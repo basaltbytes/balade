@@ -2,8 +2,9 @@
    header: progress count and thin bar, the next-unreviewed jump, and the
    hide-reviewed toggle. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { NavNode, Payload, Section } from "../contract";
+import { sectionById } from "../data/review";
 import { MarkButton, ProgressBar } from "./bits";
 import { FileStatusIcon, Octicon, statusColor } from "./octicon";
 import { useReview } from "./review-context";
@@ -34,6 +35,33 @@ export function jumpTo(id: string): void {
   window.history.replaceState(null, "", `#${id}`);
 }
 
+/** An in-page anchor that scrolls instead of navigating. */
+export function JumpLink({
+  id,
+  className,
+  title,
+  children,
+}: {
+  id: string;
+  className?: string;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={`#${id}`}
+      onClick={(event) => {
+        event.preventDefault();
+        jumpTo(id);
+      }}
+      {...(className !== undefined ? { className } : {})}
+      {...(title !== undefined ? { title } : {})}
+    >
+      {children}
+    </a>
+  );
+}
+
 function NavLeaf({
   node,
   active,
@@ -54,14 +82,7 @@ function NavLeaf({
       } ${reviewed && review.hideReviewed ? "opacity-50" : ""}`}
     >
       <MarkButton reviewed={reviewed} onToggle={() => review.markSection(node.ref)} compact />
-      <a
-        href={`#${node.ref}`}
-        onClick={(event) => {
-          event.preventDefault();
-          jumpTo(node.ref);
-        }}
-        className="flex items-center gap-2 min-w-0 flex-1"
-      >
+      <JumpLink id={node.ref} className="flex items-center gap-2 min-w-0 flex-1">
         {node.kind === "file" ? (
           <>
             <FileStatusIcon status={node.status} size={13} />
@@ -79,7 +100,7 @@ function NavLeaf({
             </span>
           </>
         )}
-      </a>
+      </JumpLink>
       {files && (
         <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
           {strings.filesViewed(files.done, files.total)}
@@ -127,7 +148,7 @@ export function Nav({ payload }: { payload: Payload }) {
   const active = useActiveSection();
   const review = useReview();
   const strings = useStrings();
-  const sections = new Map(payload.sections.map((section) => [section.id, section]));
+  const sections = sectionById(payload);
 
   return (
     <nav className="text-[13px] leading-tight">

@@ -15,12 +15,14 @@ export interface ExecResult {
 /* Diffs of large PRs and whole-file blobs pass through stdout. */
 const MAX_BUFFER = 256 * 1024 * 1024;
 
+const ENV = { ...process.env, GIT_PAGER: "cat", GIT_OPTIONAL_LOCKS: "0" };
+
 export function exec(file: string, args: readonly string[], cwd: string): ExecResult {
   const res = spawnSync(file, [...args], {
     cwd,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,
-    env: { ...process.env, GIT_PAGER: "cat", GIT_OPTIONAL_LOCKS: "0" },
+    env: ENV,
   });
   if (res.error !== undefined) {
     return { ok: false, stdout: "", stderr: res.error.message, code: -1 };
@@ -40,4 +42,10 @@ export function gitOut(args: readonly string[], cwd: string): string | null {
 
 export function gh(args: readonly string[], cwd: string): ExecResult {
   return exec("gh", args, cwd);
+}
+
+/** Absolute repository root holding `cwd`, or `null` outside any repository. */
+export function gitToplevel(cwd: string): string | null {
+  const out = gitOut(["rev-parse", "--show-toplevel"], cwd)?.trim();
+  return out === undefined || out === "" ? null : out;
 }

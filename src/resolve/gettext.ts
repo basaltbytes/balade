@@ -4,6 +4,8 @@
  * would otherwise inflate every number.
  */
 
+import { fileName } from "./paths.js";
+
 export interface EntryCounts {
   new?: number;
   updated?: number;
@@ -86,7 +88,7 @@ export function countEntries(oldSource: string | null, newSource: string | null)
 
 /** `fr.po` → `fr`; a `.pot` template carries no language. */
 export function poLanguage(path: string): string | null {
-  const name = path.slice(path.lastIndexOf("/") + 1);
+  const name = fileName(path);
   if (!name.endsWith(".po")) return null;
   return name.slice(0, -3);
 }

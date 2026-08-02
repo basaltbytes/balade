@@ -65,13 +65,13 @@ const oField: PresetTag = {
     const kind = String(node.attributes["kind"]);
     const comodel = node.attributes["comodel"];
 
-    const badges = [...toStrings(node.attributes["badges"])];
+    const badges = toStrings(node.attributes["badges"]);
     if (node.attributes["compute"] === true || /·\s*compute/.test(kind)) badges.push("computed");
     if (node.attributes["readonly"] === true) badges.push("readonly");
     if (node.attributes["required"] === true) badges.push("required");
     if (node.attributes["store"] === true) badges.push("stored");
 
-    const tags = [...toStrings(node.attributes["tags"])];
+    const tags = toStrings(node.attributes["tags"]);
     if (typeof comodel === "string") tags.unshift(`→ ${comodel}`);
 
     const note: Inline[] = api.inline(node);

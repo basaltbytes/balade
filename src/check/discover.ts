@@ -6,7 +6,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { gitOut } from "../resolve/exec.js";
+import { gitOut, gitToplevel } from "../resolve/exec.js";
 import { frontmatterBlock } from "../schema/frontmatter.js";
 
 const WALKTHROUGH_PATH = /(?:^|\/)walkthroughs\/[^/]+\.md$/;
@@ -15,6 +15,9 @@ const WALKTHROUGH_PATH = /(?:^|\/)walkthroughs\/[^/]+\.md$/;
 export const NO_WALKTHROUGH =
   "No walkthrough found. A walkthrough is a git-tracked `**/walkthroughs/*.md` file whose frontmatter holds the `walkthrough` key.";
 
+export const NOT_A_REPO =
+  "Not inside a git repository — run balade from the repository that holds the walkthrough.";
+
 export interface Discovery {
   repoRoot: string | null;
   /** Repo-relative paths, sorted. */
@@ -22,8 +25,8 @@ export interface Discovery {
 }
 
 export function discoverWalkthroughs(cwd: string): Discovery {
-  const root = gitOut(["rev-parse", "--show-toplevel"], cwd)?.trim();
-  if (root === undefined || root === "") return { repoRoot: null, paths: [] };
+  const root = gitToplevel(cwd);
+  if (root === null) return { repoRoot: null, paths: [] };
 
   const listed = (gitOut(["ls-files", "-z"], root) ?? "").split("\0").filter((path) => path !== "");
   const paths = listed
@@ -33,7 +36,7 @@ export function discoverWalkthroughs(cwd: string): Discovery {
   return { repoRoot: root, paths };
 }
 
-/** True when the file starts with a frontmatter block holding `walkthrough:`. */
+/** Reads only the first 4096 bytes — enough for any frontmatter block. */
 function hasWalkthroughKey(absolute: string): boolean {
   let head: string;
   try {

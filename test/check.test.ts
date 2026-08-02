@@ -143,17 +143,16 @@ describe("check", () => {
 
   it("reports a duplicate section without orphaning its error cards", () => {
     const path = join(repo.dir, "walkthroughs/duplicate.md");
-    const report = checkOne({ cwd: repo.dir, path, useGh: false });
-    expect(report.ok).toBe(false);
+    const loaded = loadWalkthrough({ cwd: repo.dir, path, useGh: false });
+    expect(loaded.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(true);
     /* The duplicate's failing `code` tag is reported… */
-    expect(codes(report.diagnostics)).toEqual(
+    expect(codes(loaded.diagnostics)).toEqual(
       expect.arrayContaining(["section-id-duplicate", "file-unresolvable"]),
     );
 
     /* …but no card survives it: every card names a section the payload renders. */
-    const payload = loadWalkthrough({ cwd: repo.dir, path, useGh: false }).payload;
-    expect(payload?.sections.map((section) => section.id)).toEqual(["dup"]);
-    expect(payload?.errors).toEqual([]);
+    expect(loaded.payload?.sections.map((section) => section.id)).toEqual(["dup"]);
+    expect(loaded.payload?.errors).toEqual([]);
   });
 
   it("discovers every tracked walkthrough with no argument", () => {

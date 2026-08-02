@@ -183,6 +183,7 @@ describe("blocks without a repository", () => {
       file: "w.md",
       ctx: stubContext,
       preset: undefined,
+      fileEntry: () => undefined,
       report: (diagnostic) => diagnostics.push(diagnostic),
       echo: () => {},
       card: () => {},

@@ -4,6 +4,7 @@
  */
 
 import { parse as parseYaml } from "yaml";
+import { isRecord } from "../payload/parse-review.js";
 import type { CheckDiagnostic } from "../payload/types.js";
 
 const SCHEMA_VERSION = 1;
@@ -47,9 +48,9 @@ export function frontmatterLine(raw: string, key: string): number {
   return 1;
 }
 
-export function parseFrontmatter(raw: string | undefined, file: string): FrontmatterResult {
+export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
   const diagnostics: CheckDiagnostic[] = [];
-  if (raw === undefined || raw.trim() === "") {
+  if (raw.trim() === "") {
     diagnostics.push({
       code: "frontmatter-missing",
       level: "error",
@@ -76,7 +77,7 @@ export function parseFrontmatter(raw: string | undefined, file: string): Frontma
     return { frontmatter: null, diagnostics };
   }
 
-  if (data === null || typeof data !== "object" || Array.isArray(data)) {
+  if (!isRecord(data)) {
     diagnostics.push({
       code: "frontmatter-invalid",
       level: "error",
@@ -88,7 +89,7 @@ export function parseFrontmatter(raw: string | undefined, file: string): Frontma
     return { frontmatter: null, diagnostics };
   }
 
-  const map = data as Record<string, unknown>;
+  const map = data;
   const at = (key: string): number => frontmatterLine(raw, key);
   /* Only a broken envelope stops resolution; everything else keeps the one-pass report. */
   let stopped = false;
@@ -129,8 +130,6 @@ export function parseFrontmatter(raw: string | undefined, file: string): Frontma
       `This build reads schema version ${SCHEMA_VERSION}. Write \`walkthrough: ${SCHEMA_VERSION}\`, or run a newer balade.`,
     );
   }
-  /* Each check writes the value it proved into its own typed local; the envelope
-     below is built from those, never from a cast over the raw map. */
   let title: string | undefined;
   const rawTitle = map["title"];
   if (rawTitle !== undefined) {
@@ -183,7 +182,7 @@ export function parseFrontmatter(raw: string | undefined, file: string): Frontma
   const meta: Record<string, string> = {};
   const rawMeta = map["meta"];
   if (rawMeta !== undefined) {
-    if (rawMeta === null || typeof rawMeta !== "object" || Array.isArray(rawMeta)) {
+    if (!isRecord(rawMeta)) {
       bad(
         "frontmatter-invalid",
         "meta",

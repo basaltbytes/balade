@@ -2,7 +2,7 @@
    a node's edges. Edges are straight center-to-center SVG lines; their labels
    ride the midpoint as HTML chips, so no routing engine is needed. */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { DiagramEdge, DiagramNode, Inline } from "../contract";
 import { jumpTo } from "../ui/nav";
 import { Rich } from "../ui/rich";
@@ -40,7 +40,25 @@ export function Diagram({
   const [hover, setHover] = useState<string | null>(null);
   const cols = Math.max(1, ...nodes.map((node) => node.col));
   const rows = Math.max(1, ...nodes.map((node) => node.row));
-  const byId = new Map(nodes.map((node) => [node.id, node]));
+  /* Every hover change re-renders the grid; the lookups hold still. */
+  const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const byCell = useMemo(
+    () => new Map(nodes.map((node) => [`${node.row}:${node.col}`, node])),
+    [nodes],
+  );
+  const neighbours = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    const link = (a: string, b: string): void => {
+      const set = map.get(a) ?? new Set<string>();
+      set.add(b);
+      map.set(a, set);
+    };
+    for (const edge of edges) {
+      link(edge.from, edge.to);
+      link(edge.to, edge.from);
+    }
+    return map;
+  }, [edges]);
   const center = (node: DiagramNode) => ({
     x: ((node.col - 0.5) / cols) * 100,
     y: ((node.row - 0.5) / rows) * 100,
@@ -110,16 +128,10 @@ export function Diagram({
         >
           {Array.from({ length: rows }, (_, row) =>
             Array.from({ length: cols }, (_, col) => {
-              const node = nodes.find((n) => n.row === row + 1 && n.col === col + 1);
+              const node = byCell.get(`${row + 1}:${col + 1}`);
               if (!node) return <div key={`${row}-${col}`} />;
               const dim =
-                hover !== null &&
-                hover !== node.id &&
-                !edges.some(
-                  (edge) =>
-                    (edge.from === hover && edge.to === node.id) ||
-                    (edge.to === hover && edge.from === node.id),
-                );
+                hover !== null && hover !== node.id && neighbours.get(hover)?.has(node.id) !== true;
               return (
                 <a
                   key={node.id}

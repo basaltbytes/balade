@@ -11,10 +11,10 @@
 
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { parseReviewState } from "../payload/parse-review.js";
+import { parseReviewJson } from "../payload/parse-review.js";
 import type { ReviewState } from "../payload/types.js";
 
-export const STATE_DIR = ".balade";
+const STATE_DIR = ".balade";
 
 /** The exclude line, with the trailing slash git wants for a directory. */
 const EXCLUDE_LINE = `${STATE_DIR}/`;
@@ -53,7 +53,7 @@ export function fileReviewStore(options: FileStoreOptions): ReviewStateStore {
         return null;
       }
 
-      const stored = readState(raw);
+      const stored = parseReviewJson(raw);
       if (stored === null) {
         options.warn(`balade: ${file} is not a review-state file — its marks are ignored.`);
         return null;
@@ -70,16 +70,6 @@ export function fileReviewStore(options: FileStoreOptions): ReviewStateStore {
       excludeStateDir(options.repoRoot, options.warn);
     },
   };
-}
-
-function readState(raw: string): ReviewState | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  return parseReviewState(value);
 }
 
 /**

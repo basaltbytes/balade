@@ -2,16 +2,13 @@
  * `build`: one walkthrough to one self-contained HTML file. Soft, like `open` —
  * a stale reference rides along as an error card and is printed, only a payload
  * that could not be built at all stops the command.
- *
- * Nothing here throws: the caller gets the file it wrote, the outcome that
- * stopped it, or the sentence that says there was nothing to build.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { discoverWalkthroughs, NO_WALKTHROUGH } from "../check/discover.js";
-import type { CheckOutcome } from "../check/run.js";
+import { discoverWalkthroughs, NO_WALKTHROUGH, NOT_A_REPO } from "../check/discover.js";
+import { softReport, type CheckOutcome } from "../check/run.js";
 import { loadWalkthrough } from "../compile/load.js";
 import { exportHtml, type ExportAssets } from "./html.js";
 
@@ -40,15 +37,12 @@ export type BuildOutcome =
 /** The export bundle ships beside the compiled CLI: `dist/cli.js` next to `dist/export/`. */
 const BUNDLE_DIR = fileURLToPath(new URL("../export/", import.meta.url));
 
-export const EXPORT_BUNDLE_MISSING =
+const EXPORT_BUNDLE_MISSING =
   `balade: no export bundle at ${BUNDLE_DIR}. In a checkout, run \`pnpm run build:app\`; ` +
   "in an install, reinstall balade.";
 
-const NOT_A_REPO =
-  "Not inside a git repository — run balade from the repository that holds the walkthrough.";
-
 /** The two files the export vite mode emits, read as text. */
-export function readExportBundle(dir: string = BUNDLE_DIR): ExportAssets | null {
+function readExportBundle(dir: string = BUNDLE_DIR): ExportAssets | null {
   try {
     return {
       js: readFileSync(join(dir, "app.js"), "utf8"),
@@ -72,17 +66,8 @@ export function runBuild(options: BuildOptions): BuildOutcome {
     ...(options.lang !== undefined ? { lang: options.lang } : {}),
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   });
-  const outcome: CheckOutcome = {
-    ok: loaded.payload !== null,
-    reports: [
-      {
-        file: loaded.sourcePath,
-        ok: loaded.payload !== null,
-        diagnostics: loaded.diagnostics,
-        ranges: loaded.ranges,
-      },
-    ],
-  };
+  const report = softReport(loaded);
+  const outcome: CheckOutcome = { ok: report.ok, reports: [report] };
   if (loaded.payload === null) return { kind: "failed", outcome };
 
   const file = outputPath(options, target);
@@ -98,11 +83,8 @@ export function runBuild(options: BuildOptions): BuildOutcome {
   return { kind: "built", file, bytes: Buffer.byteLength(html), outcome };
 }
 
-/**
- * The one walkthrough to build, or the note that says why there is none.
- * Zero arguments list what discovery found (#21): the index is served-mode
- * only, so `build` never picks for the author.
- */
+/** Zero arguments list what discovery found (#21): the index is served-mode
+    only, so `build` never picks for the author. */
 function pick(options: BuildOptions): string | { kind: "note"; message: string } {
   const [first, second] = options.paths;
   if (second !== undefined) {
@@ -125,7 +107,6 @@ function pick(options: BuildOptions): string | { kind: "note"; message: string }
   };
 }
 
-/** `--out` wins; otherwise the HTML lands beside the walkthrough it renders. */
 function outputPath(options: BuildOptions, target: string): string {
   if (options.out !== undefined) {
     return isAbsolute(options.out) ? options.out : resolvePath(options.cwd, options.out);

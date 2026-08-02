@@ -3,6 +3,8 @@
  * The payload never carries tokens, only this id.
  */
 
+import { fileName } from "./paths.js";
+
 const BY_EXTENSION: Record<string, string> = {
   bash: "bash",
   c: "c",
@@ -63,7 +65,7 @@ const BY_FILENAME: Record<string, string> = {
 };
 
 export function langOf(path: string): string {
-  const name = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+  const name = fileName(path).toLowerCase();
   const byName = BY_FILENAME[name];
   if (byName !== undefined) return byName;
   const dot = name.lastIndexOf(".");

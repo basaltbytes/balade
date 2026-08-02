@@ -16,6 +16,11 @@ export function repoRelative(root: string, absolute: string): string {
   return relative(real(root), real(absolute)).replaceAll(sep, "/");
 }
 
+/** The last segment of a git-spelled path. */
+export function fileName(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
+
 /* `realpathSync.native` expands Windows 8.3 short names, which the portable
    implementation keeps; where the OS call is unsupported the portable answer
    still resolves symlinks, and a path that resolves nowhere answers itself. */

@@ -4,15 +4,14 @@
  */
 
 import type { Node } from "@markdoc/markdoc";
+import { isRecord } from "../payload/parse-review.js";
 import type { DiagramBlock, DiagramEdge, DiagramNode, Inline } from "../payload/types.js";
 
 const CHANGES = ["new", "mod", "ctx"] as const;
 const EDGE_KINDS = ["new", "mod", "ctx", "derived"] as const;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+  return isRecord(value) ? value : null;
 }
 
 function inlineRow(value: unknown): Inline[] {
@@ -49,7 +48,7 @@ export function diagramNodes(value: unknown): DiagramNode[] {
   });
 }
 
-export function diagramEdges(value: unknown): DiagramEdge[] {
+function diagramEdges(value: unknown): DiagramEdge[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((raw): DiagramEdge[] => {
     const record = asRecord(raw);

@@ -1,6 +1,5 @@
 /* The two stores, driven through their own seams: a memory storage and a fake
-   fetch, no module mocking. The parse they share is covered in
-   `test/parse-review.test.ts`, beside the module it now lives in. */
+   fetch, no module mocking. The shared parse is covered in `test/parse-review.test.ts`. */
 
 import { describe, expect, it } from "vitest";
 import type { ReviewState } from "../contract";

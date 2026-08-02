@@ -1,6 +1,7 @@
 /* One renderer per block kind of the catalog; a namespaced preset node the app
    has no renderer for shows a labeled placeholder instead of vanishing. */
 
+import { memo } from "react";
 import type { Block, PresetBlock } from "../contract";
 import { Octicon } from "../ui/octicon";
 import { useStrings } from "../ui/strings";
@@ -22,7 +23,9 @@ function PresetPlaceholder({ block }: { block: PresetBlock }) {
   );
 }
 
-export function BlockView({ block }: { block: Block }) {
+/* Blocks are stable payload references, so memo keeps every untouched widget
+   out of the re-render a review mark causes. */
+export const BlockView = memo(function BlockView({ block }: { block: Block }) {
   switch (block.b) {
     case "md":
       return <Md nodes={block.nodes} />;
@@ -79,4 +82,4 @@ export function BlockView({ block }: { block: Block }) {
     default:
       return <PresetPlaceholder block={block} />;
   }
-}
+});

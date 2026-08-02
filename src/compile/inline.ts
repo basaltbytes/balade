@@ -143,9 +143,6 @@ export function mdNodesOf(nodes: readonly Node[]): MdResult {
         fences.push(...inner.fences);
         break;
       }
-      case "hr":
-      case "comment":
-        break;
       default:
         break;
     }

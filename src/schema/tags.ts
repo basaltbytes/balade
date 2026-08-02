@@ -8,6 +8,14 @@ import type { Node, Schema, ValidationError } from "@markdoc/markdoc";
 
 export const SECTION_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const FILE_STATUSES = ["A", "M", "D", "R"] as const;
+
+/** `status="A, M"` → `["A", "M"]` — the one spelling of the comma list. */
+export function statusList(value: string): string[] {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+}
 const CODE_VIEWS = ["plain", "change", "diff"] as const;
 
 /** Tag names that hold a child family; the compiler checks the child names. */
@@ -124,13 +132,9 @@ const files: Schema = {
       type: String,
       validate(value: unknown): ValidationError[] {
         if (typeof value !== "string") return [];
-        const bad = value
-          .split(",")
-          .map((part) => part.trim())
-          .filter(
-            (part) =>
-              part !== "" && !FILE_STATUSES.includes(part as (typeof FILE_STATUSES)[number]),
-          );
+        const bad = statusList(value).filter(
+          (part) => !FILE_STATUSES.some((status) => status === part),
+        );
         return bad.length === 0
           ? []
           : [

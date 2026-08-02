@@ -46,7 +46,7 @@ export function Chip({
   icon,
   children,
 }: {
-  tone?: keyof typeof TONES | string;
+  tone?: string;
   icon?: string;
   children: ReactNode;
 }) {

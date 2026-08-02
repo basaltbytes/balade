@@ -22,14 +22,23 @@ function useHeadDistance(path: string): number | null {
   return distance;
 }
 
+/* One formatter per locale: the Intl constructor is expensive and every row wants the same one. */
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+function dateFormat(locale: string): Intl.DateTimeFormat {
+  let format = dateFormats.get(locale);
+  if (format === undefined) {
+    format = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
+    dateFormats.set(locale, format);
+  }
+  return format;
+}
+
 function Row({ entry, locale }: { entry: IndexEntry; locale: string }) {
   const strings = useStrings();
   const distance = useHeadDistance(entry.path);
   const progress = entry.progress;
   const date = new Date(entry.updatedAt);
-  const updated = Number.isNaN(date.getTime())
-    ? entry.updatedAt
-    : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
+  const updated = Number.isNaN(date.getTime()) ? entry.updatedAt : dateFormat(locale).format(date);
 
   return (
     <a

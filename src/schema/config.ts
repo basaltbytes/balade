@@ -8,11 +8,9 @@ import type { Config } from "@markdoc/markdoc";
 import { allPresetSchemas } from "../preset/registry.js";
 import { CORE_TAGS } from "./tags.js";
 
-export function buildConfig(): Config {
-  return {
-    tags: { ...CORE_TAGS, ...allPresetSchemas() },
-    /* The format bans expressions: no variables, no functions. */
-    variables: {},
-    functions: {},
-  };
-}
+export const MARKDOC_CONFIG: Config = {
+  tags: { ...CORE_TAGS, ...allPresetSchemas() },
+  /* The format bans expressions: no variables, no functions. */
+  variables: {},
+  functions: {},
+};

@@ -14,7 +14,7 @@ import {
   ResetBanner,
   StaleBanner,
 } from "../ui/chrome";
-import { jumpTo, Nav } from "../ui/nav";
+import { JumpLink, Nav } from "../ui/nav";
 import { Octicon } from "../ui/octicon";
 import { PayloadProvider } from "../ui/payload-context";
 import {
@@ -79,16 +79,9 @@ function SectionView({
           {section.relatedFiles !== undefined && section.relatedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {section.relatedFiles.map((ref) => (
-                <a
-                  key={ref}
-                  href={`#${ref}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    jumpTo(ref);
-                  }}
-                >
+                <JumpLink key={ref} id={ref}>
                   <Chip icon="link">{titles.get(ref) ?? ref}</Chip>
-                </a>
+                </JumpLink>
               ))}
             </div>
           )}
@@ -119,15 +112,19 @@ function Document({
 }) {
   const review: ReviewApi = useReview();
   const strings = useStrings();
-  const titles = new Map(payload.sections.map((section) => [section.id, section.title]));
-  const globalErrors = payload.errors.filter((error) => error.sectionId === undefined);
-  const errorsBySection = new Map<string, ErrorCard[]>();
-  for (const error of payload.errors) {
-    if (error.sectionId === undefined) continue;
-    const list = errorsBySection.get(error.sectionId) ?? [];
-    list.push(error);
-    errorsBySection.set(error.sectionId, list);
-  }
+  /* Rebuilt only when the payload changes, not on every mark. */
+  const { titles, globalErrors, errorsBySection } = useMemo(() => {
+    const titles = new Map(payload.sections.map((section) => [section.id, section.title]));
+    const globalErrors = payload.errors.filter((error) => error.sectionId === undefined);
+    const errorsBySection = new Map<string, ErrorCard[]>();
+    for (const error of payload.errors) {
+      if (error.sectionId === undefined) continue;
+      const list = errorsBySection.get(error.sectionId) ?? [];
+      list.push(error);
+      errorsBySection.set(error.sectionId, list);
+    }
+    return { titles, globalErrors, errorsBySection };
+  }, [payload]);
 
   return (
     <div

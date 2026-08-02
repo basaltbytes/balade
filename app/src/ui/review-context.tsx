@@ -109,10 +109,7 @@ export function useReviewApi(payload: Payload, store: ReviewStore): ReviewApi {
           toggleFile(payload, previous, sectionId, path, new Date().toISOString()),
         ),
       filesOf: (section) => fileProgress(payload, state, section),
-      next: (afterId) =>
-        afterId === undefined
-          ? nextUnreviewed(payload, state)
-          : nextUnreviewed(payload, state, afterId),
+      next: (afterId) => nextUnreviewed(payload, state, afterId),
     }),
     [payload, state, reset, persist, hideReviewed, update],
   );

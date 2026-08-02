@@ -6,8 +6,9 @@ import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import { useMemo, useState } from "react";
 import type { FileEntry } from "../contract";
 import { normalizeUnified, splitPath } from "../data/diff";
+import { fileByPath } from "../data/review";
 import { useDiffHighlighter } from "../highlight/diff-highlighter";
-import { jumpTo } from "../ui/nav";
+import { JumpLink } from "../ui/nav";
 import { Octicon, FileStatusIcon } from "../ui/octicon";
 import { usePayload } from "../ui/payload-context";
 import { Rich } from "../ui/rich";
@@ -83,17 +84,13 @@ function FileRow({ entry }: { entry: FileEntry }) {
           )}
         </button>
         {sectionRef !== undefined && (
-          <a
-            href={`#${sectionRef}`}
-            onClick={(event) => {
-              event.preventDefault();
-              jumpTo(sectionRef);
-            }}
+          <JumpLink
+            id={sectionRef}
             title={sectionRef}
             className="shrink-0 text-muted-foreground hover:text-primary"
           >
             <Octicon name="link" size={13} />
-          </a>
+          </JumpLink>
         )}
         <span className="font-mono text-added shrink-0">+{entry.additions}</span>
         <span
@@ -171,7 +168,7 @@ function FileRow({ entry }: { entry: FileEntry }) {
 export function Files({ paths }: { paths: string[] }) {
   const payload = usePayload();
   const strings = useStrings();
-  const byPath = new Map(payload.files.map((entry) => [entry.path, entry]));
+  const byPath = fileByPath(payload);
   const entries = paths.map((path) => [path, byPath.get(path)] as const);
   const known = entries.flatMap(([, entry]) => (entry ? [entry] : []));
   const additions = known.reduce((sum, entry) => sum + entry.additions, 0);

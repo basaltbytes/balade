@@ -21,9 +21,10 @@ import type {
 } from "../payload/types.js";
 import type { ResolveContext } from "../resolve/context.js";
 import { sha256 } from "../resolve/hash.js";
+import { fileName } from "../resolve/paths.js";
 import { frontmatterLine } from "../schema/frontmatter.js";
 import { SECTION_ID } from "../schema/tags.js";
-import { compileBlocks, lineOf, type CompileEnv } from "./blocks.js";
+import { attrStrings, compileBlocks, lineOf, short, type CompileEnv } from "./blocks.js";
 import type { ValidDocument } from "./document.js";
 
 export interface CompileInput {
@@ -58,6 +59,7 @@ export function compileDocument(input: CompileInput): CompileResult {
     file: sourcePath,
     ctx,
     preset: doc.preset,
+    fileEntry: (path) => files.get(path),
     report: (diagnostic) => diagnostics.push(diagnostic),
     echo: (range) => ranges.push(range),
     card: (error) => errors.push(error),
@@ -82,8 +84,6 @@ export function compileDocument(input: CompileInput): CompileResult {
 
     if (id === "" || !SECTION_ID.test(id)) return null; /* the schema already reported it */
     const first = seen.get(id);
-    /* A duplicate cannot enter the payload, but its blocks still report — one pass. */
-    const duplicate = first !== undefined;
     if (first !== undefined) {
       diagnostics.push({
         code: "section-id-duplicate",
@@ -95,6 +95,7 @@ export function compileDocument(input: CompileInput): CompileResult {
       });
     }
     seen.set(id, line);
+    const duplicate = first !== undefined;
 
     /* A duplicate still reports — one pass — but it leaves no error card: no
        rendered section would own one, and the app keys cards by section id. */
@@ -103,23 +104,23 @@ export function compileDocument(input: CompileInput): CompileResult {
     const filePath = optionalString(node, "file");
     let status: FileStatus = "M";
     if (filePath !== undefined) {
-      referenced.add(filePath);
+      env.markReferenced(filePath);
+      env.fileRef(filePath, id);
       const entry = files.get(filePath);
       if (entry !== undefined) {
         status = entry.status;
-        if (entry.ref === undefined) entry.ref = id;
       } else if (ctx.blob(filePath) === null) {
         diagnostics.push({
           code: "file-unresolvable",
           level: "error",
           file: sourcePath,
           line,
-          message: `The section file \`${filePath}\` does not exist at ${ctx.pin.slice(0, 7)}.`,
+          message: `The section file \`${filePath}\` does not exist at ${short(ctx.pin)}.`,
           hint: "Use a path relative to the repository root, as git spells it.",
         });
         sectionEnv.card({
           code: "file-unresolvable",
-          message: `\`${filePath}\` does not exist at ${ctx.pin.slice(0, 7)}.`,
+          message: `\`${filePath}\` does not exist at ${short(ctx.pin)}.`,
           reference: filePath,
           sectionId: id,
           line,
@@ -142,9 +143,7 @@ export function compileDocument(input: CompileInput): CompileResult {
     const icon = optionalString(node, "icon");
     const badge = optionalString(node, "badge");
     const badgeTone = optionalString(node, "badgeTone");
-    const relatedFiles = Array.isArray(node.attributes["relatedFiles"])
-      ? (node.attributes["relatedFiles"] as unknown[]).map((item) => String(item))
-      : [];
+    const relatedFiles = attrStrings(node, "relatedFiles");
 
     if (duplicate) return null;
 
@@ -162,19 +161,19 @@ export function compileDocument(input: CompileInput): CompileResult {
     });
 
     const label =
-      optionalString(node, "nav") ?? (filePath !== undefined ? basename(filePath) : title);
+      optionalString(node, "nav") ?? (filePath !== undefined ? fileName(filePath) : title);
     if (filePath !== undefined) return { kind: "file", label, ref: id, status };
     return { kind: "section", label, ref: id, ...(icon !== undefined ? { icon } : {}) };
   };
 
-  const walk = (nodes: readonly Node[], depth: number): NavNode[] => {
+  const walk = (nodes: readonly Node[]): NavNode[] => {
     const nav: NavNode[] = [];
     for (const node of nodes) {
       if (node.type === "tag" && node.tag === "group") {
         nav.push({
           kind: "group",
           label: String(node.attributes["label"] ?? ""),
-          children: walk(node.children, depth + 1),
+          children: walk(node.children),
         });
         continue;
       }
@@ -208,9 +207,8 @@ export function compileDocument(input: CompileInput): CompileResult {
     return nav;
   };
 
-  const nav = walk(doc.ast.children, 0);
+  const nav = walk(doc.ast.children);
 
-  /* Staleness: plain staleness warns; an overlap with a referenced file fails. */
   if (ctx.headDistance > 0) {
     const overlap = [...referenced].filter((path) => ctx.touched.has(path)).sort();
     const line = frontmatterLine(doc.raw, "commit");
@@ -221,7 +219,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         file: sourcePath,
         line,
         message: `The PR head moved ${ctx.headDistance} commit${ctx.headDistance === 1 ? "" : "s"} past the stamp, and it touches ${overlap.join(", ")}.`,
-        hint: `Re-read the changed files, update the ranges, then re-stamp: commit: ${ctx.headSha.slice(0, 7)}.`,
+        hint: `Re-read the changed files, update the ranges, then re-stamp: commit: ${short(ctx.headSha)}.`,
       });
     } else {
       diagnostics.push({
@@ -230,7 +228,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         file: sourcePath,
         line,
         message: `The PR head moved ${ctx.headDistance} commit${ctx.headDistance === 1 ? "" : "s"} past the stamp, but touches no file this walkthrough shows.`,
-        hint: `Re-stamp when convenient: commit: ${ctx.headSha.slice(0, 7)}.`,
+        hint: `Re-stamp when convenient: commit: ${short(ctx.headSha)}.`,
       });
     }
   }
@@ -271,10 +269,6 @@ function toneOf(
   if (status === "A") return "new";
   if (status === "D") return "del";
   return "mod";
-}
-
-function basename(path: string): string {
-  return path.slice(path.lastIndexOf("/") + 1);
 }
 
 function langOfMeta(value: string | undefined): "en" | "fr" {

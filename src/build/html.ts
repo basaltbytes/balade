@@ -1,10 +1,6 @@
 /**
  * The single-file export document: one JS, one CSS, and the resolved payload
- * baked as `window.__BALADE__` ahead of the app.
- *
- * Everything here is a pure string transform. The escapes below are the whole
- * of the HTML contract, and each one is load-bearing — a `file://` page has no
- * second chance.
+ * baked as `window.__BALADE__` ahead of the app. Pure string transforms.
  */
 
 import type { Payload } from "../payload/types.js";
@@ -44,7 +40,7 @@ export function exportHtml(payload: Payload, assets: ExportAssets): string {
  * holds. The two line separators are legal in JSON and were not legal in a
  * JavaScript string before ES2019.
  */
-export function bake(value: unknown): string {
+function bake(value: unknown): string {
   return JSON.stringify(value)
     .replaceAll("<", "\\u003c")
     .replaceAll("\u2028", "\\u2028")
@@ -61,12 +57,12 @@ export function bake(value: unknown): string {
  *   the closing tag stop closing. `\!` is `!` in a string and in a regular
  *   expression; under a `/u` flag it is a syntax error, never a silent change.
  */
-export function scriptText(js: string): string {
+function scriptText(js: string): string {
   return js.replaceAll(/<\/script/gi, "<\\/script").replaceAll("<!--", "<\\!--");
 }
 
 /** `<style>` is raw text: only its own end tag closes it. */
-export function styleText(css: string): string {
+function styleText(css: string): string {
   return css.replaceAll(/<\/style/gi, "<\\/style");
 }
 

@@ -10,9 +10,9 @@
 
 import { watch, type FSWatcher } from "node:fs";
 import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
-import { discoverWalkthroughs, NO_WALKTHROUGH } from "../check/discover.js";
-import type { CheckOutcome } from "../check/run.js";
-import { gitOut } from "../resolve/exec.js";
+import { discoverWalkthroughs, NO_WALKTHROUGH, NOT_A_REPO } from "../check/discover.js";
+import { softReport, type CheckOutcome } from "../check/run.js";
+import { gitToplevel } from "../resolve/exec.js";
 import { repoRelative } from "../resolve/paths.js";
 import { fileReviewStore } from "../state/store.js";
 import { createApi, type Api } from "./api.js";
@@ -51,9 +51,6 @@ export type Prepared =
   /** A dead repository, PR or file: `open` prints this and stops. */
   | { kind: "failed"; outcome: CheckOutcome };
 
-const NOT_A_REPO =
-  "Not inside a git repository — run balade from the repository that holds the walkthrough.";
-
 type Selected =
   | { kind: "ok"; root: string; paths: readonly string[] }
   | { kind: "note"; message: string };
@@ -67,8 +64,8 @@ function select(options: SessionOptions): Selected {
     return { kind: "ok", root: found.repoRoot, paths: found.paths };
   }
 
-  const root = gitOut(["rev-parse", "--show-toplevel"], options.cwd)?.trim();
-  if (root === undefined || root === "") return { kind: "note", message: NOT_A_REPO };
+  const root = gitToplevel(options.cwd);
+  if (root === null) return { kind: "note", message: NOT_A_REPO };
   const paths = options.selection.paths.map((path) =>
     repoRelative(root, isAbsolute(path) ? path : resolvePath(options.cwd, path)),
   );
@@ -124,15 +121,7 @@ export function prepareSession(options: SessionOptions): Prepared {
  * an in-app error card (#15, soft `open`).
  */
 function compileEagerly(payloads: PayloadCache, paths: readonly string[]): CheckOutcome {
-  const reports = paths.map((path) => {
-    const loaded = payloads.get(path);
-    return {
-      file: loaded.sourcePath,
-      ok: loaded.payload !== null,
-      diagnostics: loaded.diagnostics,
-      ranges: loaded.ranges,
-    };
-  });
+  const reports = paths.map((path) => softReport(payloads.get(path)));
   return { ok: reports.every((report) => report.ok), reports };
 }
 

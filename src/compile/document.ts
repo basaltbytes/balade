@@ -8,15 +8,11 @@ import type { Node, ValidateError } from "@markdoc/markdoc";
 import type { CheckDiagnostic } from "../payload/types.js";
 import { getPreset, presetNames } from "../preset/registry.js";
 import type { Preset } from "../preset/types.js";
-import { buildConfig } from "../schema/config.js";
+import { MARKDOC_CONFIG } from "../schema/config.js";
 import { parseFrontmatter, frontmatterLine, type Frontmatter } from "../schema/frontmatter.js";
 import { CORE_TAG_NAMES } from "../schema/tags.js";
 
-/**
- * A document that cleared the frontmatter gate. `compileDocument` takes only
- * this shape: the envelope is proven, and the parse diagnostics already belong
- * to the report the caller is assembling.
- */
+/** A document that cleared the frontmatter gate — `compileDocument` takes only this shape. */
 export interface ValidDocument {
   ast: Node;
   source: string;
@@ -74,7 +70,7 @@ export function parseDocument(source: string, file: string): ParsedDocument {
     }
   }
 
-  for (const error of Markdoc.validate(ast, buildConfig())) {
+  for (const error of Markdoc.validate(ast, MARKDOC_CONFIG)) {
     const line = (error.lines[0] ?? 0) + 1;
     diagnostics.push({
       code: error.error.id,

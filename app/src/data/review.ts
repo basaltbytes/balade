@@ -33,11 +33,27 @@ export const emptyState = (payload: Payload): ReviewState => ({
   files: {},
 });
 
-const sectionById = (payload: Payload): Map<string, Section> =>
-  new Map(payload.sections.map((s) => [s.id, s]));
+/* Computed once per payload: components call these on every render. */
+const sectionIndex = new WeakMap<Payload, Map<string, Section>>();
+const fileIndex = new WeakMap<Payload, Map<string, FileEntry>>();
 
-const fileByPath = (payload: Payload): Map<string, FileEntry> =>
-  new Map(payload.files.map((f) => [f.path, f]));
+export function sectionById(payload: Payload): Map<string, Section> {
+  let map = sectionIndex.get(payload);
+  if (map === undefined) {
+    map = new Map(payload.sections.map((s) => [s.id, s]));
+    sectionIndex.set(payload, map);
+  }
+  return map;
+}
+
+export function fileByPath(payload: Payload): Map<string, FileEntry> {
+  let map = fileIndex.get(payload);
+  if (map === undefined) {
+    map = new Map(payload.files.map((f) => [f.path, f]));
+    fileIndex.set(payload, map);
+  }
+  return map;
+}
 
 /**
  * Selective, hash-based reset: a mark survives only while the content hash it
@@ -154,7 +170,7 @@ export function toggleSection(
   if (isSectionReviewed(state, sectionId)) {
     return { ...state, sections: withoutKey(state.sections, sectionId) };
   }
-  const section = payload.sections.find((s) => s.id === sectionId);
+  const section = sectionById(payload).get(sectionId);
   if (!section) return state;
   return { ...state, sections: { ...state.sections, [sectionId]: { hash: section.hash, at } } };
 }
@@ -170,7 +186,7 @@ export function toggleFile(
   if (state.files[key] !== undefined) {
     return { ...state, files: withoutKey(state.files, key) };
   }
-  const entry = payload.files.find((f) => f.path === path);
+  const entry = fileByPath(payload).get(path);
   if (!entry) return state;
   return { ...state, files: { ...state.files, [key]: { hash: entry.hash, at } } };
 }

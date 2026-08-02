@@ -5,7 +5,7 @@
  */
 
 import { join } from "node:path";
-import { loadWalkthrough } from "../compile/load.js";
+import { loadWalkthrough, type LoadResult } from "../compile/load.js";
 import type { CheckReport } from "../payload/types.js";
 import { discoverWalkthroughs, NO_WALKTHROUGH } from "./discover.js";
 
@@ -47,19 +47,25 @@ export function runCheck(options: CheckOptions): CheckOutcome {
   }
 
   const found = discoverWalkthroughs(options.cwd);
+  if (found.repoRoot === null) {
+    return { ok: true, reports: [], note: "Not inside a git repository — nothing to check." };
+  }
   if (found.paths.length === 0) {
-    return {
-      ok: true,
-      reports: [],
-      note:
-        found.repoRoot === null
-          ? "Not inside a git repository — nothing to check."
-          : NO_WALKTHROUGH,
-    };
+    return { ok: true, reports: [], note: NO_WALKTHROUGH };
   }
   const root = found.repoRoot;
-  const reports = found.paths.map((path) => one(join(root ?? options.cwd, path)));
+  const reports = found.paths.map((path) => one(join(root, path)));
   return { ok: reports.every((report) => report.ok), reports };
+}
+
+/** The soft commands' report: `ok` asks only that a payload built; diagnostics ride along as error cards. */
+export function softReport(loaded: LoadResult): CheckReport {
+  return {
+    file: loaded.sourcePath,
+    ok: loaded.payload !== null,
+    diagnostics: loaded.diagnostics,
+    ranges: loaded.ranges,
+  };
 }
 
 export function checkOne(options: CheckFileOptions): CheckReport {

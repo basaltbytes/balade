@@ -1,7 +1,6 @@
 import type { Inline, MdNode } from "../contract";
 import { Rich, Tag } from "../ui/rich";
 
-/* markdown flow: paragraphs, one heading level, ordered and bullet lists */
 export function Md({ nodes }: { nodes: MdNode[] }) {
   return (
     <>

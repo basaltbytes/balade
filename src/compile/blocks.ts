@@ -17,13 +17,14 @@ import type {
   RangeEcho,
   TestItem,
 } from "../payload/types.js";
+import { isRecord } from "../payload/parse-review.js";
 import type { MacroApi, Preset } from "../preset/types.js";
-import { presetOfTag, presetTag } from "../preset/registry.js";
+import { presetOfTag } from "../preset/registry.js";
 import type { ResolveContext } from "../resolve/context.js";
 import { countEntries, isGettext, poLanguage } from "../resolve/gettext.js";
 import { matchesGlob } from "../resolve/glob.js";
 import { langOf } from "../resolve/lang.js";
-import { CHILD_TAGS, FILE_STATUSES } from "../schema/tags.js";
+import { CHILD_TAGS, FILE_STATUSES, statusList } from "../schema/tags.js";
 import { diagramBlock } from "./diagram.js";
 import { bodyInline, inlineOf, mdNodesOf, paragraphsOf, plainText } from "./inline.js";
 
@@ -32,6 +33,8 @@ export interface CompileEnv {
   readonly file: string;
   readonly ctx: ResolveContext;
   readonly preset: Preset | undefined;
+  /** The PR's entry for a path, from the map the compiler already keeps. */
+  fileEntry(path: string): { lang?: string } | undefined;
   report(diagnostic: CheckDiagnostic): void;
   echo(range: RangeEcho): void;
   card(error: ErrorCard): void;
@@ -51,7 +54,7 @@ function attrString(node: Node, name: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function attrStrings(node: Node, name: string): string[] {
+export function attrStrings(node: Node, name: string): string[] {
   const value = node.attributes[name];
   return Array.isArray(value) ? value.map((item) => String(item)) : [];
 }
@@ -83,10 +86,7 @@ export function parseMark(value: unknown): number[] {
   return out;
 }
 
-/**
- * Compiles the children of a section into payload blocks. Markdown flow
- * between tags collapses into `md` blocks.
- */
+/** Markdown flow between tags collapses into `md` blocks. */
 export function compileBlocks(
   children: readonly Node[],
   env: CompileEnv,
@@ -129,23 +129,27 @@ export function compileBlocks(
   return blocks;
 }
 
+/** Reports a preset tag in a file that does not activate its preset; true when it may expand. */
+function presetActive(node: Node, owner: Preset, env: CompileEnv, fallback: string): boolean {
+  if (env.preset?.name === owner.name) return true;
+  env.report({
+    code: "preset-tag-inactive",
+    level: "error",
+    file: env.file,
+    line: lineOf(node),
+    message: `The tag \`${node.tag ?? ""}\` belongs to the \`${owner.name}\` preset, which this file does not activate.`,
+    hint: `Add \`preset: ${owner.name}\` to the frontmatter, or use ${fallback} instead.`,
+  });
+  return false;
+}
+
 function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
   const tag = node.tag ?? "";
 
   const owner = presetOfTag(tag);
   if (owner !== undefined) {
-    if (env.preset?.name !== owner.name) {
-      env.report({
-        code: "preset-tag-inactive",
-        level: "error",
-        file: env.file,
-        line: lineOf(node),
-        message: `The tag \`${tag}\` belongs to the \`${owner.name}\` preset, which this file does not activate.`,
-        hint: `Add \`preset: ${owner.name}\` to the frontmatter, or use the core tag instead.`,
-      });
-      return [];
-    }
-    const macro = presetTag(owner, tag);
+    if (!presetActive(node, owner, env, "the core tag")) return [];
+    const macro = owner.tags[tag];
     if (macro !== undefined && macro.slot === "block") {
       return macro.expand(node, macroApi(env, node));
     }
@@ -194,7 +198,7 @@ function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
     case "matrix":
       return [matrixBlock(node, env)];
     case "table":
-      return [tableBlock(innerTable(node) ?? node)];
+      return [tableBlock(tableSource(node) ?? node)];
     case "cards": {
       const cols = node.attributes["cols"];
       return [
@@ -255,7 +259,7 @@ function childTags(node: Node, family: string, env: CompileEnv): Node[] {
     if (child.type !== "tag") continue;
     const tag = child.tag ?? "";
     const owner = presetOfTag(tag);
-    if (allowed.includes(tag) || (owner !== undefined && presetTag(owner, tag)?.slot === "field")) {
+    if (allowed.includes(tag) || (owner !== undefined && owner.tags[tag]?.slot === "field")) {
       out.push(child);
       continue;
     }
@@ -282,18 +286,8 @@ function fieldRows(node: Node, env: CompileEnv): FieldRow[] {
     const tag = child.tag ?? "";
     const owner = presetOfTag(tag);
     if (owner !== undefined) {
-      if (env.preset?.name !== owner.name) {
-        env.report({
-          code: "preset-tag-inactive",
-          level: "error",
-          file: env.file,
-          line: lineOf(child),
-          message: `The tag \`${tag}\` belongs to the \`${owner.name}\` preset, which this file does not activate.`,
-          hint: `Add \`preset: ${owner.name}\` to the frontmatter, or use \`field\` instead.`,
-        });
-        continue;
-      }
-      const macro = presetTag(owner, tag);
+      if (!presetActive(child, owner, env, "`field`")) continue;
+      const macro = owner.tags[tag];
       if (macro !== undefined && macro.slot === "field") {
         rows.push(...macro.expand(child, macroApi(env, child)));
       }
@@ -349,6 +343,16 @@ function innerTable(node: Node): Node | undefined {
   return node.children.find((child) => child.type === "table");
 }
 
+/** The markdown table beneath a tag, unwrapping one `{% table %}` wrapper when present. */
+function tableSource(node: Node): Node | undefined {
+  const direct = innerTable(node);
+  if (direct !== undefined) return direct;
+  const wrapper = node.children.find(
+    (child) => child.tag === "table" && innerTable(child) !== undefined,
+  );
+  return wrapper === undefined ? undefined : innerTable(wrapper);
+}
+
 interface TableData {
   head: Inline[][];
   rows: Inline[][][];
@@ -399,10 +403,7 @@ function tableBlock(node: Node): Block {
 const TRUE_CELLS = ["✓", "✔", "x", "X", "yes", "true", "✅"];
 
 function matrixBlock(node: Node, env: CompileEnv): Block {
-  const table =
-    innerTable(node) ??
-    node.children.find((child) => child.tag === "table" && innerTable(child) !== undefined);
-  const source = table === undefined ? undefined : (innerTable(table) ?? table);
+  const source = tableSource(node);
   if (source === undefined) {
     env.report({
       code: "matrix-empty",
@@ -428,30 +429,20 @@ function matrixBlock(node: Node, env: CompileEnv): Block {
 function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
   const only = attrString(node, "only");
   const status = attrString(node, "status");
-  const wanted =
-    status === undefined
-      ? null
-      : new Set(
-          status
-            .split(",")
-            .map((part) => part.trim())
-            .filter((part) => part !== ""),
-        );
+  const wanted = status === undefined ? null : new Set(statusList(status));
   const why = node.attributes["why"];
-  const whyMap =
-    why !== null && typeof why === "object" && !Array.isArray(why)
-      ? (why as Record<string, unknown>)
-      : {};
+  const whyMap = isRecord(why) ? why : {};
 
   const paths = env.ctx.files
     .filter((entry) => (only === undefined ? true : matchesGlob(entry.path, only)))
     .filter((entry) => (wanted === null ? true : wanted.has(entry.status)))
     .map((entry) => entry.path);
+  const held = new Set(paths);
 
   for (const path of paths) env.fileRef(path, sectionId);
 
   for (const [path, text] of Object.entries(whyMap)) {
-    if (!paths.includes(path)) {
+    if (!held.has(path)) {
       env.report({
         code: "file-unresolvable",
         level: "error",
@@ -549,7 +540,6 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     return [];
   }
 
-  /* A code reference links its file to the section that narrates it. */
   env.fileRef(file, sectionId);
 
   const lines = blob.slice(from - 1, to);
@@ -609,7 +599,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     file,
     from,
     to,
-    lang: env.ctx.files.find((entry) => entry.path === file)?.lang ?? langOf(file),
+    lang: env.fileEntry(file)?.lang ?? langOf(file),
     view: view === "plain" || view === "diff" ? view : "change",
     lines: [...lines],
     changed,
@@ -619,7 +609,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
   return [block];
 }
 
-function short(sha: string): string {
+export function short(sha: string): string {
   return sha.slice(0, 7);
 }
 

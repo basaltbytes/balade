@@ -2,21 +2,10 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { checkOne } from "../src/check/run.js";
 import { loadWalkthrough } from "../src/compile/load.js";
-import type { Block, Payload } from "../src/payload/types.js";
+import type { Payload } from "../src/payload/types.js";
 import { getPreset, presetNames, presetOfTag } from "../src/preset/registry.js";
+import { firstBlock } from "./support/blocks.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
-
-function block<K extends Block["b"]>(
-  payload: Payload,
-  sectionId: string,
-  kind: K,
-): Extract<Block, { b: K }> {
-  const found = payload.sections
-    .find((entry) => entry.id === sectionId)
-    ?.blocks.find((entry) => entry.b === kind);
-  if (found === undefined) throw new Error(`no ${kind} block in ${sectionId}`);
-  return found as Extract<Block, { b: K }>;
-}
 
 describe("preset registry", () => {
   it("keys presets by name and tags by prefix", () => {
@@ -52,7 +41,7 @@ describe("odoo preset", () => {
   });
 
   it("expands o-field to core field rows with kind chips", () => {
-    const rows = block(payload, "m-pool", "fields").rows;
+    const rows = firstBlock(payload, "m-pool", "fields").rows;
     expect(rows[0]).toEqual({
       name: "allocation_id",
       kind: "Many2one",
@@ -69,7 +58,7 @@ describe("odoo preset", () => {
   });
 
   it("adds decorator chips to a core method", () => {
-    expect(block(payload, "m-pool", "method").chips).toEqual(["depends"]);
+    expect(firstBlock(payload, "m-pool", "method").chips).toEqual(["depends"]);
   });
 
   it("fails a relational field with no comodel", () => {

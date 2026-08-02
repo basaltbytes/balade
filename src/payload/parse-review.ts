@@ -8,7 +8,8 @@
 
 import type { ReviewMark, ReviewState } from "./types.js";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+/** The one record guard for both packages — every other module imports it from here. */
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Marks that fail the shape are dropped: one corrupt entry never costs the rest. */
@@ -21,6 +22,15 @@ function parseMarks(value: unknown): Record<string, ReviewMark> {
     if (typeof hash === "string" && typeof at === "string") marks[key] = { hash, at };
   }
   return marks;
+}
+
+/** A serialized state from any edge: corrupt JSON reads as no state. */
+export function parseReviewJson(raw: string): ReviewState | null {
+  try {
+    return parseReviewState(JSON.parse(raw));
+  } catch {
+    return null;
+  }
 }
 
 export function parseReviewState(value: unknown): ReviewState | null {

@@ -6,8 +6,10 @@
 
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../payload/types.js";
 import type { ResolveContext } from "../resolve/context.js";
+import { isRecord } from "../payload/parse-review.js";
 import { changedLines, splitDiff } from "./diff.js";
-import { gh, gitOut } from "./exec.js";
+import { gh, gitOut, gitToplevel } from "./exec.js";
+import { fileName } from "./paths.js";
 import { sha256 } from "./hash.js";
 import { langOf } from "./lang.js";
 
@@ -47,8 +49,8 @@ interface PullRequestResult {
 
 export function resolveContext(options: ResolveOptions): ResolveResult {
   const diagnostics: CheckDiagnostic[] = [];
-  const root = gitOut(["rev-parse", "--show-toplevel"], options.cwd)?.trim();
-  if (root === undefined || root === "") {
+  const root = gitToplevel(options.cwd);
+  if (root === null) {
     diagnostics.push({
       code: "repo-unresolvable",
       level: "error",
@@ -74,7 +76,9 @@ export function resolveContext(options: ResolveOptions): ResolveResult {
     return { ctx: null, diagnostics };
   }
 
-  const defaultBranch = findDefaultBranch(root);
+  /* Lazy: when gh supplied both base fields, the probes never run. */
+  let probedDefault: string | undefined;
+  const defaultBranch = (): string => (probedDefault ??= findDefaultBranch(root));
   const requested =
     options.useGh === false ? null : readPullRequest(root, options.pr, options.file);
   if (requested !== null) diagnostics.push(...requested.diagnostics);
@@ -83,7 +87,7 @@ export function resolveContext(options: ResolveOptions): ResolveResult {
   const head = firstSha(root, [pull?.headRefOid, pull?.headRefName, "HEAD"]) ?? pin;
   const base =
     firstSha(root, [pull?.baseRefOid]) ??
-    mergeBase(root, defaultBranch, pin) ??
+    mergeBase(root, defaultBranch(), pin) ??
     parentOf(root, pin) ??
     pin;
 
@@ -133,7 +137,7 @@ export function resolveContext(options: ResolveOptions): ResolveResult {
     url: pull?.url ?? `https://github.com/${slug}/pull/${options.pr}`,
     author: pull?.author ?? gitOut(["log", "-1", "--format=%an", pin], root)?.trim() ?? "unknown",
     state: prState(pull?.state),
-    base: pull?.baseRefName ?? defaultBranch,
+    base: pull?.baseRefName ?? defaultBranch(),
     head:
       pull?.headRefName ?? gitOut(["rev-parse", "--abbrev-ref", "HEAD"], root)?.trim() ?? "HEAD",
     commits:
@@ -209,7 +213,7 @@ export function repoSlug(root: string): string {
     const match = /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/.exec(url);
     if (match?.[1] !== undefined) return match[1];
   }
-  return root.slice(root.lastIndexOf("/") + 1);
+  return fileName(root);
 }
 
 function prState(state: string | undefined): "open" | "closed" | "merged" {
@@ -266,10 +270,6 @@ function readPullRequest(root: string, number: number, file: string): PullReques
   };
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/** A gh field the resolver can use: a non-empty string, or nothing. */
 const text = (value: unknown): string | undefined =>
   typeof value === "string" && value !== "" ? value : undefined;
 

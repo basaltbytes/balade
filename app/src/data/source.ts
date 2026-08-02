@@ -1,6 +1,7 @@
 /* Where the payload comes from, in order: the baked global of a static export,
    then the served endpoint, then — only under `vite dev` — the pr-96 fixture. */
 
+import { isRecord } from "../../../src/payload/parse-review";
 import type { IndexPayload, Payload } from "../contract";
 
 declare global {
@@ -19,9 +20,6 @@ export interface RouteLocation {
   hash: string;
   pathname: string;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isIndex = (value: Record<string, unknown>): value is Record<string, unknown> & IndexPayload =>
   value["kind"] === "index" && Array.isArray(value["entries"]);

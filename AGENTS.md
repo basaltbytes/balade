@@ -9,9 +9,10 @@ trade-offs there.
 
 ## Rules
 
-- **The charter is binding.** Read [guidelines/CODING_GUIDELINES.md](guidelines/CODING_GUIDELINES.md)
+- Read [guidelines/CODING_GUIDELINES.md](guidelines/CODING_GUIDELINES.md)
   before writing code, and [guidelines/TYPESCRIPT.md](guidelines/TYPESCRIPT.md)
   for the language mapping. Reviews hunt violations against it.
+- When writing Effect TypeScript code ALWAYS refer to the `/effect-ts` skill
 - **`src/payload/types.ts` is the contract** between the CLI and every renderer.
   It stays plain interfaces and changes only with a deliberate decision.
 - Chrome strings ship in `en` and `fr` (`app/src/i18n.ts`); never hardcode

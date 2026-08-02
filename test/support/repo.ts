@@ -11,18 +11,13 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const FIXTURES = join(HERE, "..", "fixtures");
+const FIXTURES = join(HERE, "..", "fixtures");
 
 export interface FixtureRepo {
   dir: string;
   /** SHA the walkthroughs are stamped against. */
   pin: string;
-  /** SHA of the diff base (the first commit on `main`). */
-  base: string;
   write(path: string, content: string): void;
-  remove(path: string): void;
-  /** `git mv`, so the rename reaches the index as one. */
-  move(from: string, to: string): void;
   commit(message: string): string;
   /** Writes a fixture walkthrough with `__COMMIT__` replaced, and commits it. */
   addWalkthrough(name: string, fixture: string): string;
@@ -200,7 +195,7 @@ export function createFixtureRepo(): FixtureRepo {
   write("docs/old.md", "# Superseded design note\n");
   write("views/pool_views.xml", VIEW);
   write("models/planning_helper.py", BASE_HELPER);
-  const base = commit("base");
+  commit("base");
   /* The PR branch: the diff base is the merge-base with `main`. */
   run(dir, ["checkout", "-b", "feature/pool"]);
 
@@ -232,10 +227,7 @@ export function createFixtureRepo(): FixtureRepo {
   return {
     dir,
     pin,
-    base,
     write,
-    remove,
-    move,
     commit,
     addWalkthrough,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),

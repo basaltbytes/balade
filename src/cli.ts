@@ -1,10 +1,6 @@
 #!/usr/bin/env node
-/**
- * `balade` — narrated code walkthroughs for pull requests.
- *
- * Effects stay at this edge: the commands read flags, call the pure compile,
- * check, build and server core, and print.
- */
+/** Effects stay at this edge: the commands read flags, call the pure compile,
+    check, build and server core, and print. */
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Option } from "effect";
@@ -74,24 +70,14 @@ const open = Command.make("open", { files, lang: langFlag, port: portFlag }, (co
       selection,
       ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
     });
-    if (prepared.kind === "note") {
-      process.stderr.write(`${prepared.message}\n`);
-      process.exitCode = 1;
-      return;
-    }
-    if (prepared.kind === "failed") {
-      process.stdout.write(formatText(diagnosticsOnly(prepared.outcome)));
-      process.exitCode = 1;
+    if (prepared.kind !== "ready") {
+      stop(prepared);
       return;
     }
 
     const session = prepared.session;
     yield* Effect.addFinalizer(() => Effect.sync(() => session.close()));
-    /* Soft open: what did not resolve is printed here and rides on as error cards. */
-    const notes = diagnosticsOnly(session.outcome);
-    if (notes.reports.some((report) => report.diagnostics.length > 0)) {
-      process.stdout.write(formatText(notes));
-    }
+    printSoft(session.outcome);
 
     const url = yield* serve({ appDir, port: config.port, api: session.api });
     process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
@@ -105,6 +91,23 @@ const diagnosticsOnly = (outcome: CheckOutcome): CheckOutcome => ({
   reports: outcome.reports.map((report) => ({ ...report, ranges: [] })),
 });
 
+/** Prints why a soft command stops — a note, or the outcome that failed — and sets the exit code. */
+const stop = (
+  result: { kind: "note"; message: string } | { kind: "failed"; outcome: CheckOutcome },
+): void => {
+  if (result.kind === "note") process.stderr.write(`${result.message}\n`);
+  else process.stdout.write(formatText(diagnosticsOnly(result.outcome)));
+  process.exitCode = 1;
+};
+
+/** Soft commands: what did not resolve is printed here and rides on as error cards. */
+const printSoft = (outcome: CheckOutcome): void => {
+  const notes = diagnosticsOnly(outcome);
+  if (notes.reports.some((report) => report.diagnostics.length > 0)) {
+    process.stdout.write(formatText(notes));
+  }
+};
+
 const served = (paths: readonly string[]): string =>
   paths.length === 1 ? (paths[0] ?? "") : `${paths.length} walkthroughs`;
 
@@ -116,21 +119,11 @@ const build = Command.make("build", { files: buildFile, lang: langFlag, out: out
       ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
       ...(Option.isSome(config.out) ? { out: config.out.value } : {}),
     });
-    if (result.kind === "note") {
-      process.stderr.write(`${result.message}\n`);
-      process.exitCode = 1;
+    if (result.kind !== "built") {
+      stop(result);
       return;
     }
-    if (result.kind === "failed") {
-      process.stdout.write(formatText(diagnosticsOnly(result.outcome)));
-      process.exitCode = 1;
-      return;
-    }
-    /* Soft build: what did not resolve is printed here and rides on as error cards. */
-    const notes = diagnosticsOnly(result.outcome);
-    if (notes.reports.some((report) => report.diagnostics.length > 0)) {
-      process.stdout.write(formatText(notes));
-    }
+    printSoft(result.outcome);
     process.stdout.write(`balade wrote ${result.file} (${size(result.bytes)})\n`);
   }),
 ).pipe(Command.withDescription("Export one self-contained HTML file"));

@@ -2,7 +2,7 @@
    is listening, localStorage under `Payload.storageKey` in the static export —
    and localStorage again whenever the endpoint refuses. */
 
-import { parseReviewState } from "../../../src/payload/parse-review";
+import { parseReviewJson, parseReviewState } from "../../../src/payload/parse-review";
 import type { Payload, ReviewState } from "../contract";
 
 /** What a save reached: `"fallback"` means the endpoint refused and the browser copy took it. */
@@ -26,8 +26,7 @@ export function localStore(storageKey: string, storage: StorageLike): ReviewStor
     async load() {
       try {
         const raw = storage.getItem(storageKey);
-        if (raw === null) return null;
-        return parseReviewState(JSON.parse(raw));
+        return raw === null ? null : parseReviewJson(raw);
       } catch {
         return null;
       }

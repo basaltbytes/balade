@@ -1,9 +1,6 @@
 /* One shiki instance for the whole app, `github-dark-default` everywhere.
-
-   This is shiki's fine-grained bundle over a curated grammar list, not the full
-   bundle: the full one code-splits ~300 grammars, which the CLI's single-file
-   static export cannot inline. Each grammar here is still its own dynamic
-   import, so a payload only pays for the languages it names. */
+   Fine-grained over a curated grammar map (the trade-off is in DECISIONS.md);
+   adding a language is one line in `LANGS` below. */
 
 import githubDarkDefault from "@shikijs/themes/github-dark-default";
 import { useEffect, useState } from "react";

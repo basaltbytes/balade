@@ -39,6 +39,14 @@ function globToRegExp(pattern: string): RegExp {
   return new RegExp(`^${out}$`);
 }
 
+/* One compile per pattern: the `files` filter runs the same glob over every PR file. */
+const compiled = new Map<string, RegExp>();
+
 export function matchesGlob(path: string, pattern: string): boolean {
-  return globToRegExp(pattern).test(path);
+  let re = compiled.get(pattern);
+  if (re === undefined) {
+    re = globToRegExp(pattern);
+    compiled.set(pattern, re);
+  }
+  return re.test(path);
 }

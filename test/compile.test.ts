@@ -1,35 +1,21 @@
 import { basename } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { loadWalkthrough } from "../src/compile/load.js";
-import type { Block, Payload } from "../src/payload/types.js";
+import { loadWalkthrough, type LoadResult } from "../src/compile/load.js";
+import type { Payload } from "../src/payload/types.js";
 import { sha256 } from "../src/resolve/hash.js";
+import { firstBlock } from "./support/blocks.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
-
-function blocksOf(payload: Payload, sectionId: string): Block[] {
-  const section = payload.sections.find((entry) => entry.id === sectionId);
-  if (section === undefined) throw new Error(`no section ${sectionId}`);
-  return section.blocks;
-}
-
-function firstBlock<K extends Block["b"]>(
-  payload: Payload,
-  sectionId: string,
-  kind: K,
-): Extract<Block, { b: K }> {
-  const block = blocksOf(payload, sectionId).find((entry) => entry.b === kind);
-  if (block === undefined) throw new Error(`no ${kind} block in ${sectionId}`);
-  return block as Extract<Block, { b: K }>;
-}
 
 describe("compile", () => {
   let repo: FixtureRepo;
   let path: string;
+  let loaded: LoadResult;
   let payload: Payload;
 
   beforeAll(() => {
     repo = createFixtureRepo();
     path = repo.addWalkthrough("valid.md", "valid.md");
-    const loaded = loadWalkthrough({ cwd: repo.dir, path, useGh: false });
+    loaded = loadWalkthrough({ cwd: repo.dir, path, useGh: false });
     if (loaded.payload === null) throw new Error(JSON.stringify(loaded.diagnostics, null, 2));
     payload = loaded.payload;
   });
@@ -37,7 +23,6 @@ describe("compile", () => {
   afterAll(() => repo.cleanup());
 
   it("builds a payload with no error diagnostics", () => {
-    const loaded = loadWalkthrough({ cwd: repo.dir, path, useGh: false });
     expect(loaded.diagnostics.filter((d) => d.level === "error")).toEqual([]);
     expect(loaded.sourcePath).toBe("walkthroughs/valid.md");
   });
