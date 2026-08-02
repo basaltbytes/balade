@@ -81,7 +81,7 @@ const open = Command.make("open", { files, lang: langFlag, port: portFlag }, (co
 
     const url = yield* serve({ appDir, port: config.port, api: session.api });
     process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
-    yield* Effect.never;
+    return yield* Effect.never;
   }).pipe(Effect.scoped),
 ).pipe(Command.withDescription("Serve the interactive walkthrough app"));
 

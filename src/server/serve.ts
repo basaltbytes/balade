@@ -99,7 +99,7 @@ const putState = (api: Api) =>
     const request = yield* HttpServerRequest.HttpServerRequest;
     /* A body that is not JSON and a body that is the wrong JSON fail the caller
        the same way: neither is a review state, and `writeState` says so. */
-    const body = yield* Effect.catch(request.json, () => Effect.succeed<unknown>(undefined));
+    const body = yield* Effect.orElseSucceed(request.json, (): unknown => undefined);
     return respond(api.writeState(path, body));
   });
 

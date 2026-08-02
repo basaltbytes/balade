@@ -24,6 +24,16 @@ throws nothing a caller must catch. Effect appears only in `src/cli.ts`, where
 it owns argument parsing and process exit. One dialect per layer; a full Effect
 migration would buy retries and typed error channels the core has no use for.
 
+## `typecheck` carries the Effect language service
+
+`@effect/tsgo` patches the native `tsc` binary in place — the `prepare` script
+re-applies it after every install, and the plugin block in `tsconfig.json`
+turns it on. Effect diagnostics therefore run inside `pnpm typecheck`:
+error-level findings fail the build, suggestions print but do not (the
+`ignoreEffectSuggestionsInTscExitCode` default). The patched binary must match
+the installed TypeScript by gitHead, so the two packages move together — bump
+`typescript` and `@effect/tsgo` in the same change.
+
 ## Resolution shells out through `spawnSync`
 
 One resolve costs 2576 ms across 25 processes — fine for `check`, too slow to

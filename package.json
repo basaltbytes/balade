@@ -44,6 +44,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "package:smoke": "bash scripts/npm-smoke.sh",
+    "prepare": "effect-tsgo patch",
     "prepublishOnly": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test && pnpm package:smoke"
   },
   "dependencies": {
@@ -53,6 +54,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@effect/tsgo": "0.24.3",
     "@git-diff-view/react": "0.1.7",
     "@primer/octicons-react": "19.32.0",
     "@shikijs/langs": "4.4.1",
