@@ -24,6 +24,22 @@ export interface FixtureRepo {
   cleanup(): void;
 }
 
+/**
+ * Recent git spawns a detached `git maintenance run --auto` after commit and
+ * fetch; one still writing `.git/objects/pack` while cleanup() runs makes
+ * rmSync fail with ENOTEMPTY. Fixture repos keep maintenance foreground-only,
+ * and cleanup retries in case a straggler wins the race once anyway.
+ */
+const NO_BACKGROUND_MAINTENANCE: ReadonlyArray<readonly [string, string]> = [
+  ["maintenance.auto", "false"],
+  ["gc.auto", "0"],
+  ["gc.autoDetach", "false"],
+];
+
+function removeRepo(dir: string): void {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
 function run(dir: string, args: string[]): string {
   return execFileSync("git", args, {
     cwd: dir,
@@ -185,6 +201,9 @@ export function createFixtureRepo(): FixtureRepo {
   run(dir, ["config", "user.email", "fixture@example.com"]);
   run(dir, ["config", "user.name", "Fixture"]);
   run(dir, ["config", "commit.gpgsign", "false"]);
+  for (const [key, value] of NO_BACKGROUND_MAINTENANCE) {
+    run(dir, ["config", key, value]);
+  }
 
   write("models/planning_pool_item.py", BASE_MODEL);
   write(
@@ -230,7 +249,7 @@ export function createFixtureRepo(): FixtureRepo {
     write,
     commit,
     addWalkthrough,
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    cleanup: () => removeRepo(dir),
   };
 }
 
@@ -252,9 +271,13 @@ export function advertisePull(origin: FixtureRepo, pull: number, commit: string)
 export function cloneOnMain(origin: FixtureRepo, pull: number): FixtureClone {
   advertisePull(origin, pull, "HEAD");
   const dir = mkdtempSync(join(tmpdir(), "balade-clone-"));
-  run(dir, ["clone", "--quiet", "--branch", "main", origin.dir, "."]);
+  const configFlags = NO_BACKGROUND_MAINTENANCE.flatMap(([key, value]) => [
+    "--config",
+    `${key}=${value}`,
+  ]);
+  run(dir, ["clone", "--quiet", "--branch", "main", ...configFlags, origin.dir, "."]);
   return {
     dir,
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    cleanup: () => removeRepo(dir),
   };
 }
