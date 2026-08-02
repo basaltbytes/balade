@@ -173,11 +173,13 @@ describe("a served PR without a checkout", () => {
           useGh: false,
         }),
       );
-      if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
+      if (prepared._tag !== "SessionReady") {
+        throw new Error(`open refused to start: ${prepared._tag}`);
+      }
       const session = prepared.session;
 
       expect(session.paths).toEqual(["walkthroughs/valid.md"]);
-      expect(session.outcome.ok).toBe(true);
+      expect(session.reports).toHaveLength(1);
 
       const payload = (yield* session.api.walkthrough(null)) as Payload;
       expect(payload.walkthrough).toBe(1);

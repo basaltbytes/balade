@@ -1,5 +1,6 @@
 /**
- * `check` output. The text form and `--json` carry the same facts: every
+ * Diagnostic output shared by `check`, `build` and `open`. The text form and
+ * `check --json` carry the same facts: every
  * diagnostic with its code and fix hint, and the first and last resolved line
  * of every code range, so an authoring agent self-verifies in one pass.
  */
@@ -8,10 +9,13 @@ import type { CheckDiagnostic, CheckReport, RangeEcho } from "../payload/types.j
 import type { CheckOutcome } from "./run.js";
 
 export function formatJson(outcome: CheckOutcome): string {
-  return JSON.stringify({ ok: outcome.ok, reports: outcome.reports }, null, 2);
+  return JSON.stringify({ ok: outcome._tag === "CheckPassed", reports: outcome.reports }, null, 2);
 }
 
-export function formatText(outcome: CheckOutcome): string {
+export function formatText(outcome: {
+  readonly reports: readonly CheckReport[];
+  readonly note?: string;
+}): string {
   const lines: string[] = [];
   if (outcome.note !== undefined) lines.push(outcome.note);
 

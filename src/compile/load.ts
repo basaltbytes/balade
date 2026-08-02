@@ -3,7 +3,7 @@
  * served mode calls this per request; `check` calls it per discovered file.
  */
 
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, FileSystem, Match, Path, Schema } from "effect";
 import type { CheckDiagnostic, Payload, RangeEcho } from "../payload/types.js";
 import type { CommandFailed } from "../resolve/exec.js";
 import { resolveContext, type ResolveError } from "../resolve/git.js";
@@ -103,42 +103,37 @@ export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: 
 
 /** Translates a real load failure into `check`'s product vocabulary at its boundary. */
 export function loadErrorDiagnostic(error: LoadError): CheckDiagnostic {
-  switch (error._tag) {
-    case "WalkthroughFileReadFailed":
-      return {
-        code: "file-unresolvable",
-        level: "error",
-        file: error.path,
-        message: "The walkthrough file does not exist or cannot be read.",
-        hint: "Check the path, or run `balade check` with no argument to validate every discovered walkthrough.",
-      };
-    case "NotARepository":
-      return {
-        code: "repo-unresolvable",
-        level: "error",
-        file: error.cwd,
-        message: "This directory is not inside a git repository.",
-        hint: "Run balade from the repository that holds the walkthrough.",
-      };
-    case "CommitUnresolvable":
-      return {
-        code: "commit-unresolvable",
-        level: "error",
-        file: error.file,
-        message: `The stamped commit \`${error.commit}\` is not in this clone.`,
-        hint: "Fetch the branch (CI needs `fetch-depth: 0`), or re-stamp the walkthrough against a commit you have.",
-      };
-    case "PathResolutionFailed":
-      return {
-        code: "file-unresolvable",
-        level: "error",
-        file: error.path,
-        message: "The walkthrough path could not be resolved.",
-        hint: "Check that the repository and walkthrough path are readable.",
-      };
-    case "CommandFailed":
-      return commandDiagnostic(error);
-  }
+  return Match.valueTags(error, {
+    WalkthroughFileReadFailed: ({ path }): CheckDiagnostic => ({
+      code: "file-unresolvable",
+      level: "error",
+      file: path,
+      message: "The walkthrough file does not exist or cannot be read.",
+      hint: "Check the path, or run `balade check` with no argument to validate every discovered walkthrough.",
+    }),
+    NotARepository: ({ cwd }): CheckDiagnostic => ({
+      code: "repo-unresolvable",
+      level: "error",
+      file: cwd,
+      message: "This directory is not inside a git repository.",
+      hint: "Run balade from the repository that holds the walkthrough.",
+    }),
+    CommitUnresolvable: ({ commit, file }): CheckDiagnostic => ({
+      code: "commit-unresolvable",
+      level: "error",
+      file,
+      message: `The stamped commit \`${commit}\` is not in this clone.`,
+      hint: "Fetch the branch (CI needs `fetch-depth: 0`), or re-stamp the walkthrough against a commit you have.",
+    }),
+    PathResolutionFailed: ({ path }): CheckDiagnostic => ({
+      code: "file-unresolvable",
+      level: "error",
+      file: path,
+      message: "The walkthrough path could not be resolved.",
+      hint: "Check that the repository and walkthrough path are readable.",
+    }),
+    CommandFailed: commandDiagnostic,
+  });
 }
 
 const commandDiagnostic = (error: CommandFailed): CheckDiagnostic => ({

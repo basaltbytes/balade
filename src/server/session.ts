@@ -5,19 +5,20 @@
  *
  * Preparation is an Effect: discovery, path resolution and eager compilation
  * preserve their failures until the CLI boundary. Domain diagnostics remain in
- * the successful check outcome.
+ * the reports produced during eager compilation.
  */
 
-import { Effect, FileSystem, Layer, Path, Stream } from "effect";
+import { Effect, FileSystem, Layer, Match, Path, Stream } from "effect";
 import {
   discoverWalkthroughs,
   NO_WALKTHROUGH,
   NOT_A_REPO,
   type DiscoveryError,
 } from "../check/discover.js";
-import { softReport, type CheckOutcome } from "../check/run.js";
+import { softReport } from "../check/run.js";
 import type { LoadError } from "../compile/load.js";
 import { describeFailure } from "../failure.js";
+import type { CheckReport } from "../payload/types.js";
 import { gitToplevel } from "../resolve/exec.js";
 import { repoRelative, type PathResolutionFailed } from "../resolve/paths.js";
 import { ReviewStateStore } from "../state/store.js";
@@ -49,38 +50,49 @@ export interface Session {
   /** Served walkthroughs, repo-relative. */
   paths: readonly string[];
   /** Diagnostics of the eager compile — warnings, and the soft errors that still serve. */
-  outcome: CheckOutcome;
+  reports: readonly CheckReport[];
 }
 
-export type Prepared =
-  /** Ready to serve; `outcome` may still carry warnings and error cards. */
-  | { kind: "ready"; session: Session }
-  /** Nothing to serve, and the sentence that says why. */
-  | { kind: "note"; message: string }
-  /** A dead repository, PR or file: `open` prints this and stops. */
-  | { kind: "failed"; outcome: CheckOutcome };
+/** Ready to serve; reports may still carry warnings and renderable error cards. */
+export interface SessionReady {
+  readonly _tag: "SessionReady";
+  readonly session: Session;
+}
+
+/** Nothing to serve, and the sentence that says why. */
+export interface SessionNotStarted {
+  readonly _tag: "SessionNotStarted";
+  readonly message: string;
+}
+
+/** A dead repository, PR or file: `open` prints this and stops. */
+export interface SessionFailed {
+  readonly _tag: "SessionFailed";
+  readonly reports: readonly CheckReport[];
+}
+
+export type Prepared = SessionReady | SessionNotStarted | SessionFailed;
 
 type Selected =
-  | { kind: "ok"; root: string; paths: readonly string[]; at?: string }
-  | { kind: "note"; message: string };
+  | { readonly _tag: "SessionSelected"; root: string; paths: readonly string[]; at?: string }
+  | SessionNotStarted;
 
 export type SessionError = DiscoveryError | LoadError | PathResolutionFailed | ServerRepoError;
 
 export function sessionErrorMessage(error: SessionError): string {
-  switch (error._tag) {
-    case "NotARepository":
-      return error.note;
-    case "CommandFailed":
-      return `${error.file} ${error.args.join(" ")} failed (exit ${error.code}).`;
-    case "WalkthroughReadFailed":
-    case "WalkthroughFileReadFailed":
-    case "ServerSourceReadFailed":
-      return `Could not read ${error.path} (${describeFailure(error.cause)}).`;
-    case "CommitUnresolvable":
-      return `The stamped commit ${error.commit} is not in this clone.`;
-    case "PathResolutionFailed":
-      return `Could not resolve ${error.path} (${describeFailure(error.cause)}).`;
-  }
+  return Match.valueTags(error, {
+    NotARepository: ({ note }) => note,
+    CommandFailed: ({ file, args, code }) => `${file} ${args.join(" ")} failed (exit ${code}).`,
+    WalkthroughReadFailed: ({ path, cause }) =>
+      `Could not read ${path} (${describeFailure(cause)}).`,
+    WalkthroughFileReadFailed: ({ path, cause }) =>
+      `Could not read ${path} (${describeFailure(cause)}).`,
+    ServerSourceReadFailed: ({ path, cause }) =>
+      `Could not read ${path} (${describeFailure(cause)}).`,
+    CommitUnresolvable: ({ commit }) => `The stamped commit ${commit} is not in this clone.`,
+    PathResolutionFailed: ({ path, cause }) =>
+      `Could not resolve ${path} (${describeFailure(cause)}).`,
+  });
 }
 
 /** Named files are made repo-relative; discovery and the locator already answer in that shape. */
@@ -88,7 +100,12 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
   const pathService = yield* Path.Path;
   if (options.selection.kind === "located") {
     const { root, paths, at } = options.selection;
-    return { kind: "ok", root, paths, ...(at === undefined ? {} : { at }) } satisfies Selected;
+    return {
+      _tag: "SessionSelected",
+      root,
+      paths,
+      ...(at === undefined ? {} : { at }),
+    } satisfies Selected;
   }
 
   if (options.selection.kind === "discovered") {
@@ -96,11 +113,11 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
       Effect.map(
         (found): Selected =>
           found.paths.length === 0
-            ? { kind: "note", message: NO_WALKTHROUGH }
-            : { kind: "ok", root: found.repoRoot, paths: found.paths },
+            ? { _tag: "SessionNotStarted", message: NO_WALKTHROUGH }
+            : { _tag: "SessionSelected", root: found.repoRoot, paths: found.paths },
       ),
       Effect.catchTag("NotARepository", () =>
-        Effect.succeed<Selected>({ kind: "note", message: NOT_A_REPO }),
+        Effect.succeed<Selected>({ _tag: "SessionNotStarted", message: NOT_A_REPO }),
       ),
     );
   }
@@ -108,7 +125,9 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
   const root = yield* gitToplevel(options.cwd).pipe(
     Effect.catchTag("NotARepository", () => Effect.void),
   );
-  if (root === undefined) return { kind: "note", message: NOT_A_REPO } satisfies Selected;
+  if (root === undefined) {
+    return { _tag: "SessionNotStarted", message: NOT_A_REPO } satisfies Selected;
+  }
   const paths: string[] = [];
   for (const path of options.selection.paths) {
     paths.push(
@@ -119,13 +138,15 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
     );
   }
   return (
-    paths.length === 0 ? { kind: "note", message: NO_WALKTHROUGH } : { kind: "ok", root, paths }
+    paths.length === 0
+      ? { _tag: "SessionNotStarted", message: NO_WALKTHROUGH }
+      : { _tag: "SessionSelected", root, paths }
   ) satisfies Selected;
 });
 
 export const prepareSession = Effect.fn("prepareSession")(function* (options: SessionOptions) {
   const selected = yield* select(options);
-  if (selected.kind === "note") return selected;
+  if (selected._tag === "SessionNotStarted") return selected;
   const { root, paths, at } = selected;
 
   const repoLayer = ServerRepo.layer({
@@ -142,17 +163,16 @@ export const prepareSession = Effect.fn("prepareSession")(function* (options: Se
     /* Named files and located PRs compile before the port opens, so a dead
        repository, PR or path stops the command instead of greeting the reviewer
        with a blank app. Discovery serves an index, which needs frontmatter only. */
-    const outcome =
-      options.selection.kind === "discovered"
-        ? ({ ok: true, reports: [] } satisfies CheckOutcome)
-        : yield* compileEagerly(paths);
-    if (!outcome.ok) return { kind: "failed", outcome } satisfies Prepared;
+    const reports = options.selection.kind === "discovered" ? [] : yield* compileEagerly(paths);
+    if (reports.some((report) => !report.ok)) {
+      return { _tag: "SessionFailed", reports } satisfies SessionFailed;
+    }
 
     const api = yield* createApi(paths);
 
     /* Content at a fetched commit is immutable: ref mode has nothing to watch. */
     if (at === undefined) yield* watchWalkthroughs(root, paths);
-    return { kind: "ready", session: { api, paths, outcome } } satisfies Prepared;
+    return { _tag: "SessionReady", session: { api, paths, reports } } satisfies SessionReady;
   }).pipe(Effect.provide(sessionLayer));
 });
 
@@ -163,10 +183,7 @@ export const prepareSession = Effect.fn("prepareSession")(function* (options: Se
  */
 const compileEagerly = Effect.fn("compileEagerly")(function* (paths: readonly string[]) {
   const payloads = yield* PayloadCache;
-  const reports = yield* Effect.forEach(paths, (path) =>
-    payloads.get(path).pipe(Effect.map(softReport)),
-  );
-  return { ok: reports.every((report) => report.ok), reports };
+  return yield* Effect.forEach(paths, (path) => payloads.get(path).pipe(Effect.map(softReport)));
 });
 
 /**

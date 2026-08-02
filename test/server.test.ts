@@ -56,7 +56,9 @@ describe("the served API", () => {
         ),
       ),
     );
-    if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
+    if (prepared._tag !== "SessionReady") {
+      throw new Error(`open refused to start: ${prepared._tag}`);
+    }
     session = prepared.session;
     path = session.paths[0] ?? "";
   });
@@ -68,7 +70,7 @@ describe("the served API", () => {
 
   it("names the walkthrough it serves, repo-relative", () => {
     expect(path).toBe("walkthroughs/valid.md");
-    expect(session.outcome.ok).toBe(true);
+    expect(session.reports).toHaveLength(1);
   });
 
   it.effect("threads --lang through to the payload, over meta.lang", () =>
@@ -81,10 +83,38 @@ describe("the served API", () => {
           useGh: false,
         }),
       );
-      if (french.kind !== "ready") throw new Error(`open refused to start: ${french.kind}`);
+      if (french._tag !== "SessionReady") {
+        throw new Error(`open refused to start: ${french._tag}`);
+      }
       const answer = yield* french.session.api.walkthrough(null);
       /* The fixture frontmatter says `lang: en`; the flag wins. */
       expect((answer as Payload).lang).toBe("fr");
+    }),
+  );
+
+  it.effect("tags empty and unbuildable session outcomes", () =>
+    Effect.gen(function* () {
+      const empty = yield* provideLive(
+        prepareSession({
+          cwd: repo.dir,
+          selection: { kind: "files", paths: [] },
+          useGh: false,
+        }),
+      );
+      expect(empty).toMatchObject({ _tag: "SessionNotStarted" });
+
+      repo.write("walkthroughs/invalid.md", "# Missing frontmatter\n");
+      const failed = yield* provideLive(
+        prepareSession({
+          cwd: repo.dir,
+          selection: { kind: "files", paths: ["walkthroughs/invalid.md"] },
+          useGh: false,
+        }),
+      );
+      expect(failed).toMatchObject({
+        _tag: "SessionFailed",
+        reports: [{ ok: false }],
+      });
     }),
   );
 
@@ -113,7 +143,9 @@ it.live("invalidates a cached payload when the scoped watcher sees an edit", () 
         selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
         useGh: false,
       });
-      if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
+      if (prepared._tag !== "SessionReady") {
+        throw new Error(`open refused to start: ${prepared._tag}`);
+      }
 
       const file = join(repo.dir, "walkthroughs/valid.md");
       const before = yield* prepared.session.api.walkthrough(null);
@@ -228,7 +260,9 @@ describe("the index", () => {
         ),
       ),
     );
-    if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
+    if (prepared._tag !== "SessionReady") {
+      throw new Error(`open refused to start: ${prepared._tag}`);
+    }
     session = prepared.session;
   });
 

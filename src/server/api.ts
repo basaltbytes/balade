@@ -8,7 +8,7 @@
  * the file system.
  */
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Match, Option, Schema } from "effect";
 import { describeFailure } from "../failure.js";
 import { parseReviewState } from "../payload/parse-review.js";
 import type {
@@ -250,33 +250,39 @@ export interface ApiErrorResponse {
 }
 
 export function apiErrorResponse(error: ApiError): ApiErrorResponse {
-  switch (error._tag) {
-    case "ApiPathRequired":
-      return { status: 400, message: NEEDS_PATH };
-    case "ApiReviewStateInvalid":
-      return {
-        status: 400,
-        message: "The body is not a review state: it needs version 1, walkthrough, pr and stamp.",
-      };
-    case "ApiReviewStateMismatch":
-      return {
-        status: 400,
-        message: `The body names \`${error.statePath}\`, but the request names \`${error.requestPath}\`.`,
-      };
-    case "ApiTargetNotServed":
-      return { status: 404, message: `This run does not serve \`${error.path}\`.` };
-    case "ApiReviewStateNotFound":
-      return { status: 404, message: `No review state for \`${error.path}\` yet.` };
-    case "ApiStampUnreadable":
-      return { status: 404, message: `\`${error.path}\` carries no readable stamp.` };
-    case "ApiStampUnresolvable":
-      return { status: 404, message: `The stamp \`${error.pin}\` is not in this clone.` };
-    case "ApiWalkthroughUnavailable":
-      return { status: 500, message: error.detail };
-    case "ApiReviewStateUnavailable":
-      return {
-        status: 500,
-        message: `Review state for \`${error.path}\` is unavailable (${error.detail}).`,
-      };
-  }
+  return Match.valueTags(error, {
+    ApiPathRequired: (): ApiErrorResponse => ({ status: 400, message: NEEDS_PATH }),
+    ApiReviewStateInvalid: (): ApiErrorResponse => ({
+      status: 400,
+      message: "The body is not a review state: it needs version 1, walkthrough, pr and stamp.",
+    }),
+    ApiReviewStateMismatch: ({ statePath, requestPath }): ApiErrorResponse => ({
+      status: 400,
+      message: `The body names \`${statePath}\`, but the request names \`${requestPath}\`.`,
+    }),
+    ApiTargetNotServed: ({ path }): ApiErrorResponse => ({
+      status: 404,
+      message: `This run does not serve \`${path}\`.`,
+    }),
+    ApiReviewStateNotFound: ({ path }): ApiErrorResponse => ({
+      status: 404,
+      message: `No review state for \`${path}\` yet.`,
+    }),
+    ApiStampUnreadable: ({ path }): ApiErrorResponse => ({
+      status: 404,
+      message: `\`${path}\` carries no readable stamp.`,
+    }),
+    ApiStampUnresolvable: ({ pin }): ApiErrorResponse => ({
+      status: 404,
+      message: `The stamp \`${pin}\` is not in this clone.`,
+    }),
+    ApiWalkthroughUnavailable: ({ detail }): ApiErrorResponse => ({
+      status: 500,
+      message: detail,
+    }),
+    ApiReviewStateUnavailable: ({ path, detail }): ApiErrorResponse => ({
+      status: 500,
+      message: `Review state for \`${path}\` is unavailable (${detail}).`,
+    }),
+  });
 }

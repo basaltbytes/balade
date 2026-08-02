@@ -1,10 +1,16 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect } from "effect";
+import { NodeServices } from "@effect/platform-node";
+import { Effect, Layer } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
+import { runBuild } from "../src/build/run.js";
 import { formatJson, formatText } from "../src/check/report.js";
-import { checkOne, runCheck } from "../src/check/run.js";
+import { checkOne, outcomeFromReports, runCheck } from "../src/check/run.js";
 import { loadWalkthrough } from "../src/compile/load.js";
 import type { CheckDiagnostic, CheckReport } from "../src/payload/types.js";
+import { CommandExecutor, CommandFailed } from "../src/resolve/exec.js";
+import { prepareSession } from "../src/server/session.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
@@ -18,6 +24,33 @@ function find(report: CheckReport, code: string): CheckDiagnostic {
     throw new Error(`no ${code} in ${codes(report.diagnostics).join(", ")}`);
   return diagnostic;
 }
+
+const unavailableGhLayer = Layer.effect(
+  CommandExecutor,
+  Effect.gen(function* () {
+    const live = yield* CommandExecutor;
+    return {
+      exec: Effect.fn("CommandExecutor.unavailableGh")(function* (
+        file: string,
+        args: readonly string[],
+        cwd: string,
+      ) {
+        if (file === "gh") {
+          return yield* new CommandFailed({
+            file,
+            args,
+            cwd,
+            stderr: "gh unavailable in test",
+            code: 1,
+          });
+        }
+        return yield* live.exec(file, args, cwd);
+      }),
+    };
+  }),
+).pipe(Layer.provide(CommandExecutor.layer));
+
+const resolverWithoutGh = Layer.mergeAll(NodeServices.layer, unavailableGhLayer);
 
 describe("check", () => {
   let repo: FixtureRepo;
@@ -155,6 +188,88 @@ describe("check", () => {
     }),
   );
 
+  it.effect("keeps validation strict while build and open preserve error cards", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const bundleDir = yield* Effect.acquireRelease(
+          Effect.sync(() => {
+            const dir = mkdtempSync(join(tmpdir(), "balade-core-pipelines-"));
+            writeFileSync(join(dir, "app.js"), "window.__BALADE_TEST__ = true;\n", "utf8");
+            writeFileSync(join(dir, "app.css"), "#root{}\n", "utf8");
+            return dir;
+          }),
+          (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+        );
+        const path = join(repo.dir, "walkthroughs/errors.md");
+
+        const checked = yield* provideLive(
+          runCheck({ cwd: repo.dir, paths: [path], useGh: false }),
+        );
+        expect(checked._tag).toBe("CheckFailed");
+
+        const built = yield* provideLive(
+          runBuild({ cwd: repo.dir, paths: [path], useGh: false, bundleDir }),
+        );
+        if (built._tag !== "Built") throw new Error(`build refused: ${built._tag}`);
+        expect(built.reports[0]?.diagnostics).toContainEqual(
+          expect.objectContaining({ code: "range-unresolvable", level: "error" }),
+        );
+
+        const prepared = yield* provideLive(
+          prepareSession({
+            cwd: repo.dir,
+            selection: { kind: "files", paths: [path] },
+            useGh: false,
+          }),
+        );
+        if (prepared._tag !== "SessionReady") {
+          throw new Error(`open refused to start: ${prepared._tag}`);
+        }
+        expect(prepared.session.reports[0]?.diagnostics).toContainEqual(
+          expect.objectContaining({ code: "range-unresolvable", level: "error" }),
+        );
+        const payload = yield* prepared.session.api.walkthrough(null);
+        if ("kind" in payload) throw new Error("single walkthrough returned an index");
+        expect(payload.errors.map((card) => card.code)).toEqual([
+          "range-unresolvable",
+          "file-unresolvable",
+        ]);
+      }),
+    ),
+  );
+
+  it.effect("keeps optional gh failure as a warning in the successful load result", () =>
+    Effect.gen(function* () {
+      const loaded = yield* loadWalkthrough({
+        cwd: repo.dir,
+        path: join(repo.dir, "walkthroughs/valid.md"),
+      });
+      expect(loaded.payload).not.toBeNull();
+      expect(loaded.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "gh-unavailable", level: "warning" }),
+      );
+    }).pipe(Effect.provide(resolverWithoutGh)),
+  );
+
+  it.effect("translates a real load failure only at the check boundary", () =>
+    Effect.gen(function* () {
+      const missing = join(repo.dir, "walkthroughs/missing.md");
+      const failure = yield* provideLive(
+        loadWalkthrough({ cwd: repo.dir, path: missing, useGh: false }).pipe(Effect.flip),
+      );
+      expect(failure).toMatchObject({
+        _tag: "WalkthroughFileReadFailed",
+        path: "walkthroughs/missing.md",
+      });
+
+      const report = yield* provideLive(checkOne({ cwd: repo.dir, path: missing, useGh: false }));
+      expect(report).toMatchObject({
+        ok: false,
+        diagnostics: [expect.objectContaining({ code: "file-unresolvable", level: "error" })],
+      });
+    }),
+  );
+
   it.effect("reports a duplicate section without orphaning its error cards", () =>
     Effect.gen(function* () {
       const path = join(repo.dir, "walkthroughs/duplicate.md");
@@ -179,18 +294,19 @@ describe("check", () => {
         "walkthroughs/errors.md",
         "walkthroughs/valid.md",
       ]);
-      expect(outcome.ok).toBe(false);
+      expect(outcome._tag).toBe("CheckFailed");
     }),
   );
 
   it("prints the same facts as text and as JSON", () => {
-    const outcome = { ok: false, reports: [errors] };
+    const outcome = outcomeFromReports([errors]);
     const text = formatText(outcome);
     expect(text).toContain("walkthroughs/errors.md");
     expect(text).toContain("expect-mismatch");
     expect(text).toContain("expected  class PlanningPoolItem");
     expect(text).toContain("code ranges (2)");
     const parsed = JSON.parse(formatJson(outcome)) as { ok: boolean; reports: CheckReport[] };
+    expect(parsed).not.toHaveProperty("_tag");
     expect(parsed.ok).toBe(false);
     expect(parsed.reports[0]?.diagnostics.length).toBe(errors.diagnostics.length);
     expect(parsed.reports[0]?.ranges.length).toBe(2);
@@ -241,7 +357,7 @@ describe("no walkthrough", () => {
   it.effect("says so instead of failing", () =>
     Effect.gen(function* () {
       const outcome = yield* provideLive(runCheck({ cwd: "/", useGh: false }));
-      expect(outcome.ok).toBe(true);
+      expect(outcome._tag).toBe("CheckPassed");
       expect(outcome.note).toBeTruthy();
     }),
   );
