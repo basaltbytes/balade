@@ -305,7 +305,7 @@ interface NameStatus {
 function parseNameStatus(out: string): NameStatus[] {
   const parts = out.split("\0").filter((part) => part !== "");
   const records: NameStatus[] = [];
-  for (let i = 0; i < parts.length; ) {
+  for (let i = 0; i < parts.length;) {
     const code = (parts[i] ?? "").trim();
     i++;
     const letter = code.charAt(0);
@@ -336,7 +336,7 @@ interface NumStat {
 function parseNumStat(out: string): Map<string, NumStat> {
   const stats = new Map<string, NumStat>();
   const parts = out.split("\0").filter((part) => part !== "");
-  for (let i = 0; i < parts.length; ) {
+  for (let i = 0; i < parts.length;) {
     const record = parts[i] ?? "";
     i++;
     const fields = record.split("\t");
