@@ -66,11 +66,13 @@ export function compileDocument(input: CompileInput): CompileResult {
     markReferenced: (path) => referenced.add(path),
     fileRef: (path, sectionId) => {
       const entry = files.get(path);
-      if (entry !== undefined && entry.ref === undefined) entry.ref = sectionId;
+      if (entry !== undefined && entry.ref === undefined) {
+        files.set(path, { ...entry, ref: sectionId });
+      }
     },
     fileWhy: (path, why) => {
       const entry = files.get(path);
-      if (entry !== undefined) entry.why = why;
+      if (entry !== undefined) files.set(path, { ...entry, why });
     },
   };
 

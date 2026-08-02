@@ -10,9 +10,9 @@ export function Method({
   body,
 }: {
   decorator?: string;
-  chips?: string[];
+  chips?: ReadonlyArray<string>;
   sig: string;
-  body: Inline[];
+  body: ReadonlyArray<Inline>;
 }) {
   return (
     <div className="my-3 border border-border rounded-md bg-card px-4 py-3">
@@ -34,7 +34,7 @@ export function Method({
   );
 }
 
-export function Tests({ items }: { items: TestItem[] }) {
+export function Tests({ items }: { items: ReadonlyArray<TestItem> }) {
   return (
     <div className="my-4 grid gap-3 md:grid-cols-2">
       {items.map((item, index) => (
@@ -69,7 +69,7 @@ export function Tests({ items }: { items: TestItem[] }) {
   );
 }
 
-export function Cards({ cols, items }: { cols: 1 | 2 | 3; items: CardItem[] }) {
+export function Cards({ cols, items }: { cols: 1 | 2 | 3; items: ReadonlyArray<CardItem> }) {
   const grid = cols === 3 ? "md:grid-cols-3" : cols === 2 ? "md:grid-cols-2" : "";
   return (
     <div className={`my-4 grid gap-3 ${grid}`}>
@@ -97,7 +97,7 @@ export function Cards({ cols, items }: { cols: 1 | 2 | 3; items: CardItem[] }) {
   );
 }
 
-export function Patterns({ items }: { items: PatternItem[] }) {
+export function Patterns({ items }: { items: ReadonlyArray<PatternItem> }) {
   return (
     <div className="my-4 grid gap-3 md:grid-cols-2">
       {items.map((item, index) => (

@@ -1,7 +1,7 @@
 import type { Inline, MdNode } from "../contract";
 import { Rich, Tag } from "../ui/rich";
 
-export function Md({ nodes }: { nodes: MdNode[] }) {
+export function Md({ nodes }: { nodes: ReadonlyArray<MdNode> }) {
   return (
     <>
       {nodes.map((node, index) => {
@@ -43,7 +43,7 @@ export function Md({ nodes }: { nodes: MdNode[] }) {
   );
 }
 
-export function Callout({ tone, body }: { tone?: "key" | "warn"; body: Inline[] }) {
+export function Callout({ tone, body }: { tone?: "key" | "warn"; body: ReadonlyArray<Inline> }) {
   const styles =
     tone === "key"
       ? "border-primary/50 bg-primary/10"
@@ -59,7 +59,11 @@ export function Callout({ tone, body }: { tone?: "key" | "warn"; body: Inline[] 
   );
 }
 
-export function Flow({ steps }: { steps: { body: Inline[]; tag?: string }[] }) {
+export function Flow({
+  steps,
+}: {
+  steps: ReadonlyArray<{ readonly body: ReadonlyArray<Inline>; readonly tag?: string }>;
+}) {
   return (
     <div className="my-4 flex flex-wrap items-center gap-y-2 text-[13px]">
       {steps.map((step, index) => (
@@ -75,7 +79,7 @@ export function Flow({ steps }: { steps: { body: Inline[]; tag?: string }[] }) {
   );
 }
 
-export function Attrs({ items }: { items: string[] }) {
+export function Attrs({ items }: { items: ReadonlyArray<string> }) {
   return (
     <div className="my-3 flex flex-wrap gap-2">
       {items.map((item, index) => (
