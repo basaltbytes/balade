@@ -4,9 +4,9 @@
  * enriches the PR header when it is there and authenticated.
  */
 
+import { Schema } from "effect";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../payload/types.js";
 import type { ResolveContext } from "../resolve/context.js";
-import { isRecord } from "../payload/parse-review.js";
 import { changedLines, splitDiff } from "./diff.js";
 import { gh, gitOut, gitToplevel } from "./exec.js";
 import { fileName } from "./paths.js";
@@ -34,20 +34,39 @@ export interface ResolveResult {
 
 /** What the resolver keeps of `gh pr view`, once every field has been checked. */
 interface PullRequest {
-  url: string | undefined;
-  state: string | undefined;
-  author: string | undefined;
-  baseRefName: string | undefined;
-  headRefName: string | undefined;
-  baseRefOid: string | undefined;
-  headRefOid: string | undefined;
-  commits: number | undefined;
+  readonly url: string;
+  readonly state: string;
+  readonly author: string | undefined;
+  readonly baseRefName: string;
+  readonly headRefName: string;
+  readonly baseRefOid: string;
+  readonly headRefOid: string;
+  readonly commits: number;
 }
 
 interface PullRequestResult {
-  pull: PullRequest | null;
-  diagnostics: CheckDiagnostic[];
+  readonly pull: PullRequest | null;
+  readonly diagnostics: readonly CheckDiagnostic[];
 }
+
+const PullRequestResponse = Schema.Struct({
+  url: Schema.NonEmptyString,
+  state: Schema.NonEmptyString,
+  author: Schema.NullOr(
+    Schema.StructWithRest(Schema.Struct({ login: Schema.NonEmptyString }), [
+      Schema.Record(Schema.String, Schema.Unknown),
+    ]),
+  ),
+  baseRefName: Schema.NonEmptyString,
+  headRefName: Schema.NonEmptyString,
+  baseRefOid: Schema.NonEmptyString,
+  headRefOid: Schema.NonEmptyString,
+  commits: Schema.Array(Schema.Unknown),
+});
+
+const decodePullRequest = Schema.decodeUnknownResult(PullRequestResponse, {
+  onExcessProperty: "error",
+});
 
 export function resolveContext(options: ResolveOptions): ResolveResult {
   const diagnostics: CheckDiagnostic[] = [];
@@ -251,29 +270,29 @@ function readPullRequest(root: string, number: number, file: string): PullReques
   } catch {
     return { pull: null, diagnostics: [ghWarning(file, "its answer was not JSON")] };
   }
-  if (!isRecord(body)) {
-    return { pull: null, diagnostics: [ghWarning(file, "its answer was not a JSON object")] };
+  const decoded = decodePullRequest(body);
+  if (decoded._tag === "Failure") {
+    return {
+      pull: null,
+      diagnostics: [ghWarning(file, "its answer did not match the requested fields")],
+    };
   }
 
-  const author = body["author"];
-  const commits = body["commits"];
+  const response = decoded.success;
   return {
     pull: {
-      url: text(body["url"]),
-      state: text(body["state"]),
-      author: text(isRecord(author) ? author["login"] : undefined),
-      baseRefName: text(body["baseRefName"]),
-      headRefName: text(body["headRefName"]),
-      baseRefOid: text(body["baseRefOid"]),
-      headRefOid: text(body["headRefOid"]),
-      commits: Array.isArray(commits) ? commits.length : undefined,
+      url: response.url,
+      state: response.state,
+      author: response.author?.login,
+      baseRefName: response.baseRefName,
+      headRefName: response.headRefName,
+      baseRefOid: response.baseRefOid,
+      headRefOid: response.headRefOid,
+      commits: response.commits.length,
     },
     diagnostics: [],
   };
 }
-
-const text = (value: unknown): string | undefined =>
-  typeof value === "string" && value !== "" ? value : undefined;
 
 function ghWarning(file: string, detail: string): CheckDiagnostic {
   return {

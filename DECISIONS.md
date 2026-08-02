@@ -3,24 +3,36 @@
 Trade-offs this package has already weighed. Each entry states what holds today
 and what would move it.
 
-## The payload contract moves to Effect Schema
+## The payload contract is Effect Schema
 
 Supersedes "the payload contract stays plain interfaces" (2026-08-02). The
-source of truth becomes `src/payload/schema.ts`, with `src/payload/types.ts`
-derived from it (`typeof X.Type`) — still the type-only entry the SPA imports
-through `app/src/contract.ts`. The original worry — a schema library following
-the types across the boundary — is now accepted deliberately: the SPA decodes
-payloads through the same schemas, and the export-bundle size delta gets
-measured and recorded when that lands. The encoded JSON of every persisted or
-transported shape stays byte-compatible. Until Phase 1 of the migration
-umbrella ([#1](https://github.com/basaltbytes/balade/issues/1)) lands, the
-plain interfaces remain the contract and the edges keep their hand-rolled
-guards.
+source of truth is `src/payload/schema.ts`, with `src/payload/types.ts` derived
+from it (`typeof X.Type`) — still the type-only entry the SPA imports through
+`app/src/contract.ts`. Every JSON edge decodes deeply and rejects excess
+properties; the deliberate exception is a namespaced preset block, whose
+unknown data must survive for a renderer that understands it. A malformed
+review mark invalidates its state file as one value rather than silently
+salvaging part of it. Schema-derived collections and fields are readonly; code
+that enriches a payload replaces values instead of mutating decoded contract
+objects.
 
-The `src/payload/parse-review.ts` exception to "app imports the CLI as types
-only" stands: the server and the SPA guard the same JSON, so the shared code
-lives beside the contract. What stays forbidden is CLI *runtime* — git, fs,
-process — reaching `app/`.
+Frontmatter has a second, edge-only schema because YAML metadata accepts string,
+finite-number and boolean scalars while the resolved contract carries strings.
+Schema issue paths map back to the existing diagnostic codes, source lines and
+hints; valid scalars are normalized, then the result passes through the canonical
+`Frontmatter` schema. This keeps the encoded JSON of every persisted or
+transported shape byte-compatible.
+
+The cost of sharing the runtime schema with the SPA was measured on the Phase 1
+build. The served entry grew from 1,545,312 to 1,611,014 bytes (+65,702; Vite
+gzip 487.21 to 508.51 kB), and the single-file export JS from 3,971,906 to
+4,037,646 bytes (+65,740; gzip 762.81 to 783.96 kB). That fixed cost buys one
+contract and deep validation at both baked and served edges.
+
+`src/payload/schema.ts` and `src/payload/parse-review.ts` are the pure shared
+exceptions to "app imports the CLI as types only": the server and SPA guard the
+same JSON. What stays forbidden is CLI *runtime* — git, fs, process — reaching
+`app/`.
 
 ## Effect v4 is the codebase idiom
 

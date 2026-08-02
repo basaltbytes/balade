@@ -17,7 +17,6 @@ import type {
   RangeEcho,
   TestItem,
 } from "../payload/types.js";
-import { isRecord } from "../payload/parse-review.js";
 import type { MacroApi, Preset } from "../preset/types.js";
 import { presetOfTag } from "../preset/registry.js";
 import type { ResolveContext } from "../resolve/context.js";
@@ -431,7 +430,7 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
   const status = attrString(node, "status");
   const wanted = status === undefined ? null : new Set(statusList(status));
   const why = node.attributes["why"];
-  const whyMap = isRecord(why) ? why : {};
+  const whyMap = typeof why === "object" && why !== null && !Array.isArray(why) ? why : {};
 
   const paths = env.ctx.files
     .filter((entry) => (only === undefined ? true : matchesGlob(entry.path, only)))

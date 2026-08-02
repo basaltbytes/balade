@@ -10,7 +10,16 @@ const walkthrough = {
   headDistance: 0,
   lang: "en",
   meta: {},
-  pr: { number: 42, url: "https://example.test/pull/42" },
+  pr: {
+    number: 42,
+    url: "https://example.test/pull/42",
+    author: "octo",
+    state: "open",
+    base: "main",
+    head: "feature/one",
+    commits: 3,
+    stats: { files: 0, additions: 0, deletions: 0 },
+  },
   files: [],
   nav: [],
   sections: [],
@@ -23,11 +32,11 @@ const index = { kind: "index", repo: "acme/repo", entries: [] };
 
 describe("parsePayload", () => {
   it("reads a walkthrough payload", () => {
-    expect(parsePayload(walkthrough)).toBe(walkthrough);
+    expect(parsePayload(walkthrough)).toEqual(walkthrough);
   });
 
   it("reads an index payload", () => {
-    expect(parsePayload(index)).toBe(index);
+    expect(parsePayload(index)).toEqual(index);
   });
 
   it("refuses another schema version", () => {
@@ -39,6 +48,23 @@ describe("parsePayload", () => {
     expect(parsePayload({ ...walkthrough, pr: "42" })).toBeNull();
     expect(parsePayload({ ...walkthrough, storageKey: 7 })).toBeNull();
     expect(parsePayload({ ...index, entries: null })).toBeNull();
+    expect(parsePayload({ ...index, entries: [{ path: "walkthroughs/one.md" }] })).toBeNull();
+  });
+
+  it("walks nested block data", () => {
+    expect(
+      parsePayload({
+        ...walkthrough,
+        sections: [
+          {
+            id: "intro",
+            title: "Intro",
+            hash: "sha256:aa",
+            blocks: [{ b: "callout", body: [{ c: 7 }] }],
+          },
+        ],
+      }),
+    ).toBeNull();
   });
 
   it("refuses junk", () => {
