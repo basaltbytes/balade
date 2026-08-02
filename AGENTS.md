@@ -7,6 +7,15 @@ reopen map decisions in code; implementation trade-offs live in
 [DECISIONS.md](DECISIONS.md) — read it before proposing a change, and record new
 trade-offs there.
 
+## Definition of done
+When working on a feature/bugfix/refactoring you need to do the following before handing off to the user:
+- always assume the code quality pipeline was fully green before your turn
+- typecheck should still pass
+- lint should still pass without lint ignore
+- format should still pass
+- tests should still pass without ignore (but keep big OS matrix tests for the CI run).
+- documentation should be updated
+
 ## Rules
 
 - Read [guidelines/CODING_GUIDELINES.md](guidelines/CODING_GUIDELINES.md)
