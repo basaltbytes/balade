@@ -13,6 +13,7 @@ import { locateErrorMessage, PrLocator } from "../src/pr/locate.js";
 import { parseOpenTarget, parsePrTarget } from "../src/pr/target.js";
 import { repoName, repoSlug } from "../src/resolve/git.js";
 import { prepareSession } from "../src/server/session.js";
+import { provideLive } from "./support/effect.js";
 import {
   advertisePull,
   cloneOnMain,
@@ -59,13 +60,13 @@ const locate = (cwd: string, number: number, slug: string | null) =>
   Effect.gen(function* () {
     const locator = yield* PrLocator;
     return yield* locator.locate(cwd, { number, slug });
-  }).pipe(Effect.provide(PrLocator.layer));
+  }).pipe(provideLive);
 
 const locateError = (cwd: string, number: number, slug: string | null) =>
   Effect.gen(function* () {
     const locator = yield* PrLocator;
     return yield* Effect.flip(locator.locate(cwd, { number, slug }));
-  }).pipe(Effect.provide(PrLocator.layer));
+  }).pipe(provideLive);
 
 describe("the locator", () => {
   let origin: FixtureRepo;
@@ -108,7 +109,7 @@ describe("the locator", () => {
 
   it.effect("accepts the URL slug the origin remote answers", () =>
     Effect.gen(function* () {
-      const located = yield* locate(clone.dir, 42, yield* repoSlug(clone.dir));
+      const located = yield* locate(clone.dir, 42, yield* provideLive(repoSlug(clone.dir)));
       expect(located.paths).toEqual(["walkthroughs/valid.md"]);
     }),
   );
@@ -141,7 +142,7 @@ describe("the locator", () => {
 
   it.effect("keeps an unusable repository path as a command failure", () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(repoSlug(join(clone.dir, "missing")));
+      const error = yield* Effect.flip(provideLive(repoSlug(join(clone.dir, "missing"))));
       expect(error._tag).toBe("CommandFailed");
     }),
   );
@@ -165,12 +166,13 @@ describe("a served PR without a checkout", () => {
   it.effect("serves the walkthrough read at the fetched commit", () =>
     Effect.gen(function* () {
       const located = yield* locate(clone.dir, 42, null);
-      const prepared = yield* prepareSession({
-        cwd: clone.dir,
-        selection: { kind: "located", ...located },
-        useGh: false,
-        warn: () => {},
-      });
+      const prepared = yield* provideLive(
+        prepareSession({
+          cwd: clone.dir,
+          selection: { kind: "located", ...located },
+          useGh: false,
+        }),
+      );
       if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
       const session = prepared.session;
 
@@ -192,8 +194,6 @@ describe("a served PR without a checkout", () => {
         files: {},
       });
       expect(written.walkthrough).toBe("walkthroughs/valid.md");
-
-      session.close();
     }),
   );
 

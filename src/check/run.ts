@@ -4,8 +4,7 @@
  * every resolved code range.
  */
 
-import { join } from "node:path";
-import { Effect } from "effect";
+import { Effect, Path, Result } from "effect";
 import { loadErrorDiagnostic, loadWalkthrough, type LoadResult } from "../compile/load.js";
 import type { CheckReport } from "../payload/types.js";
 import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discover.js";
@@ -33,8 +32,9 @@ export interface CheckOutcome {
   note?: string;
 }
 
-export function runCheck(options: CheckOptions): CheckOutcome {
-  const one = (path: string): CheckReport =>
+export const runCheck = Effect.fn("runCheck")(function* (options: CheckOptions) {
+  const pathService = yield* Path.Path;
+  const one = (path: string) =>
     checkOne({
       cwd: options.cwd,
       path,
@@ -43,38 +43,30 @@ export function runCheck(options: CheckOptions): CheckOutcome {
 
   const explicit = options.paths ?? [];
   if (explicit.length > 0) {
-    const reports = explicit.map(one);
+    const reports = yield* Effect.forEach(explicit, one);
     return { ok: reports.every((report) => report.ok), reports };
   }
 
-  const found = Effect.runSync(
-    discoverWalkthroughs(options.cwd).pipe(
-      Effect.match({
-        onFailure: (error) => ({
-          kind: "failure" as const,
-          error,
-        }),
-        onSuccess: (discovery) => ({ kind: "success" as const, discovery }),
-      }),
-    ),
-  );
-  if (found.kind === "failure") {
-    return found.error._tag === "NotARepository"
+  const found = yield* Effect.result(discoverWalkthroughs(options.cwd));
+  if (Result.isFailure(found)) {
+    return found.failure._tag === "NotARepository"
       ? { ok: true, reports: [], note: "Not inside a git repository — nothing to check." }
       : {
           ok: false,
           reports: [],
-          note: `Walkthrough discovery failed: ${discoveryErrorMessage(found.error)}`,
+          note: `Walkthrough discovery failed: ${discoveryErrorMessage(found.failure)}`,
         };
   }
-  const { discovery } = found;
+  const discovery = found.success;
   if (discovery.paths.length === 0) {
     return { ok: true, reports: [], note: NO_WALKTHROUGH };
   }
   const root = discovery.repoRoot;
-  const reports = discovery.paths.map((path) => one(join(root, path)));
+  const reports = yield* Effect.forEach(discovery.paths, (path) =>
+    one(pathService.join(root, path)),
+  );
   return { ok: reports.every((report) => report.ok), reports };
-}
+});
 
 /** The soft commands' report: `ok` asks only that a payload built; diagnostics ride along as error cards. */
 export function softReport(loaded: LoadResult): CheckReport {
@@ -86,24 +78,22 @@ export function softReport(loaded: LoadResult): CheckReport {
   };
 }
 
-export function checkOne(options: CheckFileOptions): CheckReport {
+export const checkOne = Effect.fn("checkOne")(function* (options: CheckFileOptions) {
   const { cwd, path } = options;
-  const loaded = Effect.runSync(
-    loadWalkthrough({
-      cwd,
-      path,
-      ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-    }).pipe(
-      Effect.match({
-        onFailure: (error): LoadResult => ({
-          sourcePath: path,
-          payload: null,
-          diagnostics: [loadErrorDiagnostic(error)],
-          ranges: [],
-        }),
-        onSuccess: (result) => result,
+  const loaded = yield* loadWalkthrough({
+    cwd,
+    path,
+    ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
+  }).pipe(
+    Effect.match({
+      onFailure: (error): LoadResult => ({
+        sourcePath: path,
+        payload: null,
+        diagnostics: [loadErrorDiagnostic(error)],
+        ranges: [],
       }),
-    ),
+      onSuccess: (result) => result,
+    }),
   );
   return {
     file: loaded.sourcePath,
@@ -111,4 +101,4 @@ export function checkOne(options: CheckFileOptions): CheckReport {
     diagnostics: loaded.diagnostics,
     ranges: loaded.ranges,
   };
-}
+});

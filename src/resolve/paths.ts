@@ -3,9 +3,7 @@
  * platform, computed between OS-final absolute paths.
  */
 
-import { realpathSync } from "node:fs";
-import { relative, sep } from "node:path";
-import { Effect, Schema } from "effect";
+import { Effect, FileSystem, Path, Schema } from "effect";
 
 export class PathResolutionFailed extends Schema.TaggedErrorClass<PathResolutionFailed>()(
   "PathResolutionFailed",
@@ -19,9 +17,11 @@ export class PathResolutionFailed extends Schema.TaggedErrorClass<PathResolution
  * would otherwise turn the relative path into a climb out of the repo.
  */
 export const repoRelative = Effect.fn("repoRelative")(function* (root: string, absolute: string) {
-  const finalRoot = yield* real(root);
-  const finalAbsolute = yield* real(absolute);
-  return relative(finalRoot, finalAbsolute).replaceAll(sep, "/");
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const finalRoot = yield* real(fs, root);
+  const finalAbsolute = yield* real(fs, absolute);
+  return path.relative(finalRoot, finalAbsolute).replaceAll(path.sep, "/");
 });
 
 /** The last segment of a git-spelled path. */
@@ -29,18 +29,6 @@ export function fileName(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
 }
 
-/* `realpathSync.native` expands Windows 8.3 short names, which the portable
-   implementation keeps. When the native call is unsupported the portable
-   implementation gets one chance; a second failure stays typed. */
-const real = (path: string) =>
-  Effect.try({
-    try: () => realpathSync.native(path),
-    catch: (cause) => new PathResolutionFailed({ path, cause }),
-  }).pipe(
-    Effect.catchTag("PathResolutionFailed", () =>
-      Effect.try({
-        try: () => realpathSync(path),
-        catch: (cause) => new PathResolutionFailed({ path, cause }),
-      }),
-    ),
-  );
+/** The platform adapter returns the operating system's final path spelling. */
+const real = (fs: FileSystem.FileSystem, path: string) =>
+  fs.realPath(path).pipe(Effect.mapError((cause) => new PathResolutionFailed({ path, cause })));

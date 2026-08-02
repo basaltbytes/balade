@@ -5,6 +5,7 @@ import { formatJson, formatText } from "../src/check/report.js";
 import { checkOne, runCheck } from "../src/check/run.js";
 import { loadWalkthrough } from "../src/compile/load.js";
 import type { CheckDiagnostic, CheckReport } from "../src/payload/types.js";
+import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
 function codes(diagnostics: readonly CheckDiagnostic[]): string[] {
@@ -23,21 +24,29 @@ describe("check", () => {
   let valid: CheckReport;
   let errors: CheckReport;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     repo = createFixtureRepo();
     repo.addWalkthrough("valid.md", "valid.md");
     repo.addWalkthrough("errors.md", "errors.md");
     repo.addWalkthrough("duplicate.md", "duplicate.md");
-    valid = checkOne({
-      cwd: repo.dir,
-      path: join(repo.dir, "walkthroughs/valid.md"),
-      useGh: false,
-    });
-    errors = checkOne({
-      cwd: repo.dir,
-      path: join(repo.dir, "walkthroughs/errors.md"),
-      useGh: false,
-    });
+    valid = await Effect.runPromise(
+      provideLive(
+        checkOne({
+          cwd: repo.dir,
+          path: join(repo.dir, "walkthroughs/valid.md"),
+          useGh: false,
+        }),
+      ),
+    );
+    errors = await Effect.runPromise(
+      provideLive(
+        checkOne({
+          cwd: repo.dir,
+          path: join(repo.dir, "walkthroughs/errors.md"),
+          useGh: false,
+        }),
+      ),
+    );
   });
 
   afterAll(() => repo.cleanup());
@@ -118,11 +127,13 @@ describe("check", () => {
 
   it.effect("still builds a payload for soft `open`, with error cards", () =>
     Effect.gen(function* () {
-      const loaded = yield* loadWalkthrough({
-        cwd: repo.dir,
-        path: join(repo.dir, "walkthroughs/errors.md"),
-        useGh: false,
-      });
+      const loaded = yield* provideLive(
+        loadWalkthrough({
+          cwd: repo.dir,
+          path: join(repo.dir, "walkthroughs/errors.md"),
+          useGh: false,
+        }),
+      );
       const payload = loaded.payload;
       expect(payload).not.toBeNull();
       expect(payload?.errors.map((card) => card.code)).toEqual([
@@ -147,7 +158,7 @@ describe("check", () => {
   it.effect("reports a duplicate section without orphaning its error cards", () =>
     Effect.gen(function* () {
       const path = join(repo.dir, "walkthroughs/duplicate.md");
-      const loaded = yield* loadWalkthrough({ cwd: repo.dir, path, useGh: false });
+      const loaded = yield* provideLive(loadWalkthrough({ cwd: repo.dir, path, useGh: false }));
       expect(loaded.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(true);
       /* The duplicate's failing `code` tag is reported… */
       expect(codes(loaded.diagnostics)).toEqual(
@@ -160,15 +171,17 @@ describe("check", () => {
     }),
   );
 
-  it("discovers every tracked walkthrough with no argument", () => {
-    const outcome = runCheck({ cwd: repo.dir, useGh: false });
-    expect(outcome.reports.map((report) => report.file)).toEqual([
-      "walkthroughs/duplicate.md",
-      "walkthroughs/errors.md",
-      "walkthroughs/valid.md",
-    ]);
-    expect(outcome.ok).toBe(false);
-  });
+  it.effect("discovers every tracked walkthrough with no argument", () =>
+    Effect.gen(function* () {
+      const outcome = yield* provideLive(runCheck({ cwd: repo.dir, useGh: false }));
+      expect(outcome.reports.map((report) => report.file)).toEqual([
+        "walkthroughs/duplicate.md",
+        "walkthroughs/errors.md",
+        "walkthroughs/valid.md",
+      ]);
+      expect(outcome.ok).toBe(false);
+    }),
+  );
 
   it("prints the same facts as text and as JSON", () => {
     const outcome = { ok: false, reports: [errors] };
@@ -194,34 +207,42 @@ describe("staleness", () => {
 
   afterAll(() => repo.cleanup());
 
-  it("fails only when a later commit touches a referenced file", () => {
-    const before = checkOne({
-      cwd: repo.dir,
-      path: join(repo.dir, "walkthroughs/valid.md"),
-      useGh: false,
-    });
-    expect(before.ok).toBe(true);
+  it.effect("fails only when a later commit touches a referenced file", () =>
+    Effect.gen(function* () {
+      const before = yield* provideLive(
+        checkOne({
+          cwd: repo.dir,
+          path: join(repo.dir, "walkthroughs/valid.md"),
+          useGh: false,
+        }),
+      );
+      expect(before.ok).toBe(true);
 
-    repo.write("models/planning_pool_item.py", "# rewritten after the stamp\n");
-    repo.commit("refactor: rewrite the pool item");
+      repo.write("models/planning_pool_item.py", "# rewritten after the stamp\n");
+      repo.commit("refactor: rewrite the pool item");
 
-    const after = checkOne({
-      cwd: repo.dir,
-      path: join(repo.dir, "walkthroughs/valid.md"),
-      useGh: false,
-    });
-    expect(after.ok).toBe(false);
-    const overlap = after.diagnostics.find((diagnostic) => diagnostic.code === "stale-overlap");
-    expect(overlap?.level).toBe("error");
-    expect(overlap?.message).toContain("models/planning_pool_item.py");
-    expect(overlap?.hint).toContain("re-stamp");
-  });
+      const after = yield* provideLive(
+        checkOne({
+          cwd: repo.dir,
+          path: join(repo.dir, "walkthroughs/valid.md"),
+          useGh: false,
+        }),
+      );
+      expect(after.ok).toBe(false);
+      const overlap = after.diagnostics.find((diagnostic) => diagnostic.code === "stale-overlap");
+      expect(overlap?.level).toBe("error");
+      expect(overlap?.message).toContain("models/planning_pool_item.py");
+      expect(overlap?.hint).toContain("re-stamp");
+    }),
+  );
 });
 
 describe("no walkthrough", () => {
-  it("says so instead of failing", () => {
-    const outcome = runCheck({ cwd: "/", useGh: false });
-    expect(outcome.ok).toBe(true);
-    expect(outcome.note).toBeTruthy();
-  });
+  it.effect("says so instead of failing", () =>
+    Effect.gen(function* () {
+      const outcome = yield* provideLive(runCheck({ cwd: "/", useGh: false }));
+      expect(outcome.ok).toBe(true);
+      expect(outcome.note).toBeTruthy();
+    }),
+  );
 });

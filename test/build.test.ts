@@ -8,9 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { runBuild } from "../src/build/run.js";
+import { runBuild as runBuildEffect, type BuildOptions } from "../src/build/run.js";
 import type { Payload } from "../src/payload/types.js";
+import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
+
+const runBuild = (options: BuildOptions) => provideLive(runBuildEffect(options));
 
 /**
  * A stand-in for the export bundle. The real one carries these three sequences

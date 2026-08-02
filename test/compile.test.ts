@@ -5,6 +5,7 @@ import { loadWalkthrough, type LoadResult } from "../src/compile/load.js";
 import type { Payload } from "../src/payload/types.js";
 import { sha256 } from "../src/resolve/hash.js";
 import { firstBlock } from "./support/blocks.js";
+import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
 describe("compile", () => {
@@ -16,7 +17,9 @@ describe("compile", () => {
   beforeAll(async () => {
     repo = createFixtureRepo();
     path = repo.addWalkthrough("valid.md", "valid.md");
-    loaded = await Effect.runPromise(loadWalkthrough({ cwd: repo.dir, path, useGh: false }));
+    loaded = await Effect.runPromise(
+      provideLive(loadWalkthrough({ cwd: repo.dir, path, useGh: false })),
+    );
     if (loaded.payload === null) throw new Error(JSON.stringify(loaded.diagnostics, null, 2));
     payload = loaded.payload;
   });
@@ -229,7 +232,8 @@ describe("compile", () => {
 
   it.effect("hashes sections and files reproducibly", () =>
     Effect.gen(function* () {
-      const again = (yield* loadWalkthrough({ cwd: repo.dir, path, useGh: false })).payload;
+      const again = (yield* provideLive(loadWalkthrough({ cwd: repo.dir, path, useGh: false })))
+        .payload;
       expect(again).not.toBeNull();
       for (const section of payload.sections) {
         expect(section.hash).toMatch(/^sha256:[0-9a-f]{64}$/);

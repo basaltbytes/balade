@@ -6,27 +6,30 @@
  * per key and never per request.
  */
 
-import { Effect, Option } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
 import type { LoadError, LoadResult } from "../compile/load.js";
-import type { CommandFailed } from "../resolve/exec.js";
-import type { ServerRepoError } from "./repo.js";
+import { ServerRepo, type ServerRepoError, type ServerRepoShape } from "./repo.js";
 
-/** The reads a lookup makes: two cheap ones to key, the slow one on a miss. */
-export interface PayloadSource {
-  readonly head: Effect.Effect<string, CommandFailed>;
-  pin(sourcePath: string): Effect.Effect<Option.Option<string>, ServerRepoError>;
-  load(sourcePath: string): Effect.Effect<LoadResult, LoadError | ServerRepoError>;
-}
-
-export interface PayloadCache {
-  get(sourcePath: string): Effect.Effect<LoadResult, PayloadCacheError>;
+export interface PayloadCacheShape {
+  readonly get: (sourcePath: string) => Effect.Effect<LoadResult, PayloadCacheError>;
   /** Drops what the watcher saw change, so the next request compiles again. */
-  invalidate(sourcePath: string): void;
+  readonly invalidate: (sourcePath: string) => Effect.Effect<void>;
 }
 
 export type PayloadCacheError = LoadError | ServerRepoError;
 
-export function payloadCache(source: PayloadSource): PayloadCache {
+export class PayloadCache extends Context.Service<PayloadCache, PayloadCacheShape>()(
+  "@balade/PayloadCache",
+) {
+  static readonly layer = Layer.effect(
+    PayloadCache,
+    Effect.gen(function* () {
+      return makePayloadCache(yield* ServerRepo);
+    }),
+  );
+}
+
+function makePayloadCache(source: ServerRepoShape): PayloadCacheShape {
   const slots = new Map<string, { key: string; result: LoadResult }>();
 
   const keyOf = Effect.fn("payloadCache.keyOf")(function* (sourcePath: string) {
@@ -36,20 +39,20 @@ export function payloadCache(source: PayloadSource): PayloadCache {
   });
 
   return {
-    get(sourcePath) {
-      return Effect.gen(function* () {
-        const key = yield* keyOf(sourcePath);
-        const slot = slots.get(sourcePath);
-        if (slot !== undefined && slot.key === key) return slot.result;
+    get: Effect.fn("PayloadCache.get")(function* (sourcePath) {
+      const key = yield* keyOf(sourcePath);
+      const slot = slots.get(sourcePath);
+      if (slot !== undefined && slot.key === key) return slot.result;
 
-        const result = yield* source.load(sourcePath);
-        slots.set(sourcePath, { key, result });
-        return result;
-      });
-    },
+      const result = yield* source.load(sourcePath);
+      slots.set(sourcePath, { key, result });
+      return result;
+    }),
 
-    invalidate(sourcePath) {
-      slots.delete(sourcePath);
-    },
+    invalidate: Effect.fn("PayloadCache.invalidate")((sourcePath) =>
+      Effect.sync(() => {
+        slots.delete(sourcePath);
+      }),
+    ),
   };
 }
