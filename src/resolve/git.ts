@@ -482,7 +482,7 @@ const readFiles = Effect.fn("readFiles")(function* (root: string, base: string, 
   );
 
   const contents = new Map<string, string>();
-  const content = (sha: string, path: string): Effect.Effect<string, CommandFailed> => {
+  const content = (sha: string, path: string) => {
     const key = `${sha}:${path}`;
     const cached = contents.get(key);
     if (cached !== undefined) return Effect.succeed(cached);

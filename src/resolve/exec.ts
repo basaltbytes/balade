@@ -4,7 +4,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { Effect, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 
 export class CommandFailed extends Schema.TaggedErrorClass<CommandFailed>()("CommandFailed", {
   file: Schema.String,
@@ -35,33 +35,55 @@ const ENV = {
   LC_ALL: "C",
 };
 
-export const exec = Effect.fn("exec")(function* (
-  file: string,
-  args: readonly string[],
-  cwd: string,
+export interface CommandExecutorShape {
+  readonly exec: (
+    file: string,
+    args: readonly string[],
+    cwd: string,
+  ) => Effect.Effect<string, CommandFailed>;
+}
+
+/** The one process port used by resolution. Swapping this layer changes how commands run. */
+export class CommandExecutor extends Context.Service<CommandExecutor, CommandExecutorShape>()(
+  "@balade/CommandExecutor",
 ) {
-  const res = spawnSync(file, [...args], {
-    cwd,
-    encoding: "utf8",
-    maxBuffer: MAX_BUFFER,
-    env: ENV,
-  });
-  const code = res.status ?? -1;
-  if (res.error !== undefined || code !== 0) {
-    return yield* new CommandFailed({
-      file,
-      args,
-      cwd,
-      stderr: res.error?.message ?? res.stderr ?? "",
-      code,
+  static readonly layer = Layer.sync(CommandExecutor, () => {
+    const exec = Effect.fn("CommandExecutor.exec")(function* (
+      file: string,
+      args: readonly string[],
+      cwd: string,
+    ) {
+      const res = spawnSync(file, [...args], {
+        cwd,
+        encoding: "utf8",
+        maxBuffer: MAX_BUFFER,
+        env: ENV,
+      });
+      const code = res.status ?? -1;
+      if (res.error !== undefined || code !== 0) {
+        return yield* new CommandFailed({
+          file,
+          args,
+          cwd,
+          stderr: res.error?.message ?? res.stderr ?? "",
+          code,
+        });
+      }
+      return res.stdout ?? "";
     });
-  }
-  return res.stdout ?? "";
-});
 
-export const gitOut = (args: readonly string[], cwd: string) => exec("git", args, cwd);
+    return { exec };
+  });
+}
 
-export const gh = (args: readonly string[], cwd: string) => exec("gh", args, cwd);
+export const exec = (file: string, args: readonly string[], cwd: string) =>
+  CommandExecutor.use((executor) => executor.exec(file, args, cwd));
+
+export const gitOut = (args: readonly string[], cwd: string) =>
+  CommandExecutor.use((executor) => executor.exec("git", args, cwd));
+
+export const gh = (args: readonly string[], cwd: string) =>
+  CommandExecutor.use((executor) => executor.exec("gh", args, cwd));
 
 /** Absolute repository root holding `cwd`. */
 export const gitToplevel = Effect.fn("gitToplevel")(function* (cwd: string) {

@@ -18,9 +18,9 @@ import type {
   Payload,
   ReviewState,
 } from "../payload/types.js";
-import type { ReviewStateStore } from "../state/store.js";
-import type { PayloadCache } from "./cache.js";
-import type { ServerRepo } from "./repo.js";
+import { ReviewStateStore, type ReviewStateStoreShape } from "../state/store.js";
+import { PayloadCache, type PayloadCacheShape } from "./cache.js";
+import { ServerRepo, type ServerRepoShape } from "./repo.js";
 
 export class ApiPathRequired extends Schema.TaggedErrorClass<ApiPathRequired>()(
   "ApiPathRequired",
@@ -81,16 +81,16 @@ export type ApiError =
 /** The slice of the repository adapter the answers read. */
 export interface ApiRepo {
   readonly slug: string;
-  pin: ServerRepo["pin"];
-  distance: ServerRepo["distance"];
-  row: ServerRepo["row"];
+  readonly pin: ServerRepoShape["pin"];
+  readonly distance: ServerRepoShape["distance"];
+  readonly row: ServerRepoShape["row"];
 }
 
-export interface ApiPorts {
+interface ApiPorts {
   /** Served walkthroughs, repo-relative. More than one puts the index on the bare endpoint. */
   paths: readonly string[];
-  payloads: PayloadCache;
-  state: ReviewStateStore;
+  payloads: PayloadCacheShape;
+  state: ReviewStateStoreShape;
   repo: ApiRepo;
 }
 
@@ -110,7 +110,14 @@ type Target = { kind: "one"; path: string } | { kind: "index" } | { kind: "unkno
 
 const NEEDS_PATH = "This run serves several walkthroughs; name one with `?path=`.";
 
-export function createApi(ports: ApiPorts): Api {
+export const createApi = Effect.fn("createApi")(function* (paths: readonly string[]) {
+  const payloads = yield* PayloadCache;
+  const state = yield* ReviewStateStore;
+  const repo = yield* ServerRepo;
+  return makeApi({ paths, payloads, state, repo });
+});
+
+function makeApi(ports: ApiPorts): Api {
   const served = new Set(ports.paths);
   const only = ports.paths.length === 1 ? ports.paths[0] : undefined;
 

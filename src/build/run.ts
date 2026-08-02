@@ -4,10 +4,8 @@
  * that could not be built at all stops the command.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, isAbsolute, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Effect, Schema } from "effect";
+import { Effect, FileSystem, Path, Schema } from "effect";
 import {
   discoverWalkthroughs,
   NO_WALKTHROUGH,
@@ -62,15 +60,22 @@ const EXPORT_BUNDLE_MISSING =
 
 /** The two files the export vite mode emits, read as text. */
 const readExportBundle = (dir: string = BUNDLE_DIR) =>
-  Effect.try({
-    try: (): ExportAssets => ({
-      js: readFileSync(join(dir, "app.js"), "utf8"),
-      css: readFileSync(join(dir, "app.css"), "utf8"),
-    }),
-    catch: (cause) => new ExportBundleReadFailed({ dir, cause }),
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const read = (name: string) =>
+      fs
+        .readFileString(path.join(dir, name))
+        .pipe(Effect.mapError((cause) => new ExportBundleReadFailed({ dir, cause })));
+    return {
+      js: yield* read("app.js"),
+      css: yield* read("app.css"),
+    } satisfies ExportAssets;
   });
 
 export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const target = yield* pick(options);
   if (typeof target !== "string") return target;
 
@@ -86,12 +91,11 @@ export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) 
   const outcome: CheckOutcome = { ok: report.ok, reports: [report] };
   if (loaded.payload === null) return { kind: "failed", outcome } satisfies BuildOutcome;
 
-  const file = outputPath(options, target);
+  const file = outputPath(path, options, target);
   const html = exportHtml(loaded.payload, assets);
-  yield* Effect.try({
-    try: () => writeFileSync(file, html, "utf8"),
-    catch: (cause) => new ExportWriteFailed({ path: file, cause }),
-  });
+  yield* fs
+    .writeFileString(file, html)
+    .pipe(Effect.mapError((cause) => new ExportWriteFailed({ path: file, cause })));
   return { kind: "built", file, bytes: Buffer.byteLength(html), outcome } satisfies BuildOutcome;
 });
 
@@ -122,12 +126,15 @@ const pick = Effect.fn("pickBuildTarget")(function* (options: BuildOptions) {
   } satisfies BuildOutcome;
 });
 
-function outputPath(options: BuildOptions, target: string): string {
+function outputPath(path: Path.Path, options: BuildOptions, target: string): string {
   if (options.out !== undefined) {
-    return isAbsolute(options.out) ? options.out : resolvePath(options.cwd, options.out);
+    return path.isAbsolute(options.out) ? options.out : path.resolve(options.cwd, options.out);
   }
-  const absolute = isAbsolute(target) ? target : resolvePath(options.cwd, target);
-  return join(dirname(absolute), `${basename(absolute, extname(absolute))}.html`);
+  const absolute = path.isAbsolute(target) ? target : path.resolve(options.cwd, target);
+  return path.join(
+    path.dirname(absolute),
+    `${path.basename(absolute, path.extname(absolute))}.html`,
+  );
 }
 
 export function buildErrorMessage(error: BuildError): string {

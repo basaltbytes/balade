@@ -8,9 +8,7 @@
  * the successful check outcome.
  */
 
-import { watch, type FSWatcher } from "node:fs";
-import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
-import { Effect } from "effect";
+import { Effect, FileSystem, Layer, Path, Stream } from "effect";
 import {
   discoverWalkthroughs,
   NO_WALKTHROUGH,
@@ -22,10 +20,10 @@ import type { LoadError } from "../compile/load.js";
 import { describeFailure } from "../failure.js";
 import { gitToplevel } from "../resolve/exec.js";
 import { repoRelative, type PathResolutionFailed } from "../resolve/paths.js";
-import { fileReviewStore } from "../state/store.js";
+import { ReviewStateStore } from "../state/store.js";
 import { createApi, type Api } from "./api.js";
-import { payloadCache, type PayloadCache } from "./cache.js";
-import { serverRepo, type ServerRepo, type ServerRepoError } from "./repo.js";
+import { PayloadCache } from "./cache.js";
+import { ServerRepo, type ServerRepoError } from "./repo.js";
 
 /**
  * Where the served set comes from: the command line, discovery, or the PR
@@ -44,8 +42,6 @@ export interface SessionOptions {
   lang?: "en" | "fr";
   /** `false` skips gh entirely. */
   useGh?: boolean;
-  /** Where file-watcher failures are reported after the session has started. */
-  warn?: (message: string) => void;
 }
 
 export interface Session {
@@ -54,8 +50,6 @@ export interface Session {
   paths: readonly string[];
   /** Diagnostics of the eager compile — warnings, and the soft errors that still serve. */
   outcome: CheckOutcome;
-  /** Stops the file watcher. */
-  close(): void;
 }
 
 export type Prepared =
@@ -91,6 +85,7 @@ export function sessionErrorMessage(error: SessionError): string {
 
 /** Named files are made repo-relative; discovery and the locator already answer in that shape. */
 const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
+  const pathService = yield* Path.Path;
   if (options.selection.kind === "located") {
     const { root, paths, at } = options.selection;
     return { kind: "ok", root, paths, ...(at === undefined ? {} : { at }) } satisfies Selected;
@@ -116,7 +111,12 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
   if (root === undefined) return { kind: "note", message: NOT_A_REPO } satisfies Selected;
   const paths: string[] = [];
   for (const path of options.selection.paths) {
-    paths.push(yield* repoRelative(root, isAbsolute(path) ? path : resolvePath(options.cwd, path)));
+    paths.push(
+      yield* repoRelative(
+        root,
+        pathService.isAbsolute(path) ? path : pathService.resolve(options.cwd, path),
+      ),
+    );
   }
   return (
     paths.length === 0 ? { kind: "note", message: NO_WALKTHROUGH } : { kind: "ok", root, paths }
@@ -124,47 +124,36 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
 });
 
 export const prepareSession = Effect.fn("prepareSession")(function* (options: SessionOptions) {
-  const warn = options.warn ?? ((message: string) => process.stderr.write(`${message}\n`));
-
   const selected = yield* select(options);
   if (selected.kind === "note") return selected;
   const { root, paths, at } = selected;
 
-  const repo: ServerRepo = yield* serverRepo({
+  const repoLayer = ServerRepo.layer({
     root,
     ...(at === undefined ? {} : { at }),
     ...(options.lang !== undefined ? { lang: options.lang } : {}),
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   });
-  const payloads = payloadCache(repo);
+  const payloadLayer = PayloadCache.layer.pipe(Layer.provideMerge(repoLayer));
+  const stateLayer = ReviewStateStore.layer({ repoRoot: root });
+  const sessionLayer = Layer.mergeAll(payloadLayer, stateLayer);
 
-  /* Named files and located PRs compile before the port opens, so a dead
-     repository, PR or path stops the command instead of greeting the reviewer
-     with a blank app. Discovery serves an index, which needs frontmatter only. */
-  const outcome =
-    options.selection.kind === "discovered"
-      ? ({ ok: true, reports: [] } satisfies CheckOutcome)
-      : yield* compileEagerly(payloads, paths);
-  if (!outcome.ok) return { kind: "failed", outcome } satisfies Prepared;
+  return yield* Effect.gen(function* () {
+    /* Named files and located PRs compile before the port opens, so a dead
+       repository, PR or path stops the command instead of greeting the reviewer
+       with a blank app. Discovery serves an index, which needs frontmatter only. */
+    const outcome =
+      options.selection.kind === "discovered"
+        ? ({ ok: true, reports: [] } satisfies CheckOutcome)
+        : yield* compileEagerly(paths);
+    if (!outcome.ok) return { kind: "failed", outcome } satisfies Prepared;
 
-  const api = createApi({
-    paths,
-    payloads,
-    state: fileReviewStore({ repoRoot: root }),
-    repo,
-  });
+    const api = yield* createApi(paths);
 
-  /* Content at a fetched commit is immutable: ref mode has nothing to watch. */
-  return {
-    kind: "ready",
-    session: {
-      api,
-      paths,
-      outcome,
-      close:
-        at === undefined ? watchWalkthroughs({ root, paths, cache: payloads, warn }) : () => {},
-    },
-  } satisfies Prepared;
+    /* Content at a fetched commit is immutable: ref mode has nothing to watch. */
+    if (at === undefined) yield* watchWalkthroughs(root, paths);
+    return { kind: "ready", session: { api, paths, outcome } } satisfies Prepared;
+  }).pipe(Effect.provide(sessionLayer));
 });
 
 /**
@@ -172,10 +161,8 @@ export const prepareSession = Effect.fn("prepareSession")(function* (options: Se
  * repository, no PR, no file. An unresolvable range is not: it rides along as
  * an in-app error card (#15, soft `open`).
  */
-const compileEagerly = Effect.fn("compileEagerly")(function* (
-  payloads: PayloadCache,
-  paths: readonly string[],
-) {
+const compileEagerly = Effect.fn("compileEagerly")(function* (paths: readonly string[]) {
+  const payloads = yield* PayloadCache;
   const reports = yield* Effect.forEach(paths, (path) =>
     payloads.get(path).pipe(Effect.map(softReport)),
   );
@@ -186,49 +173,29 @@ const compileEagerly = Effect.fn("compileEagerly")(function* (
  * Directories, not files: an editor that saves through a rename replaces the
  * inode a file watcher holds, and the change is then never seen.
  */
-function watchWalkthroughs(options: {
-  root: string;
-  paths: readonly string[];
-  cache: PayloadCache;
-  warn: (message: string) => void;
-}): () => void {
-  const watchers: FSWatcher[] = [];
+const watchWalkthroughs = Effect.fn("watchWalkthroughs")(function* (
+  root: string,
+  paths: readonly string[],
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  const cache = yield* PayloadCache;
   const byDirectory = new Map<string, string[]>();
-  for (const path of options.paths) {
-    const directory = dirname(path);
+  for (const path of paths) {
+    const directory = pathService.dirname(path);
     byDirectory.set(directory, [...(byDirectory.get(directory) ?? []), path]);
   }
 
-  /* A watcher that never starts costs freshness, not correctness: the payloads
-     stay as they were compiled until the CLI restarts, so it is said out loud. */
-  const lost = (directory: string, reason: unknown): void => {
-    options.warn(
-      `balade: no file watcher on ${directory} (${reason instanceof Error ? reason.message : String(reason)}). ` +
-        "Restart balade to pick up edits to the walkthrough.",
-    );
-  };
-
   for (const [directory, served] of byDirectory) {
-    try {
-      const watcher = watch(join(options.root, directory), (_event, filename) => {
-        if (filename === null) {
-          for (const path of served) options.cache.invalidate(path);
-          return;
-        }
-        const name = String(filename);
-        options.cache.invalidate(directory === "." ? name : `${directory}/${name}`);
-      });
-      watcher.on("error", (error) => {
-        watcher.close();
-        lost(directory, error);
-      });
-      watchers.push(watcher);
-    } catch (error) {
-      lost(directory, error);
-    }
+    yield* fs.watch(pathService.join(root, directory)).pipe(
+      Stream.runForEach(() => Effect.forEach(served, cache.invalidate, { discard: true })),
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `balade: no file watcher on ${directory} (${describeFailure(error)}). ` +
+            "Restart balade to pick up edits to the walkthrough.",
+        ),
+      ),
+      Effect.forkScoped,
+    );
   }
-
-  return () => {
-    for (const watcher of watchers) watcher.close();
-  };
-}
+});

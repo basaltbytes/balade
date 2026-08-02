@@ -8,6 +8,7 @@ import {
   ReviewState as ReviewStateSchema,
 } from "../src/payload/schema.js";
 import type { Payload, ReviewState } from "../src/payload/types.js";
+import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
 const strict = { onExcessProperty: "error" } as const;
@@ -20,11 +21,13 @@ describe("the payload schemas", () => {
     repo = createFixtureRepo();
     repo.addWalkthrough("valid.md", "valid.md");
     const loaded = await Effect.runPromise(
-      loadWalkthrough({
-        cwd: repo.dir,
-        path: join(repo.dir, "walkthroughs/valid.md"),
-        useGh: false,
-      }),
+      provideLive(
+        loadWalkthrough({
+          cwd: repo.dir,
+          path: join(repo.dir, "walkthroughs/valid.md"),
+          useGh: false,
+        }),
+      ),
     );
     if (loaded.payload === null) throw new Error(JSON.stringify(loaded.diagnostics, null, 2));
     payload = loaded.payload;

@@ -4,9 +4,7 @@
  * bounded and works the same at the repo root and per package in a monorepo.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { Effect, Option, Schema } from "effect";
+import { Effect, FileSystem, Option, Path, Schema } from "effect";
 import { gitOut, gitToplevel, type CommandFailed, type NotARepository } from "../resolve/exec.js";
 import { frontmatterBlock } from "../schema/frontmatter.js";
 
@@ -33,13 +31,15 @@ export class WalkthroughReadFailed extends Schema.TaggedErrorClass<WalkthroughRe
 export type DiscoveryError = NotARepository | CommandFailed | WalkthroughReadFailed;
 
 export const discoverWalkthroughs = Effect.fn("discoverWalkthroughs")(function* (cwd: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
   const root = yield* gitToplevel(cwd);
   const listed = (yield* gitOut(["ls-files", "-z"], root))
     .split("\0")
     .filter((path) => path !== "");
   const paths: string[] = [];
   for (const path of listed.filter((candidate) => WALKTHROUGH_PATH.test(candidate))) {
-    if (yield* hasWalkthroughKey(join(root, path))) paths.push(path);
+    if (yield* hasWalkthroughKey(fs, pathService.join(root, path))) paths.push(path);
   }
   return { repoRoot: root, paths: paths.sort() } satisfies Discovery;
 });
@@ -86,11 +86,11 @@ export function discoveryErrorMessage(error: DiscoveryError): string {
   }
 }
 
-const hasWalkthroughKey = (absolute: string) =>
-  Effect.try({
-    try: () => readFileSync(absolute, "utf8"),
-    catch: (cause) => new WalkthroughReadFailed({ path: absolute, cause }),
-  }).pipe(Effect.map(carriesWalkthroughKey));
+const hasWalkthroughKey = (fs: FileSystem.FileSystem, absolute: string) =>
+  fs.readFileString(absolute).pipe(
+    Effect.mapError((cause) => new WalkthroughReadFailed({ path: absolute, cause })),
+    Effect.map(carriesWalkthroughKey),
+  );
 
 /** Looks only at the first 4096 bytes — enough for any frontmatter block. */
 const carriesWalkthroughKey = (source: string): boolean => {

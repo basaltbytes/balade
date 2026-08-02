@@ -54,6 +54,29 @@ rather than wrapped in it. One version note: the pinned `effect@4.0.0-beta.102`
 `ServiceMap` is later naming that most docs already use. Verify every API
 against the installed `.d.ts` under `node_modules/effect/dist/`.
 
+## The effectful shell has shared and session-scoped layer stacks
+
+The CLI provides `cliLayer` once at its entry point. That layer holds Effect's
+Node `FileSystem`/`Path` services, `CommandExecutor`, and `PrLocator`.
+`CommandExecutor` deliberately still wraps `spawnSync`; process behavior and the
+served payload-cache cost model stay unchanged. The resolver depends on that
+process boundary rather than on Node's child-process API.
+
+Repository selection happens after command parsing and may fetch a PR ref, so
+the root-dependent `ServerRepo`, `PayloadCache`, and `ReviewStateStore` layers
+cannot be constructed at process startup. `prepareSession` constructs each
+parameterized layer once after selection and provides their merged session layer
+once for that scope. Implementations capture the shared shell context while
+their public service methods keep `R = never`. Tests use the same live shell
+layer at real fixture seams and explicit test layers for fake repository/cache
+seams.
+
+Product file access goes through core `FileSystem` and path manipulation through
+core `Path`; adapters translate `PlatformError` into their existing tagged
+errors. The only `node:path` use left in the resolver is the pure cross-platform
+repository-name parser, which must recognize Windows strings while running on a
+different host.
+
 ## Failures are tagged errors; absence is `Option`
 
 Process execution, discovery, path resolution, review-state storage, loading,
@@ -83,12 +106,14 @@ The old state-store warning callback is gone. A failed state write reaches the
 HTTP caller; the store itself logs failure to add `.balade/` to
 `.git/info/exclude`, and the completed state write still succeeds. Index reads
 do not degrade failures into omitted rows: repository or state failures reach
-the HTTP error boundary. The file-watcher callback remains a
-logging port because watcher errors can arrive after `prepareSession` has
-returned its session. Phase 3 may replace that port with the runtime logger when
-the session becomes an Effect service. Until Phase 5 moves the SPA store to
-Effect, browser storage and network fallbacks log their caught exception before
-returning their existing fallback outcome.
+the HTTP error boundary. File watching is now a `FileSystem.watch` stream forked
+into the session scope: the platform stream acquires and releases the OS watcher,
+scope closure interrupts it, and late watcher failures go to the Effect runtime
+logger. Any event invalidates the served walkthroughs in that directory; this
+keeps editor rename saves correct without trusting an OS-specific event path.
+The manual close and warning callbacks are gone. Until Phase 5 moves the SPA
+store to Effect, browser storage and network fallbacks log their caught exception
+before returning their existing fallback outcome.
 
 ## `typecheck` carries the Effect language service
 
@@ -111,16 +136,18 @@ of `HEAD`; and the fetch requires a GitHub origin — `pull/<n>/head` is a GitHu
 refspec, and a failed fetch stops with a note. Review state is unaffected:
 `.balade/` is keyed by walkthrough path, so marks made against a fetched ref
 reappear when the branch is eventually checked out. The locator is an Effect
-service (`src/pr/locate.ts`) with typed errors — the first piece of the
-Effect-throughout direction; the sync core it calls into is unchanged.
+service (`src/pr/locate.ts`) with typed errors and captures the same filesystem,
+path and command services as the rest of the shell.
 
-## Resolution shells out through `spawnSync`
+## Resolution shells out through the `CommandExecutor` layer
 
-One resolve costs 2576 ms across 25 processes — fine for `check`, too slow to
-repeat per request. The decided path is the synchronous adapter plus a
+The live layer still uses `spawnSync`. One resolve costs 2576 ms across 25
+processes — fine for `check`, too slow to repeat per request. The decided path
+is the synchronous adapter plus a
 served-mode payload cache keyed `(sourcePath, pin, head)`, which turns repeat
 requests into a map lookup. If the cache falls short, `execAsync` goes in beside
-`exec` in `src/resolve/exec.ts`, behind the same seam.
+the synchronous implementation in `src/resolve/exec.ts`, behind the same
+service.
 
 `src/server/cache.ts` keeps one slot per walkthrough rather than one per key: a
 payload carries the full contents of every changed file, and the head only moves

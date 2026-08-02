@@ -2,12 +2,13 @@
 /** Command boundary: read flags, run the typed build/session Effects, translate
     their failures into terminal output, and keep diagnostics as report values. */
 
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Effect, Layer, Option } from "effect";
+import { NodeRuntime } from "@effect/platform-node";
+import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { buildErrorMessage, runBuild } from "./build/run.js";
 import { formatJson, formatText } from "./check/report.js";
 import { runCheck, type CheckOutcome } from "./check/run.js";
+import { cliLayer } from "./live.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
 import { findAppBundle, serve } from "./server/serve.js";
@@ -45,10 +46,12 @@ const buildFile = Argument.variadic(
 );
 
 const check = Command.make("check", { files, json: jsonFlag }, (config) =>
-  Effect.sync(() => {
-    const outcome = runCheck({ cwd: process.cwd(), paths: config.files });
-    process.stdout.write(config.json ? `${formatJson(outcome)}\n` : formatText(outcome));
-    if (!outcome.ok) process.exitCode = 1;
+  Effect.gen(function* () {
+    const outcome = yield* runCheck({ cwd: process.cwd(), paths: config.files });
+    yield* Effect.sync(() => {
+      process.stdout.write(config.json ? `${formatJson(outcome)}\n` : formatText(outcome));
+      if (!outcome.ok) process.exitCode = 1;
+    });
   }),
 ).pipe(
   Command.withDescription(
@@ -127,7 +130,6 @@ const open = Command.make(
       }
 
       const session = prepared.value.session;
-      yield* Effect.addFinalizer(() => Effect.sync(() => session.close()));
       printSoft(session.outcome);
 
       const url = yield* serve({ appDir: appDir.value, port: config.port, api: session.api });
@@ -196,8 +198,4 @@ const balade = Command.make("balade").pipe(
   Command.withSubcommands([check, open, build]),
 );
 
-NodeRuntime.runMain(
-  Command.run(balade, { version: VERSION }).pipe(
-    Effect.provide(Layer.mergeAll(NodeServices.layer, PrLocator.layer)),
-  ),
-);
+NodeRuntime.runMain(Command.run(balade, { version: VERSION }).pipe(Effect.provide(cliLayer)));

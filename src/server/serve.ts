@@ -7,7 +7,7 @@
  */
 
 import { NodeHttpServer } from "@effect/platform-node";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, FileSystem, Layer, Path, Schema } from "effect";
 import {
   HttpRouter,
   HttpServer,
@@ -15,9 +15,7 @@ import {
   HttpServerResponse,
   HttpStaticServer,
 } from "effect/unstable/http";
-import { existsSync } from "node:fs";
 import { createServer } from "node:http";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ApiReviewStateInvalid, apiErrorResponse, type Api, type ApiError } from "./api.js";
 
@@ -49,7 +47,9 @@ export class AppBundleMissing extends Schema.TaggedErrorClass<AppBundleMissing>(
 
 /** The required served-app bundle directory. */
 export const findAppBundle = Effect.fn("findAppBundle")(function* () {
-  return existsSync(join(APP_DIR, "index.html"))
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  return (yield* fs.exists(path.join(APP_DIR, "index.html")))
     ? APP_DIR
     : yield* new AppBundleMissing({ path: APP_DIR });
 });

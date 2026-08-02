@@ -4,17 +4,19 @@
  * payload cache spends the resolver once per key.
  */
 
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { LoadResult } from "../src/compile/load.js";
 import type { IndexPayload, Payload, ReviewState } from "../src/payload/types.js";
-import { payloadCache } from "../src/server/cache.js";
+import { PayloadCache } from "../src/server/cache.js";
+import { ServerRepo } from "../src/server/repo.js";
 import { findAppBundle, serve } from "../src/server/serve.js";
 import { prepareSession, type Session } from "../src/server/session.js";
-import { fileReviewStore, stateFileName } from "../src/state/store.js";
+import { ReviewStateStore, stateFileName } from "../src/state/store.js";
+import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
 /** A stand-in for the vite bundle: the static server only needs an entry file. */
@@ -28,7 +30,7 @@ const json = { "content-type": "application/json" };
 
 it.effect("keeps a missing served-app bundle in the error channel", () =>
   Effect.gen(function* () {
-    expect((yield* Effect.flip(findAppBundle()))._tag).toBe("AppBundleMissing");
+    expect((yield* Effect.flip(provideLive(findAppBundle())))._tag).toBe("AppBundleMissing");
   }),
 );
 
@@ -44,12 +46,15 @@ describe("the served API", () => {
     appDir = stubBundle();
 
     const prepared = await Effect.runPromise(
-      prepareSession({
-        cwd: repo.dir,
-        selection: { kind: "files", paths: [join(repo.dir, "walkthroughs/valid.md")] },
-        useGh: false,
-        warn: () => {},
-      }),
+      provideLive(
+        Effect.scoped(
+          prepareSession({
+            cwd: repo.dir,
+            selection: { kind: "files", paths: [join(repo.dir, "walkthroughs/valid.md")] },
+            useGh: false,
+          }),
+        ),
+      ),
     );
     if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
     session = prepared.session;
@@ -57,7 +62,6 @@ describe("the served API", () => {
   });
 
   afterAll(() => {
-    session.close();
     repo.cleanup();
     rmSync(appDir, { recursive: true, force: true });
   });
@@ -69,16 +73,16 @@ describe("the served API", () => {
 
   it.effect("threads --lang through to the payload, over meta.lang", () =>
     Effect.gen(function* () {
-      const french = yield* prepareSession({
-        cwd: repo.dir,
-        selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
-        lang: "fr",
-        useGh: false,
-        warn: () => {},
-      });
+      const french = yield* provideLive(
+        prepareSession({
+          cwd: repo.dir,
+          selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
+          lang: "fr",
+          useGh: false,
+        }),
+      );
       if (french.kind !== "ready") throw new Error(`open refused to start: ${french.kind}`);
       const answer = yield* french.session.api.walkthrough(null);
-      french.session.close();
       /* The fixture frontmatter says `lang: en`; the flag wins. */
       expect((answer as Payload).lang).toBe("fr");
     }),
@@ -86,14 +90,59 @@ describe("the served API", () => {
 
   it.live("answers the payload, the review state and the staleness badge", () =>
     Effect.scoped(
-      Effect.gen(function* () {
-        const url = yield* serve({ appDir, port: 0, api: session.api });
-        expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-        yield* Effect.promise(() => exercise(url, path));
-      }),
+      provideLive(
+        Effect.gen(function* () {
+          const url = yield* serve({ appDir, port: 0, api: session.api });
+          expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+          yield* Effect.promise(() => exercise(url, path));
+        }),
+      ),
     ),
   );
 });
+
+it.live("invalidates a cached payload when the scoped watcher sees an edit", () =>
+  provideLive(
+    Effect.gen(function* () {
+      const repo = createFixtureRepo();
+      repo.addWalkthrough("valid.md", "valid.md");
+      yield* Effect.addFinalizer(() => Effect.sync(() => repo.cleanup()));
+
+      const prepared = yield* prepareSession({
+        cwd: repo.dir,
+        selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
+        useGh: false,
+      });
+      if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
+
+      const file = join(repo.dir, "walkthroughs/valid.md");
+      const before = yield* prepared.session.api.walkthrough(null);
+      if ("kind" in before) throw new Error("single walkthrough returned an index");
+      expect(before.title).toBe("Add live planning pool items");
+
+      /* Let the scoped watcher acquire before making the edit. The stamp and
+         HEAD do not move, so only watcher invalidation can refresh this key. */
+      yield* Effect.sleep("20 millis");
+      writeFileSync(
+        file,
+        readFileSync(file, "utf8").replace(
+          "Add live planning pool items",
+          "Add watched planning pool items",
+        ),
+        "utf8",
+      );
+
+      let title = before.title;
+      for (let attempt = 0; attempt < 50 && title === before.title; attempt += 1) {
+        yield* Effect.sleep("20 millis");
+        const refreshed = yield* prepared.session.api.walkthrough(null);
+        if ("kind" in refreshed) throw new Error("single walkthrough returned an index");
+        title = refreshed.title;
+      }
+      expect(title).toBe("Add watched planning pool items");
+    }),
+  ),
+);
 
 async function exercise(url: string, path: string): Promise<void> {
   const query = `?path=${encodeURIComponent(path)}`;
@@ -169,19 +218,21 @@ describe("the index", () => {
     repo.addWalkthrough("second.md", "valid.md");
 
     const prepared = await Effect.runPromise(
-      prepareSession({
-        cwd: repo.dir,
-        selection: { kind: "discovered" },
-        useGh: false,
-        warn: () => {},
-      }),
+      provideLive(
+        Effect.scoped(
+          prepareSession({
+            cwd: repo.dir,
+            selection: { kind: "discovered" },
+            useGh: false,
+          }),
+        ),
+      ),
     );
     if (prepared.kind !== "ready") throw new Error(`open refused to start: ${prepared.kind}`);
     session = prepared.session;
   });
 
   afterAll(() => {
-    session.close();
     repo.cleanup();
   });
 
@@ -264,7 +315,7 @@ describe("review-state files", () => {
 
   it.effect("writes one file per walkthrough and excludes the directory once", () =>
     Effect.gen(function* () {
-      const store = fileReviewStore({ repoRoot: repo.dir });
+      const store = yield* ReviewStateStore;
 
       yield* store.write("walkthroughs/valid.md", state);
       const stored = yield* store.read("walkthroughs/valid.md");
@@ -280,12 +331,12 @@ describe("review-state files", () => {
       yield* store.write("walkthroughs/valid.md", state);
       const again = readFileSync(join(repo.dir, ".git/info/exclude"), "utf8");
       expect(again).toBe(exclude);
-    }),
+    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
   );
 
   it.effect("returns a typed error for corrupt JSON", () =>
     Effect.gen(function* () {
-      const store = fileReviewStore({ repoRoot: repo.dir });
+      const store = yield* ReviewStateStore;
       writeFileSync(
         join(repo.dir, ".balade", stateFileName("walkthroughs/broken.md")),
         "{ not json",
@@ -295,12 +346,12 @@ describe("review-state files", () => {
       const error = yield* Effect.flip(store.read("walkthroughs/broken.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
       expect(error.path).toContain("broken.review.json");
-    }),
+    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
   );
 
   it.effect("returns a typed error for schema-invalid state", () =>
     Effect.gen(function* () {
-      const store = fileReviewStore({ repoRoot: repo.dir });
+      const store = yield* ReviewStateStore;
       writeFileSync(
         join(repo.dir, ".balade", stateFileName("walkthroughs/invalid.md")),
         JSON.stringify({
@@ -314,15 +365,15 @@ describe("review-state files", () => {
       const error = yield* Effect.flip(store.read("walkthroughs/invalid.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
       expect(error.path).toContain("invalid.review.json");
-    }),
+    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
   );
 
   it.effect("ignores a file that names another walkthrough", () =>
     Effect.gen(function* () {
-      const store = fileReviewStore({ repoRoot: repo.dir });
+      const store = yield* ReviewStateStore;
       yield* store.write("walkthroughs/valid.md", state);
       expect(yield* store.read("docs/valid.md")).toMatchObject({ _tag: "None" });
-    }),
+    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
   );
 });
 
@@ -334,19 +385,26 @@ describe("the payload cache", () => {
     ranges: [],
   });
 
-  it.effect("resolves once per key and again when the file or the head moves", () =>
-    Effect.gen(function* () {
-      let loads = 0;
-      let pin = "aaa";
-      let head = "111";
-      const cache = payloadCache({
-        head: Effect.sync(() => head),
-        pin: () => Effect.succeed(Option.some(pin)),
-        load: (sourcePath) => {
+  it.effect("resolves once per key and again when the file or the head moves", () => {
+    let loads = 0;
+    let pin = "aaa";
+    let head = "111";
+    const repoLayer = Layer.succeed(ServerRepo, {
+      root: "/fixture",
+      slug: "fixture/repo",
+      head: Effect.sync(() => head),
+      pin: () => Effect.succeed(Option.some(pin)),
+      distance: () => Effect.succeed(Option.none()),
+      row: () => Effect.succeed(Option.none()),
+      load: (sourcePath) =>
+        Effect.sync(() => {
           loads += 1;
-          return Effect.succeed(result(sourcePath));
-        },
-      });
+          return result(sourcePath);
+        }),
+    });
+
+    return Effect.gen(function* () {
+      const cache = yield* PayloadCache;
 
       yield* cache.get("w.md");
       yield* cache.get("w.md");
@@ -361,9 +419,9 @@ describe("the payload cache", () => {
       expect(loads).toBe(3);
 
       /* What the watcher does when the file changes under a settled key. */
-      cache.invalidate("w.md");
+      yield* cache.invalidate("w.md");
       yield* cache.get("w.md");
       expect(loads).toBe(4);
-    }),
-  );
+    }).pipe(Effect.provide(PayloadCache.layer.pipe(Layer.provide(repoLayer))));
+  });
 });
