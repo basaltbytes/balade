@@ -4,6 +4,7 @@
  */
 
 import type { Node } from "@markdoc/markdoc";
+import { Option } from "effect";
 import type {
   Block,
   CardItem,
@@ -495,7 +496,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
   env.markReferenced(file);
 
   const blob = env.ctx.blob(file);
-  if (blob === null) {
+  if (Option.isNone(blob)) {
     env.report({
       code: "file-unresolvable",
       level: "error",
@@ -519,19 +520,19 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     !Number.isInteger(to) ||
     from < 1 ||
     to < from ||
-    to > blob.length
+    to > blob.value.length
   ) {
     env.report({
       code: "range-unresolvable",
       level: "error",
       file: env.file,
       line,
-      message: `Lines ${from}-${to} fall outside \`${file}\`, which holds ${blob.length} lines at ${short(env.ctx.pin)}.`,
-      hint: `Use a range inside 1-${blob.length}.`,
+      message: `Lines ${from}-${to} fall outside \`${file}\`, which holds ${blob.value.length} lines at ${short(env.ctx.pin)}.`,
+      hint: `Use a range inside 1-${blob.value.length}.`,
     });
     env.card({
       code: "range-unresolvable",
-      message: `Lines ${from}-${to} fall outside \`${file}\` (${blob.length} lines).`,
+      message: `Lines ${from}-${to} fall outside \`${file}\` (${blob.value.length} lines).`,
       reference,
       sectionId,
       line,
@@ -541,7 +542,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
 
   env.fileRef(file, sectionId);
 
-  const lines = blob.slice(from - 1, to);
+  const lines = blob.value.slice(from - 1, to);
   const first = lines[0] ?? "";
   const last = lines[lines.length - 1] ?? "";
   env.echo({ file, from, to, firstLine: first, lastLine: last, atLine: line });

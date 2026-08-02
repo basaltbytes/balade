@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { Schema } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Effect, Schema } from "effect";
+import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { loadWalkthrough } from "../src/compile/load.js";
 import {
   Block,
@@ -16,14 +16,16 @@ describe("the payload schemas", () => {
   let repo: FixtureRepo;
   let payload: Payload;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     repo = createFixtureRepo();
     repo.addWalkthrough("valid.md", "valid.md");
-    const loaded = loadWalkthrough({
-      cwd: repo.dir,
-      path: join(repo.dir, "walkthroughs/valid.md"),
-      useGh: false,
-    });
+    const loaded = await Effect.runPromise(
+      loadWalkthrough({
+        cwd: repo.dir,
+        path: join(repo.dir, "walkthroughs/valid.md"),
+        useGh: false,
+      }),
+    );
     if (loaded.payload === null) throw new Error(JSON.stringify(loaded.diagnostics, null, 2));
     payload = loaded.payload;
   });

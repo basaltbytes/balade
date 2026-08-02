@@ -1,30 +1,89 @@
 /**
- * What the four served endpoints answer, as plain values. HTTP lives one
- * module up in `serve.ts`; everything here is a function of the ports it is
- * given, so a test drives it without a socket.
+ * What the four served endpoints answer. Successes and typed `ApiError`
+ * failures stay independent of HTTP; `serve.ts` maps them to JSON and status
+ * codes. Tests drive these ports without a socket.
  *
  * `?path=` is untrusted input: it names a walkthrough this run serves or it
  * names nothing at all — which is also what keeps the parameter from reaching
  * the file system.
  */
 
+import { Effect, Option, Schema } from "effect";
+import { describeFailure } from "../failure.js";
 import { parseReviewState } from "../payload/parse-review.js";
-import type { CheckDiagnostic, IndexEntry, IndexPayload } from "../payload/types.js";
+import type {
+  CheckDiagnostic,
+  IndexEntry,
+  IndexPayload,
+  Payload,
+  ReviewState,
+} from "../payload/types.js";
 import type { ReviewStateStore } from "../state/store.js";
 import type { PayloadCache } from "./cache.js";
-import type { IndexRow } from "./repo.js";
+import type { ServerRepo } from "./repo.js";
 
-/** One endpoint's answer: a JSON body, or a status with a sentence for it. */
-export type Answer =
-  | { kind: "json"; body: unknown }
-  | { kind: "error"; status: 400 | 404 | 500; message: string };
+export class ApiPathRequired extends Schema.TaggedErrorClass<ApiPathRequired>()(
+  "ApiPathRequired",
+  {},
+) {}
+
+export class ApiTargetNotServed extends Schema.TaggedErrorClass<ApiTargetNotServed>()(
+  "ApiTargetNotServed",
+  { path: Schema.String },
+) {}
+
+export class ApiWalkthroughUnavailable extends Schema.TaggedErrorClass<ApiWalkthroughUnavailable>()(
+  "ApiWalkthroughUnavailable",
+  { path: Schema.String, detail: Schema.String },
+) {}
+
+export class ApiReviewStateNotFound extends Schema.TaggedErrorClass<ApiReviewStateNotFound>()(
+  "ApiReviewStateNotFound",
+  { path: Schema.String },
+) {}
+
+export class ApiReviewStateInvalid extends Schema.TaggedErrorClass<ApiReviewStateInvalid>()(
+  "ApiReviewStateInvalid",
+  {},
+) {}
+
+export class ApiReviewStateMismatch extends Schema.TaggedErrorClass<ApiReviewStateMismatch>()(
+  "ApiReviewStateMismatch",
+  { requestPath: Schema.String, statePath: Schema.String },
+) {}
+
+export class ApiReviewStateUnavailable extends Schema.TaggedErrorClass<ApiReviewStateUnavailable>()(
+  "ApiReviewStateUnavailable",
+  { path: Schema.String, detail: Schema.String },
+) {}
+
+export class ApiStampUnreadable extends Schema.TaggedErrorClass<ApiStampUnreadable>()(
+  "ApiStampUnreadable",
+  { path: Schema.String },
+) {}
+
+export class ApiStampUnresolvable extends Schema.TaggedErrorClass<ApiStampUnresolvable>()(
+  "ApiStampUnresolvable",
+  { pin: Schema.String },
+) {}
+
+export type ApiError =
+  | ApiPathRequired
+  | ApiTargetNotServed
+  | ApiWalkthroughUnavailable
+  | ApiReviewStateNotFound
+  | ApiReviewStateInvalid
+  | ApiReviewStateMismatch
+  | ApiReviewStateUnavailable
+  | ApiStampUnreadable
+  | ApiStampUnresolvable;
 
 /** The slice of the repository adapter the answers read. */
 export interface ApiRepo {
   readonly slug: string;
-  pin(sourcePath: string): string | null;
-  distance(pin: string): number | null;
-  row(sourcePath: string): IndexRow | null;
+  pin: ServerRepo["pin"];
+  distance: ServerRepo["distance"];
+  row: ServerRepo["row"];
 }
 
 export interface ApiPorts {
@@ -37,13 +96,13 @@ export interface ApiPorts {
 
 export interface Api {
   /** `GET /api/walkthrough` — one payload, or the index when several are served. */
-  walkthrough(path: string | null): Answer;
+  walkthrough(path: string | null): Effect.Effect<Payload | IndexPayload, ApiError>;
   /** `GET /api/state` — the marks on disk, 404 when the CLI holds none. */
-  readState(path: string | null): Answer;
+  readState(path: string | null): Effect.Effect<ReviewState, ApiError>;
   /** `PUT /api/state` — the body is unknown until it parses. */
-  writeState(path: string | null, body: unknown): Answer;
+  writeState(path: string | null, body: unknown): Effect.Effect<ReviewState, ApiError>;
   /** `GET /api/staleness` — how far the head moved past the stamp. */
-  staleness(path: string | null): Answer;
+  staleness(path: string | null): Effect.Effect<{ headDistance: number }, ApiError>;
 }
 
 /** What `?path=` resolved to. `index` means "no path given, and several served". */
@@ -60,93 +119,76 @@ export function createApi(ports: ApiPorts): Api {
     return served.has(path) ? { kind: "one", path } : { kind: "unknown" };
   };
 
-  const notServed = (path: string | null): Answer => ({
-    kind: "error",
-    status: 404,
-    message: `This run does not serve \`${path ?? ""}\`.`,
-  });
+  const notServed = (path: string | null) => new ApiTargetNotServed({ path: path ?? "" });
 
   /** The three per-file endpoints all need one walkthrough, never the index. */
-  const oneOf = (path: string | null): { kind: "one"; path: string } | Answer => {
+  const oneOf = (path: string | null): Effect.Effect<string, ApiError> => {
     const target = targetOf(path);
-    if (target.kind === "one") return target;
-    if (target.kind === "index") return { kind: "error", status: 400, message: NEEDS_PATH };
+    if (target.kind === "one") return Effect.succeed(target.path);
+    if (target.kind === "index") return new ApiPathRequired({});
     return notServed(path);
   };
 
   return {
-    walkthrough(path) {
+    walkthrough: Effect.fn("Api.walkthrough")(function* (path) {
       const target = targetOf(path);
-      if (target.kind === "unknown") return notServed(path);
-      if (target.kind === "index") return { kind: "json", body: buildIndex(ports) };
+      if (target.kind === "unknown") return yield* notServed(path);
+      if (target.kind === "index") return yield* buildIndex(ports);
 
-      const loaded = ports.payloads.get(target.path);
+      const loaded = yield* ports.payloads
+        .get(target.path)
+        .pipe(Effect.mapError(walkthroughUnavailable(target.path)));
       if (loaded.payload === null) {
-        return { kind: "error", status: 500, message: firstFailure(loaded.diagnostics) };
+        return yield* new ApiWalkthroughUnavailable({
+          path: target.path,
+          detail: firstFailure(loaded.diagnostics),
+        });
       }
-      return { kind: "json", body: loaded.payload };
-    },
+      return loaded.payload;
+    }),
 
-    readState(path) {
-      const target = oneOf(path);
-      if (target.kind !== "one") return target;
+    readState: Effect.fn("Api.readState")(function* (path) {
+      const target = yield* oneOf(path);
 
-      const stored = ports.state.read(target.path);
-      if (stored === null) {
-        return {
-          kind: "error",
-          status: 404,
-          message: `No review state for \`${target.path}\` yet.`,
-        };
+      const stored = yield* ports.state
+        .read(target)
+        .pipe(Effect.mapError(reviewStateUnavailable(target)));
+      return Option.isSome(stored)
+        ? stored.value
+        : yield* new ApiReviewStateNotFound({ path: target });
+    }),
+
+    writeState: Effect.fn("Api.writeState")(function* (path, body) {
+      const target = yield* oneOf(path);
+
+      const state = yield* parseReviewState(body).pipe(
+        Effect.mapError(() => new ApiReviewStateInvalid({})),
+      );
+      if (state.walkthrough !== target) {
+        return yield* new ApiReviewStateMismatch({
+          requestPath: target,
+          statePath: state.walkthrough,
+        });
       }
-      return { kind: "json", body: stored };
-    },
+      yield* ports.state.write(target, state).pipe(Effect.mapError(reviewStateUnavailable(target)));
+      return state;
+    }),
 
-    writeState(path, body) {
-      const target = oneOf(path);
-      if (target.kind !== "one") return target;
+    staleness: Effect.fn("Api.staleness")(function* (path) {
+      const target = yield* oneOf(path);
 
-      const state = parseReviewState(body);
-      if (state === null) {
-        return {
-          kind: "error",
-          status: 400,
-          message: "The body is not a review state: it needs version 1, walkthrough, pr and stamp.",
-        };
+      const pin = yield* ports.repo
+        .pin(target)
+        .pipe(Effect.mapError(walkthroughUnavailable(target)));
+      if (Option.isNone(pin)) return yield* new ApiStampUnreadable({ path: target });
+      const headDistance = yield* ports.repo
+        .distance(pin.value)
+        .pipe(Effect.mapError(walkthroughUnavailable(target)));
+      if (Option.isNone(headDistance)) {
+        return yield* new ApiStampUnresolvable({ pin: pin.value });
       }
-      if (state.walkthrough !== target.path) {
-        return {
-          kind: "error",
-          status: 400,
-          message: `The body names \`${state.walkthrough}\`, but the request names \`${target.path}\`.`,
-        };
-      }
-      ports.state.write(target.path, state);
-      return { kind: "json", body: state };
-    },
-
-    staleness(path) {
-      const target = oneOf(path);
-      if (target.kind !== "one") return target;
-
-      const pin = ports.repo.pin(target.path);
-      if (pin === null) {
-        return {
-          kind: "error",
-          status: 404,
-          message: `\`${target.path}\` carries no readable stamp.`,
-        };
-      }
-      const headDistance = ports.repo.distance(pin);
-      if (headDistance === null) {
-        return {
-          kind: "error",
-          status: 404,
-          message: `The stamp \`${pin}\` is not in this clone.`,
-        };
-      }
-      return { kind: "json", body: { headDistance } };
-    },
+      return { headDistance: headDistance.value };
+    }),
   };
 }
 
@@ -156,30 +198,78 @@ export function createApi(ports: ApiPorts): Api {
  * Progress counts the marks that are on disk; the walkthrough itself applies the
  * hash rule when it opens.
  */
-function buildIndex(ports: ApiPorts): IndexPayload {
+const buildIndex = Effect.fn("Api.buildIndex")(function* (ports: ApiPorts) {
   const entries: IndexEntry[] = [];
   for (const path of ports.paths) {
-    const row = ports.repo.row(path);
-    if (row === null) continue;
+    const row = yield* ports.repo.row(path).pipe(Effect.mapError(walkthroughUnavailable(path)));
+    if (Option.isNone(row)) continue;
 
-    const stored = ports.state.read(path);
-    const done =
-      stored === null ? null : Math.min(Object.keys(stored.sections).length, row.sections);
+    const stored = yield* ports.state
+      .read(path)
+      .pipe(Effect.mapError(reviewStateUnavailable(path)));
+    const done = Option.match(stored, {
+      onNone: () => Option.none<number>(),
+      onSome: (state) =>
+        Option.some(Math.min(Object.keys(state.sections).length, row.value.sections)),
+    });
     entries.push({
       path,
-      title: row.title,
-      pr: row.pr,
-      meta: row.meta,
-      updatedAt: row.updatedAt,
-      ...(done === null ? {} : { progress: { done, total: row.sections } }),
+      title: row.value.title,
+      pr: row.value.pr,
+      meta: row.value.meta,
+      updatedAt: row.value.updatedAt,
+      ...(Option.isNone(done) ? {} : { progress: { done: done.value, total: row.value.sections } }),
     });
   }
-  return { kind: "index", repo: ports.repo.slug, entries };
-}
+  return { kind: "index", repo: ports.repo.slug, entries } satisfies IndexPayload;
+});
+
+const walkthroughUnavailable = (path: string) => (error: unknown) =>
+  new ApiWalkthroughUnavailable({ path, detail: describeFailure(error) });
+
+const reviewStateUnavailable = (path: string) => (error: unknown) =>
+  new ApiReviewStateUnavailable({ path, detail: describeFailure(error) });
 
 function firstFailure(diagnostics: readonly CheckDiagnostic[]): string {
   const failure = diagnostics.find((diagnostic) => diagnostic.level === "error");
   return failure === undefined
     ? "The walkthrough no longer compiles."
     : `${failure.code}: ${failure.message}`;
+}
+
+export interface ApiErrorResponse {
+  readonly status: 400 | 404 | 500;
+  readonly message: string;
+}
+
+export function apiErrorResponse(error: ApiError): ApiErrorResponse {
+  switch (error._tag) {
+    case "ApiPathRequired":
+      return { status: 400, message: NEEDS_PATH };
+    case "ApiReviewStateInvalid":
+      return {
+        status: 400,
+        message: "The body is not a review state: it needs version 1, walkthrough, pr and stamp.",
+      };
+    case "ApiReviewStateMismatch":
+      return {
+        status: 400,
+        message: `The body names \`${error.statePath}\`, but the request names \`${error.requestPath}\`.`,
+      };
+    case "ApiTargetNotServed":
+      return { status: 404, message: `This run does not serve \`${error.path}\`.` };
+    case "ApiReviewStateNotFound":
+      return { status: 404, message: `No review state for \`${error.path}\` yet.` };
+    case "ApiStampUnreadable":
+      return { status: 404, message: `\`${error.path}\` carries no readable stamp.` };
+    case "ApiStampUnresolvable":
+      return { status: 404, message: `The stamp \`${error.pin}\` is not in this clone.` };
+    case "ApiWalkthroughUnavailable":
+      return { status: 500, message: error.detail };
+    case "ApiReviewStateUnavailable":
+      return {
+        status: 500,
+        message: `Review state for \`${error.path}\` is unavailable (${error.detail}).`,
+      };
+  }
 }

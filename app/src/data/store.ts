@@ -3,6 +3,7 @@
    and localStorage again whenever the endpoint refuses. */
 
 import { parseReviewJson, parseReviewState } from "../../../src/payload/parse-review";
+import { Effect } from "effect";
 import type { Payload, ReviewState } from "../contract";
 
 /** What a save reached: `"fallback"` means the endpoint refused and the browser copy took it. */
@@ -21,13 +22,29 @@ export interface StorageLike {
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
-export function localStore(storageKey: string, storage: StorageLike): ReviewStore {
+export type StoreWarning = (message: string, error?: unknown) => void;
+
+const browserWarning: StoreWarning = (message, error) => console.warn(message, error);
+
+export function localStore(
+  storageKey: string,
+  storage: StorageLike,
+  warn: StoreWarning = browserWarning,
+): ReviewStore {
   return {
     async load() {
+      let raw: string | null;
       try {
-        const raw = storage.getItem(storageKey);
-        return raw === null ? null : parseReviewJson(raw);
-      } catch {
+        raw = storage.getItem(storageKey);
+      } catch (error) {
+        warn(`balade: could not read browser review state for ${storageKey}.`, error);
+        return null;
+      }
+      if (raw === null) return null;
+      try {
+        return await Effect.runPromise(parseReviewJson(raw));
+      } catch (error) {
+        warn(`balade: ignoring invalid browser review state for ${storageKey}.`, error);
         return null;
       }
     },
@@ -35,15 +52,21 @@ export function localStore(storageKey: string, storage: StorageLike): ReviewStor
       try {
         storage.setItem(storageKey, JSON.stringify(state));
         return "saved";
-      } catch {
+      } catch (error) {
         /* private mode or a full quota: the marks stay in memory for this visit */
+        warn(`balade: could not save browser review state for ${storageKey}.`, error);
         return "failed";
       }
     },
   };
 }
 
-export function httpStore(path: string, fallback: ReviewStore, fetch: FetchLike): ReviewStore {
+export function httpStore(
+  path: string,
+  fallback: ReviewStore,
+  fetch: FetchLike,
+  warn: StoreWarning = browserWarning,
+): ReviewStore {
   const url = `/api/state?path=${encodeURIComponent(path)}`;
   return {
     async load() {
@@ -51,9 +74,20 @@ export function httpStore(path: string, fallback: ReviewStore, fetch: FetchLike)
         const response = await fetch(url, { headers: { accept: "application/json" } });
         /* 404 means the CLI holds nothing — not that nothing exists: marks made
            while it was down live on in the browser copy. */
-        if (!response.ok) return fallback.load();
-        return parseReviewState(await response.json());
-      } catch {
+        if (!response.ok) {
+          if (response.status !== 404)
+            warn(`balade: review-state GET failed (${response.status}).`);
+          return fallback.load();
+        }
+        const body: unknown = await response.json();
+        try {
+          return await Effect.runPromise(parseReviewState(body));
+        } catch (error) {
+          warn("balade: the served review state was invalid; using the browser copy.", error);
+          return fallback.load();
+        }
+      } catch (error) {
+        warn("balade: could not load served review state; using the browser copy.", error);
         return fallback.load();
       }
     },
@@ -65,8 +99,10 @@ export function httpStore(path: string, fallback: ReviewStore, fetch: FetchLike)
           body: JSON.stringify(state),
         });
         if (response.ok) return "saved";
-      } catch {
+        warn(`balade: review-state PUT failed (${response.status}); using the browser copy.`);
+      } catch (error) {
         /* the CLI stopped listening; the browser copy is the last resort */
+        warn("balade: could not save served review state; using the browser copy.", error);
       }
       return (await fallback.save(state)) === "saved" ? "fallback" : "failed";
     },

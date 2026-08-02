@@ -8,6 +8,7 @@
  */
 
 import type { Node } from "@markdoc/markdoc";
+import { Option } from "effect";
 import type {
   Block,
   CheckDiagnostic,
@@ -40,6 +41,22 @@ export interface CompileResult {
   payload: Payload;
   diagnostics: CheckDiagnostic[];
   ranges: RangeEcho[];
+}
+
+/** Files whose stamped blobs the pure compiler may inspect. */
+export function referencedFiles(doc: ValidDocument): string[] {
+  const paths = new Set<string>();
+  const walk = (nodes: readonly Node[]): void => {
+    for (const node of nodes) {
+      if (node.type === "tag" && (node.tag === "section" || node.tag === "code")) {
+        const path = node.attributes["file"];
+        if (typeof path === "string" && path !== "") paths.add(path);
+      }
+      walk(node.children);
+    }
+  };
+  walk(doc.ast.children);
+  return [...paths].sort();
 }
 
 export function compileDocument(input: CompileInput): CompileResult {
@@ -111,7 +128,7 @@ export function compileDocument(input: CompileInput): CompileResult {
       const entry = files.get(filePath);
       if (entry !== undefined) {
         status = entry.status;
-      } else if (ctx.blob(filePath) === null) {
+      } else if (Option.isNone(ctx.blob(filePath))) {
         diagnostics.push({
           code: "file-unresolvable",
           level: "error",

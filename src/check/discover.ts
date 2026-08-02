@@ -6,7 +6,8 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { gitOut, gitToplevel } from "../resolve/exec.js";
+import { Effect, Option, Schema } from "effect";
+import { gitOut, gitToplevel, type CommandFailed, type NotARepository } from "../resolve/exec.js";
 import { frontmatterBlock } from "../schema/frontmatter.js";
 
 const WALKTHROUGH_PATH = /(?:^|\/)walkthroughs\/[^/]+\.md$/;
@@ -19,61 +20,77 @@ export const NOT_A_REPO =
   "Not inside a git repository — run balade from the repository that holds the walkthrough.";
 
 export interface Discovery {
-  repoRoot: string | null;
+  repoRoot: string;
   /** Repo-relative paths, sorted. */
   paths: string[];
 }
 
-export function discoverWalkthroughs(cwd: string): Discovery {
-  const root = gitToplevel(cwd);
-  if (root === null) return { repoRoot: null, paths: [] };
+export class WalkthroughReadFailed extends Schema.TaggedErrorClass<WalkthroughReadFailed>()(
+  "WalkthroughReadFailed",
+  { path: Schema.String, cause: Schema.Defect() },
+) {}
 
-  const listed = (gitOut(["ls-files", "-z"], root) ?? "").split("\0").filter((path) => path !== "");
-  const paths = listed
-    .filter((path) => WALKTHROUGH_PATH.test(path))
-    .filter((path) => hasWalkthroughKey(join(root, path)))
-    .sort();
-  return { repoRoot: root, paths };
-}
+export type DiscoveryError = NotARepository | CommandFailed | WalkthroughReadFailed;
+
+export const discoverWalkthroughs = Effect.fn("discoverWalkthroughs")(function* (cwd: string) {
+  const root = yield* gitToplevel(cwd);
+  const listed = (yield* gitOut(["ls-files", "-z"], root))
+    .split("\0")
+    .filter((path) => path !== "");
+  const paths: string[] = [];
+  for (const path of listed.filter((candidate) => WALKTHROUGH_PATH.test(candidate))) {
+    if (yield* hasWalkthroughKey(join(root, path))) paths.push(path);
+  }
+  return { repoRoot: root, paths: paths.sort() } satisfies Discovery;
+});
 
 /**
  * The walkthroughs a commit holds: the same convention, read from the object
  * store — served ref mode looks here when the branch is not checked out.
  */
-export function discoverWalkthroughsAt(root: string, commit: string): string[] {
-  const listed = (gitOut(["ls-tree", "-r", "--name-only", "-z", commit], root) ?? "")
+export const discoverWalkthroughsAt = Effect.fn("discoverWalkthroughsAt")(function* (
+  root: string,
+  commit: string,
+) {
+  const listed = (yield* gitOut(["ls-tree", "-r", "--name-only", "-z", commit], root))
     .split("\0")
     .filter((path) => path !== "");
-  return listed
-    .filter((path) => WALKTHROUGH_PATH.test(path))
-    .filter((path) => {
-      const source = gitOut(["show", `${commit}:${path}`], root);
-      return source !== null && carriesWalkthroughKey(source);
-    })
-    .sort();
-}
+  const paths: string[] = [];
+  for (const path of listed.filter((candidate) => WALKTHROUGH_PATH.test(candidate))) {
+    const source = yield* gitOut(["show", `${commit}:${path}`], root);
+    if (carriesWalkthroughKey(source)) paths.push(path);
+  }
+  return paths.sort();
+});
 
 /**
- * The PR number a walkthrough source names, or `null` when the envelope does
+ * The PR number a walkthrough source names, or `None` when the envelope does
  * not say. A scalar read, not a parse: a file whose other keys are broken still
  * names its PR here, and compilation reports what is actually wrong.
  */
-export function walkthroughPr(source: string): number | null {
+export function walkthroughPr(source: string): Option.Option<number> {
   const block = frontmatterBlock(source.slice(0, 4096));
-  if (block === null) return null;
+  if (block === null) return Option.none();
   const match = /^pr\s*:\s*(\d+)\s*$/m.exec(block);
-  return match?.[1] === undefined ? null : Number(match[1]);
+  return match?.[1] === undefined ? Option.none() : Option.some(Number(match[1]));
 }
 
-function hasWalkthroughKey(absolute: string): boolean {
-  let source: string;
-  try {
-    source = readFileSync(absolute, "utf8");
-  } catch {
-    return false;
+export function discoveryErrorMessage(error: DiscoveryError): string {
+  switch (error._tag) {
+    case "NotARepository":
+      return error.note;
+    case "CommandFailed":
+      return `${error.file} ${error.args.join(" ")} failed (exit ${error.code}).`;
+    case "WalkthroughReadFailed":
+      return `Could not read walkthrough source at ${error.path}.`;
   }
-  return carriesWalkthroughKey(source);
 }
+
+const hasWalkthroughKey = (absolute: string) =>
+  Effect.try({
+    try: () => readFileSync(absolute, "utf8"),
+    catch: (cause) => new WalkthroughReadFailed({ path: absolute, cause }),
+  }).pipe(Effect.map(carriesWalkthroughKey));
 
 /** Looks only at the first 4096 bytes — enough for any frontmatter block. */
 const carriesWalkthroughKey = (source: string): boolean => {

@@ -7,25 +7,19 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import {
+  discoveryErrorMessage,
   discoverWalkthroughs,
   discoverWalkthroughsAt,
-  NOT_A_REPO,
+  type DiscoveryError,
   walkthroughPr,
 } from "../check/discover.js";
 import { gitOut, gitToplevel } from "../resolve/exec.js";
 import { repoSlug } from "../resolve/git.js";
 import type { PrTarget } from "./target.js";
 
-export class NotARepository extends Schema.TaggedErrorClass<NotARepository>()(
-  "NotARepository",
-  {},
-) {
-  get note(): string {
-    return NOT_A_REPO;
-  }
-}
+export { NotARepository } from "../resolve/exec.js";
 
 export class WrongRepository extends Schema.TaggedErrorClass<WrongRepository>()("WrongRepository", {
   wanted: Schema.String,
@@ -60,7 +54,35 @@ export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughF
   }
 }
 
-export type LocateError = NotARepository | WrongRepository | PullFetchFailed | NoWalkthroughForPull;
+export class PullSourceReadFailed extends Schema.TaggedErrorClass<PullSourceReadFailed>()(
+  "PullSourceReadFailed",
+  { path: Schema.String, cause: Schema.Defect() },
+) {
+  get note(): string {
+    return `Could not read the walkthrough source at ${this.path}.`;
+  }
+}
+
+export type LocateError =
+  | DiscoveryError
+  | WrongRepository
+  | PullFetchFailed
+  | NoWalkthroughForPull
+  | PullSourceReadFailed;
+
+export function locateErrorMessage(error: LocateError): string {
+  switch (error._tag) {
+    case "NotARepository":
+    case "CommandFailed":
+    case "WalkthroughReadFailed":
+      return discoveryErrorMessage(error);
+    case "WrongRepository":
+    case "PullFetchFailed":
+    case "NoWalkthroughForPull":
+    case "PullSourceReadFailed":
+      return error.note;
+  }
+}
 
 export interface Located {
   /** Absolute repository root. */
@@ -79,23 +101,23 @@ export class PrLocator extends Context.Service<
 >()("balade/PrLocator") {
   static readonly layer = Layer.sync(PrLocator, () => ({
     locate: Effect.fn("PrLocator.locate")(function* (cwd: string, target: PrTarget) {
-      const root = gitToplevel(cwd);
-      if (root === null) return yield* new NotARepository({});
+      const root = yield* gitToplevel(cwd);
 
-      const slug = repoSlug(root);
+      const slug = yield* repoSlug(root);
       if (target.slug !== null && target.slug.toLowerCase() !== slug.toLowerCase()) {
         return yield* new WrongRepository({ wanted: target.slug, found: slug });
       }
 
-      const checkedOut = naming(target.number, discoverWalkthroughs(cwd).paths, (path) =>
+      const discovered = yield* discoverWalkthroughs(cwd);
+      const checkedOut = yield* naming(target.number, discovered.paths, (path) =>
         read(join(root, path)),
       );
       if (checkedOut.length > 0) return { root, paths: checkedOut };
 
-      const at = fetchPullHead(root, target.number);
-      if (at === null) return yield* new PullFetchFailed({ number: target.number });
+      const at = yield* fetchPullHead(root, target.number);
 
-      const held = naming(target.number, discoverWalkthroughsAt(root, at), (path) =>
+      const heldPaths = yield* discoverWalkthroughsAt(root, at);
+      const held = yield* naming(target.number, heldPaths, (path) =>
         gitOut(["show", `${at}:${path}`], root),
       );
       if (held.length === 0) return yield* new NoWalkthroughForPull({ number: target.number });
@@ -105,26 +127,34 @@ export class PrLocator extends Context.Service<
 }
 
 /** The walkthroughs whose frontmatter names this PR number. */
-const naming = (
+const naming = <E>(
   number: number,
   paths: readonly string[],
-  sourceOf: (path: string) => string | null,
-): string[] =>
-  paths.filter((path) => {
-    const source = sourceOf(path);
-    return source !== null && walkthroughPr(source) === number;
+  sourceOf: (path: string) => Effect.Effect<string, E>,
+): Effect.Effect<string[], E> =>
+  Effect.gen(function* () {
+    const found: string[] = [];
+    for (const path of paths) {
+      const source = yield* sourceOf(path);
+      const namesPull = Option.match(walkthroughPr(source), {
+        onNone: () => false,
+        onSome: (pr) => pr === number,
+      });
+      if (namesPull) found.push(path);
+    }
+    return found;
   });
 
 /** GitHub advertises every PR head as `pull/<n>/head`; the SHA lands in FETCH_HEAD. */
-const fetchPullHead = (root: string, number: number): string | null => {
-  if (gitOut(["fetch", "--quiet", "origin", `pull/${number}/head`], root) === null) return null;
-  return gitOut(["rev-parse", "FETCH_HEAD"], root)?.trim() ?? null;
-};
+const fetchPullHead = (root: string, number: number) =>
+  Effect.gen(function* () {
+    yield* gitOut(["fetch", "--quiet", "origin", `pull/${number}/head`], root);
+    const at = (yield* gitOut(["rev-parse", "FETCH_HEAD"], root)).trim();
+    return at === "" ? yield* new PullFetchFailed({ number }) : at;
+  }).pipe(Effect.mapError(() => new PullFetchFailed({ number })));
 
-const read = (absolute: string): string | null => {
-  try {
-    return readFileSync(absolute, "utf8");
-  } catch {
-    return null;
-  }
-};
+const read = (absolute: string) =>
+  Effect.try({
+    try: () => readFileSync(absolute, "utf8"),
+    catch: (cause) => new PullSourceReadFailed({ path: absolute, cause }),
+  });

@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Effect } from "effect";
+import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { formatJson, formatText } from "../src/check/report.js";
 import { checkOne, runCheck } from "../src/check/run.js";
 import { loadWalkthrough } from "../src/compile/load.js";
@@ -115,45 +116,49 @@ describe("check", () => {
     });
   });
 
-  it("still builds a payload for soft `open`, with error cards", () => {
-    const loaded = loadWalkthrough({
-      cwd: repo.dir,
-      path: join(repo.dir, "walkthroughs/errors.md"),
-      useGh: false,
-    });
-    const payload = loaded.payload;
-    expect(payload).not.toBeNull();
-    expect(payload?.errors.map((card) => card.code)).toEqual([
-      "range-unresolvable",
-      "file-unresolvable",
-    ]);
-    expect(payload?.errors[1]).toMatchObject({
-      reference: "models/does_not_exist.py:1-3",
-      sectionId: "one",
-    });
-    /* The duplicate section stays out of the payload; the unique ones stay in. */
-    expect(payload?.sections.map((section) => section.id)).toEqual(["one", "three"]);
-    /* A mismatched expect= still renders — the block carries the warning. */
-    const blocks = payload?.sections.find((section) => section.id === "three")?.blocks ?? [];
-    const code = blocks.filter((entry) => entry.b === "code");
-    expect(code).toHaveLength(2);
-    expect(code[0]?.expect).toEqual({ value: "class PlanningPoolItem", status: "mismatch" });
-    expect(code[1]?.expect).toBeUndefined();
-  });
+  it.effect("still builds a payload for soft `open`, with error cards", () =>
+    Effect.gen(function* () {
+      const loaded = yield* loadWalkthrough({
+        cwd: repo.dir,
+        path: join(repo.dir, "walkthroughs/errors.md"),
+        useGh: false,
+      });
+      const payload = loaded.payload;
+      expect(payload).not.toBeNull();
+      expect(payload?.errors.map((card) => card.code)).toEqual([
+        "range-unresolvable",
+        "file-unresolvable",
+      ]);
+      expect(payload?.errors[1]).toMatchObject({
+        reference: "models/does_not_exist.py:1-3",
+        sectionId: "one",
+      });
+      /* The duplicate section stays out of the payload; the unique ones stay in. */
+      expect(payload?.sections.map((section) => section.id)).toEqual(["one", "three"]);
+      /* A mismatched expect= still renders — the block carries the warning. */
+      const blocks = payload?.sections.find((section) => section.id === "three")?.blocks ?? [];
+      const code = blocks.filter((entry) => entry.b === "code");
+      expect(code).toHaveLength(2);
+      expect(code[0]?.expect).toEqual({ value: "class PlanningPoolItem", status: "mismatch" });
+      expect(code[1]?.expect).toBeUndefined();
+    }),
+  );
 
-  it("reports a duplicate section without orphaning its error cards", () => {
-    const path = join(repo.dir, "walkthroughs/duplicate.md");
-    const loaded = loadWalkthrough({ cwd: repo.dir, path, useGh: false });
-    expect(loaded.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(true);
-    /* The duplicate's failing `code` tag is reported… */
-    expect(codes(loaded.diagnostics)).toEqual(
-      expect.arrayContaining(["section-id-duplicate", "file-unresolvable"]),
-    );
+  it.effect("reports a duplicate section without orphaning its error cards", () =>
+    Effect.gen(function* () {
+      const path = join(repo.dir, "walkthroughs/duplicate.md");
+      const loaded = yield* loadWalkthrough({ cwd: repo.dir, path, useGh: false });
+      expect(loaded.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(true);
+      /* The duplicate's failing `code` tag is reported… */
+      expect(codes(loaded.diagnostics)).toEqual(
+        expect.arrayContaining(["section-id-duplicate", "file-unresolvable"]),
+      );
 
-    /* …but no card survives it: every card names a section the payload renders. */
-    expect(loaded.payload?.sections.map((section) => section.id)).toEqual(["dup"]);
-    expect(loaded.payload?.errors).toEqual([]);
-  });
+      /* …but no card survives it: every card names a section the payload renders. */
+      expect(loaded.payload?.sections.map((section) => section.id)).toEqual(["dup"]);
+      expect(loaded.payload?.errors).toEqual([]);
+    }),
+  );
 
   it("discovers every tracked walkthrough with no argument", () => {
     const outcome = runCheck({ cwd: repo.dir, useGh: false });

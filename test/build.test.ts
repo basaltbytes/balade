@@ -6,7 +6,8 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Effect } from "effect";
+import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { runBuild } from "../src/build/run.js";
 import type { Payload } from "../src/payload/types.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
@@ -61,103 +62,129 @@ describe("build", () => {
       ...(out !== undefined ? { out } : {}),
     });
 
-  it("writes one HTML file beside the walkthrough, with the payload baked in", () => {
-    const result = build(["walkthroughs/valid.md"]);
-    if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+  it.effect("writes one HTML file beside the walkthrough, with the payload baked in", () =>
+    Effect.gen(function* () {
+      const result = yield* build(["walkthroughs/valid.md"]);
+      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
 
-    expect(result.file).toBe(join(repo.dir, "walkthroughs/valid.html"));
-    expect(readdirSync(join(repo.dir, "walkthroughs")).sort()).toEqual(["valid.html", "valid.md"]);
+      expect(result.file).toBe(join(repo.dir, "walkthroughs/valid.html"));
+      expect(readdirSync(join(repo.dir, "walkthroughs")).sort()).toEqual([
+        "valid.html",
+        "valid.md",
+      ]);
 
-    const html = readFileSync(result.file, "utf8");
-    const payload = bakedPayload(html);
-    expect(payload.walkthrough).toBe(1);
-    expect(payload.title).toBe("Add live planning pool items");
-    expect(payload.sourcePath).toBe("walkthroughs/valid.md");
-    expect(payload.sections.map((section) => section.id)).toContain("overview");
-    /* Review state falls back to localStorage under this key (#14). */
-    expect(payload.storageKey).toContain("walkthroughs/valid.md");
-  });
+      const html = readFileSync(result.file, "utf8");
+      const payload = bakedPayload(html);
+      expect(payload.walkthrough).toBe(1);
+      expect(payload.title).toBe("Add live planning pool items");
+      expect(payload.sourcePath).toBe("walkthroughs/valid.md");
+      expect(payload.sections.map((section) => section.id)).toContain("overview");
+      /* Review state falls back to localStorage under this key (#14). */
+      expect(payload.storageKey).toContain("walkthroughs/valid.md");
+    }),
+  );
 
-  it("names no file but itself", () => {
-    const result = build(["walkthroughs/valid.md"]);
-    if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
-    const html = readFileSync(result.file, "utf8");
+  it.effect("names no file but itself", () =>
+    Effect.gen(function* () {
+      const result = yield* build(["walkthroughs/valid.md"]);
+      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      const html = readFileSync(result.file, "utf8");
 
-    for (const [, url] of html.matchAll(/(?:src|href)\s*=\s*"([^"]*)"/g)) {
-      expect(url).toMatch(/^data:/);
-    }
-    expect(html).toContain("#root{color:#fff}");
-    expect(html).toContain("window.__BALADE_STUB__");
-    expect(html).toContain('<script type="module">');
-  });
+      for (const [, url] of html.matchAll(/(?:src|href)\s*=\s*"([^"]*)"/g)) {
+        expect(url).toMatch(/^data:/);
+      }
+      expect(html).toContain("#root{color:#fff}");
+      expect(html).toContain("window.__BALADE_STUB__");
+      expect(html).toContain('<script type="module">');
+    }),
+  );
 
-  it("threads --lang through to the baked payload", () => {
-    const result = runBuild({
-      cwd: repo.dir,
-      paths: ["walkthroughs/valid.md"],
-      useGh: false,
-      bundleDir,
-      lang: "fr",
-    });
-    if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
-    /* The fixture frontmatter says `lang: en`; the flag wins. */
-    expect(bakedPayload(readFileSync(result.file, "utf8")).lang).toBe("fr");
-    expect(readFileSync(result.file, "utf8")).toContain('<html lang="fr">');
-  });
+  it.effect("threads --lang through to the baked payload", () =>
+    Effect.gen(function* () {
+      const result = yield* runBuild({
+        cwd: repo.dir,
+        paths: ["walkthroughs/valid.md"],
+        useGh: false,
+        bundleDir,
+        lang: "fr",
+      });
+      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      /* The fixture frontmatter says `lang: en`; the flag wins. */
+      expect(bakedPayload(readFileSync(result.file, "utf8")).lang).toBe("fr");
+      expect(readFileSync(result.file, "utf8")).toContain('<html lang="fr">');
+    }),
+  );
 
-  it("writes where --out says", () => {
-    const out = join(repo.dir, "export/pool.html");
-    const result = build(["walkthroughs/valid.md"], "export/pool.html");
-    expect(result.kind).toBe("note");
-    if (result.kind !== "note") throw new Error("expected a note");
-    /* The directory does not exist: the failure is a sentence, not a stack. */
-    expect(result.message).toContain(out);
+  it.effect("writes where --out says", () =>
+    Effect.gen(function* () {
+      const out = join(repo.dir, "export/pool.html");
+      const error = yield* Effect.flip(
+        runBuild({
+          cwd: repo.dir,
+          paths: ["walkthroughs/valid.md"],
+          out: "export/pool.html",
+          useGh: false,
+          bundleDir,
+        }),
+      );
+      expect(error).toMatchObject({ _tag: "ExportWriteFailed", path: out });
 
-    repo.write("export/.keep", "");
-    const again = build(["walkthroughs/valid.md"], "export/pool.html");
-    if (again.kind !== "built") throw new Error(`build refused: ${JSON.stringify(again)}`);
-    expect(again.file).toBe(out);
-    expect(bakedPayload(readFileSync(out, "utf8")).title).toBe("Add live planning pool items");
-  });
+      repo.write("export/.keep", "");
+      const again = yield* build(["walkthroughs/valid.md"], "export/pool.html");
+      if (again.kind !== "built") throw new Error(`build refused: ${JSON.stringify(again)}`);
+      expect(again.file).toBe(out);
+      expect(bakedPayload(readFileSync(out, "utf8")).title).toBe("Add live planning pool items");
+    }),
+  );
 
-  it("escapes what the prose and the bundle carry", () => {
-    repo.addWalkthrough("script-prose.md", "script-prose.md");
-    const result = build(["walkthroughs/script-prose.md"]);
-    if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
-    const html = readFileSync(result.file, "utf8");
+  it.effect("escapes what the prose and the bundle carry", () =>
+    Effect.gen(function* () {
+      repo.addWalkthrough("script-prose.md", "script-prose.md");
+      const result = yield* build(["walkthroughs/script-prose.md"]);
+      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      const html = readFileSync(result.file, "utf8");
 
-    /* The payload survives the round trip a browser makes through it. */
-    expect(JSON.stringify(bakedPayload(html))).toContain("</script>");
+      /* The payload survives the round trip a browser makes through it. */
+      expect(JSON.stringify(bakedPayload(html))).toContain("</script>");
 
-    /* Two closing tags, and nothing else that ends or derails script data. */
-    expect(html.match(/<\/script/g)).toHaveLength(2);
-    expect(html).not.toContain("<!--");
-    expect(html).toContain('"<\\/script>"');
-    expect(html).toContain('"<\\!--"');
-    /* The title is HTML text, not script data. */
-    expect(html).toContain("<title>Close the &lt;/script&gt; hole</title>");
-  });
+      /* Two closing tags, and nothing else that ends or derails script data. */
+      expect(html.match(/<\/script/g)).toHaveLength(2);
+      expect(html).not.toContain("<!--");
+      expect(html).toContain('"<\\/script>"');
+      expect(html).toContain('"<\\!--"');
+      /* The title is HTML text, not script data. */
+      expect(html).toContain("<title>Close the &lt;/script&gt; hole</title>");
+    }),
+  );
 
-  it("stops with the discovered paths when no file is named", () => {
-    const result = build([]);
-    if (result.kind !== "note") throw new Error(`expected a note, got ${result.kind}`);
-    expect(result.message).toContain("walkthroughs/valid.md");
-    expect(result.message).toContain("walkthroughs/script-prose.md");
-  });
+  it.effect("stops with the discovered paths when no file is named", () =>
+    Effect.gen(function* () {
+      const result = yield* build([]);
+      if (result.kind !== "note") throw new Error(`expected a note, got ${result.kind}`);
+      expect(result.message).toContain("walkthroughs/valid.md");
+      expect(result.message).toContain("walkthroughs/script-prose.md");
+    }),
+  );
 
-  it("exports one walkthrough at a time", () => {
-    const result = build(["walkthroughs/valid.md", "walkthroughs/script-prose.md"]);
-    expect(result).toMatchObject({ kind: "note" });
-  });
+  it.effect("exports one walkthrough at a time", () =>
+    Effect.gen(function* () {
+      const result = yield* build(["walkthroughs/valid.md", "walkthroughs/script-prose.md"]);
+      expect(result).toMatchObject({ kind: "note" });
+    }),
+  );
 
-  it("says where the export bundle should be when it is missing", () => {
-    const result = runBuild({
-      cwd: repo.dir,
-      paths: ["walkthroughs/valid.md"],
-      useGh: false,
-      bundleDir: join(repo.dir, "nowhere"),
-    });
-    if (result.kind !== "note") throw new Error(`expected a note, got ${result.kind}`);
-    expect(result.message).toContain("pnpm run build:app");
-  });
+  it.effect("says where the export bundle should be when it is missing", () =>
+    Effect.gen(function* () {
+      const dir = join(repo.dir, "nowhere");
+      const error = yield* Effect.flip(
+        runBuild({
+          cwd: repo.dir,
+          paths: ["walkthroughs/valid.md"],
+          useGh: false,
+          bundleDir: dir,
+        }),
+      );
+      expect(error).toMatchObject({ _tag: "ExportBundleReadFailed", dir });
+    }),
+  );
 });

@@ -5,10 +5,12 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path";
+import { Effect, Schema } from "effect";
 import type { CheckDiagnostic, Payload, RangeEcho } from "../payload/types.js";
-import { resolveContext } from "../resolve/git.js";
-import { repoRelative } from "../resolve/paths.js";
-import { compileDocument } from "./compile.js";
+import type { CommandFailed } from "../resolve/exec.js";
+import { resolveContext, type ResolveError } from "../resolve/git.js";
+import { repoRelative, type PathResolutionFailed } from "../resolve/paths.js";
+import { compileDocument, referencedFiles } from "./compile.js";
 import { parseDocument, type ValidDocument } from "./document.js";
 
 export interface LoadOptions {
@@ -33,29 +35,23 @@ export interface LoadResult {
   ranges: RangeEcho[];
 }
 
-export function loadWalkthrough(options: LoadOptions): LoadResult {
+export class WalkthroughFileReadFailed extends Schema.TaggedErrorClass<WalkthroughFileReadFailed>()(
+  "WalkthroughFileReadFailed",
+  { path: Schema.String, cause: Schema.Defect() },
+) {}
+
+export type LoadError = ResolveError | PathResolutionFailed | WalkthroughFileReadFailed;
+
+export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: LoadOptions) {
   const absolute = isAbsolute(options.path) ? options.path : resolvePath(options.cwd, options.path);
   const givenPath = toGivenPath(absolute, options.cwd);
 
-  let source: string;
-  try {
-    source = options.source ?? readFileSync(absolute, "utf8");
-  } catch {
-    return {
-      sourcePath: givenPath,
-      payload: null,
-      ranges: [],
-      diagnostics: [
-        {
-          code: "file-unresolvable",
-          level: "error",
-          file: givenPath,
-          message: "The walkthrough file does not exist.",
-          hint: "Check the path, or run `balade check` with no argument to validate every discovered walkthrough.",
-        },
-      ],
-    };
-  }
+  const source =
+    options.source ??
+    (yield* Effect.try({
+      try: () => readFileSync(absolute, "utf8"),
+      catch: (cause) => new WalkthroughFileReadFailed({ path: givenPath, cause }),
+    }));
 
   const doc = parseDocument(source, givenPath);
   const { frontmatter } = doc;
@@ -72,20 +68,20 @@ export function loadWalkthrough(options: LoadOptions): LoadResult {
 
   /* Ref mode: the walkthrough's directory may not exist on disk, so git runs
      from `cwd` — the repository root the server resolved. */
-  const resolved = resolveContext({
+  const resolved = yield* resolveContext({
     cwd: options.source === undefined ? dirname(absolute) : options.cwd,
     pr: frontmatter.pr,
     commit: frontmatter.commit,
     file: givenPath,
+    references: referencedFiles(valid),
     ...(options.at !== undefined ? { at: options.at } : {}),
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   });
   const diagnostics = [...doc.diagnostics, ...resolved.diagnostics];
-  if (resolved.ctx === null) {
-    return { sourcePath: givenPath, payload: null, diagnostics, ranges: [] };
-  }
-
-  const sourcePath = repoRelative(resolved.ctx.repoRoot, absolute) || givenPath;
+  const sourcePath =
+    options.source === undefined
+      ? (yield* repoRelative(resolved.ctx.repoRoot, absolute)) || givenPath
+      : givenPath;
   const compiled = compileDocument({
     doc: valid,
     ctx: resolved.ctx,
@@ -102,7 +98,55 @@ export function loadWalkthrough(options: LoadOptions): LoadResult {
     })),
     ranges: compiled.ranges,
   };
+});
+
+/** Translates a real load failure into `check`'s product vocabulary at its boundary. */
+export function loadErrorDiagnostic(error: LoadError): CheckDiagnostic {
+  switch (error._tag) {
+    case "WalkthroughFileReadFailed":
+      return {
+        code: "file-unresolvable",
+        level: "error",
+        file: error.path,
+        message: "The walkthrough file does not exist or cannot be read.",
+        hint: "Check the path, or run `balade check` with no argument to validate every discovered walkthrough.",
+      };
+    case "NotARepository":
+      return {
+        code: "repo-unresolvable",
+        level: "error",
+        file: error.cwd,
+        message: "This directory is not inside a git repository.",
+        hint: "Run balade from the repository that holds the walkthrough.",
+      };
+    case "CommitUnresolvable":
+      return {
+        code: "commit-unresolvable",
+        level: "error",
+        file: error.file,
+        message: `The stamped commit \`${error.commit}\` is not in this clone.`,
+        hint: "Fetch the branch (CI needs `fetch-depth: 0`), or re-stamp the walkthrough against a commit you have.",
+      };
+    case "PathResolutionFailed":
+      return {
+        code: "file-unresolvable",
+        level: "error",
+        file: error.path,
+        message: "The walkthrough path could not be resolved.",
+        hint: "Check that the repository and walkthrough path are readable.",
+      };
+    case "CommandFailed":
+      return commandDiagnostic(error);
+  }
 }
+
+const commandDiagnostic = (error: CommandFailed): CheckDiagnostic => ({
+  code: "git-unresolvable",
+  level: "error",
+  file: error.cwd,
+  message: `\`${error.file} ${error.args.join(" ")}\` failed (exit ${error.code}).`,
+  hint: "Run the command directly to inspect the repository failure.",
+});
 
 /** The given path spelled relative to `cwd` where it fits beneath it, with forward slashes. */
 function toGivenPath(absolute: string, cwd: string): string {

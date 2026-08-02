@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Effect } from "effect";
+import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { checkOne } from "../src/check/run.js";
 import { loadWalkthrough } from "../src/compile/load.js";
 import type { Payload } from "../src/payload/types.js";
@@ -21,15 +22,17 @@ describe("odoo preset", () => {
   let repo: FixtureRepo;
   let payload: Payload;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     repo = createFixtureRepo();
     repo.addWalkthrough("odoo.md", "odoo.md");
     repo.addWalkthrough("unknown-preset.md", "unknown-preset.md");
-    const loaded = loadWalkthrough({
-      cwd: repo.dir,
-      path: join(repo.dir, "walkthroughs/odoo.md"),
-      useGh: false,
-    });
+    const loaded = await Effect.runPromise(
+      loadWalkthrough({
+        cwd: repo.dir,
+        path: join(repo.dir, "walkthroughs/odoo.md"),
+        useGh: false,
+      }),
+    );
     if (loaded.payload === null) throw new Error(JSON.stringify(loaded.diagnostics, null, 2));
     payload = loaded.payload;
   });

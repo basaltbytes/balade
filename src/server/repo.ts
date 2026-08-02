@@ -13,9 +13,10 @@ import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadWalkthrough, type LoadResult } from "../compile/load.js";
-import { gitOut } from "../resolve/exec.js";
-import { repoSlug } from "../resolve/git.js";
+import { Effect, Option, Schema } from "effect";
+import { loadWalkthrough, type LoadError, type LoadResult } from "../compile/load.js";
+import { gitOut, type CommandFailed } from "../resolve/exec.js";
+import { repoSlug, resolveCommit } from "../resolve/git.js";
 import { frontmatterBlock, parseFrontmatter, type Frontmatter } from "../schema/frontmatter.js";
 
 /** What one index row needs, read straight from the file and from git. */
@@ -34,16 +35,23 @@ export interface ServerRepo {
   /** `owner/name` when the remote is known, else the repository directory name. */
   readonly slug: string;
   /** Current HEAD; one third of a payload cache key. */
-  head(): string;
-  /** The stamp the file carries now, or `null` when its frontmatter is unreadable. */
-  pin(sourcePath: string): string | null;
-  /** Commits between a stamp and HEAD, or `null` when the stamp is not in this clone. */
-  distance(pin: string): number | null;
-  /** Index-row facts, or `null` when the file no longer carries a valid envelope. */
-  row(sourcePath: string): IndexRow | null;
+  readonly head: Effect.Effect<string, CommandFailed>;
+  /** The stamp the file carries now, or `None` when its frontmatter is unreadable. */
+  pin(sourcePath: string): Effect.Effect<Option.Option<string>, ServerRepoError>;
+  /** Commits between a stamp and HEAD, or `None` when the stamp is not in this clone. */
+  distance(pin: string): Effect.Effect<Option.Option<number>, ServerRepoError>;
+  /** Index-row facts, or `None` when the file no longer carries a valid envelope. */
+  row(sourcePath: string): Effect.Effect<Option.Option<IndexRow>, ServerRepoError>;
   /** Compiles one walkthrough. Slow: the payload cache calls it once per key. */
-  load(sourcePath: string): LoadResult;
+  load(sourcePath: string): Effect.Effect<LoadResult, LoadError | ServerRepoError>;
 }
+
+export class ServerSourceReadFailed extends Schema.TaggedErrorClass<ServerSourceReadFailed>()(
+  "ServerSourceReadFailed",
+  { path: Schema.String, cause: Schema.Defect() },
+) {}
+
+export type ServerRepoError = CommandFailed | ServerSourceReadFailed;
 
 export interface RepoOptions {
   /** Absolute repository root; every `sourcePath` is relative to it. */
@@ -56,76 +64,88 @@ export interface RepoOptions {
   useGh?: boolean;
 }
 
-export function serverRepo(options: RepoOptions): ServerRepo {
+export const serverRepo = Effect.fn("serverRepo")(function* (options: RepoOptions) {
   const { root, at } = options;
   const absolute = (sourcePath: string): string => join(root, sourcePath);
 
   /** The walkthrough text as served: the working tree, or a blob at `at`. */
-  const readSource = (sourcePath: string): string | null =>
+  const readSource = (sourcePath: string): Effect.Effect<string, ServerRepoError> =>
     at === undefined ? read(absolute(sourcePath)) : gitOut(["show", `${at}:${sourcePath}`], root);
 
   /** The source as it is served now, with its envelope proven. */
-  const envelope = (sourcePath: string): { source: string; frontmatter: Frontmatter } | null => {
-    const source = readSource(sourcePath);
-    if (source === null) return null;
+  const envelope = Effect.fn("serverRepo.envelope")(function* (sourcePath: string) {
+    const source = yield* readSource(sourcePath);
     const block = frontmatterBlock(source);
-    if (block === null) return null;
+    if (block === null) return Option.none<{ source: string; frontmatter: Frontmatter }>();
     const frontmatter = parseFrontmatter(block, sourcePath).frontmatter;
-    return frontmatter === null ? null : { source, frontmatter };
-  };
+    return frontmatter === null ? Option.none() : Option.some({ source, frontmatter });
+  });
 
+  const slug = yield* repoSlug(root);
   return {
     root,
-    slug: repoSlug(root),
+    slug,
 
-    head: () => at ?? gitOut(["rev-parse", "HEAD"], root)?.trim() ?? "",
+    head:
+      at === undefined
+        ? gitOut(["rev-parse", "HEAD"], root).pipe(Effect.map((out) => out.trim()))
+        : Effect.succeed(at),
 
-    pin: (sourcePath) => envelope(sourcePath)?.frontmatter.commit ?? null,
+    pin: (sourcePath) =>
+      envelope(sourcePath).pipe(Effect.map(Option.map((found) => found.frontmatter.commit))),
 
-    distance: (pin) => {
-      const out = gitOut(["rev-list", "--count", `${pin}..${at ?? "HEAD"}`], root)?.trim();
-      if (out === undefined) return null;
-      const count = Number(out);
-      return Number.isFinite(count) ? count : null;
-    },
+    distance: (pin) =>
+      Effect.gen(function* () {
+        const commit = yield* resolveCommit(root, pin);
+        if (Option.isNone(commit)) return Option.none();
+        const out = yield* gitOut(
+          ["rev-list", "--count", `${commit.value}..${at ?? "HEAD"}`],
+          root,
+        );
+        const count = Number(out.trim());
+        return Number.isFinite(count)
+          ? Option.some(count)
+          : yield* Effect.die(new Error("git rev-list returned a non-numeric count"));
+      }),
 
-    row: (sourcePath) => {
-      const found = envelope(sourcePath);
-      if (found === null) return null;
-      return {
-        title: found.frontmatter.title,
-        pr: found.frontmatter.pr,
-        meta: found.frontmatter.meta,
-        updatedAt:
-          gitOut(
-            ["log", "-1", "--format=%cI", ...(at === undefined ? [] : [at]), "--", sourcePath],
-            root,
-          )?.trim() ?? "",
-        sections: countSections(found.source),
-      };
-    },
+    row: (sourcePath) =>
+      Effect.gen(function* () {
+        const found = yield* envelope(sourcePath);
+        if (Option.isNone(found)) return Option.none();
+        const value = found.value;
+        const updatedAt = (yield* gitOut(
+          ["log", "-1", "--format=%cI", ...(at === undefined ? [] : [at]), "--", sourcePath],
+          root,
+        )).trim();
+        return Option.some({
+          title: value.frontmatter.title,
+          pr: value.frontmatter.pr,
+          meta: value.frontmatter.meta,
+          updatedAt,
+          sections: countSections(value.source),
+        });
+      }),
 
-    load: (sourcePath) => {
-      const source = at === undefined ? null : readSource(sourcePath);
-      return loadWalkthrough({
-        cwd: root,
-        path: absolute(sourcePath),
-        ...(source !== null ? { source } : {}),
-        ...(at !== undefined ? { at } : {}),
-        ...(options.lang !== undefined ? { lang: options.lang } : {}),
-        ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-      });
-    },
-  };
-}
+    load: (sourcePath) =>
+      Effect.gen(function* () {
+        const source = at === undefined ? undefined : yield* readSource(sourcePath);
+        return yield* loadWalkthrough({
+          cwd: root,
+          path: absolute(sourcePath),
+          ...(source !== undefined ? { source } : {}),
+          ...(at !== undefined ? { at } : {}),
+          ...(options.lang !== undefined ? { lang: options.lang } : {}),
+          ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
+        });
+      }),
+  } satisfies ServerRepo;
+});
 
-function read(path: string): string | null {
-  try {
-    return readFileSync(path, "utf8");
-  } catch {
-    return null;
-  }
-}
+const read = (path: string) =>
+  Effect.try({
+    try: () => readFileSync(path, "utf8"),
+    catch: (cause) => new ServerSourceReadFailed({ path, cause }),
+  });
 
 /** The index counts sections without resolving anything: a parse, no git. */
 function countSections(source: string): number {

@@ -1,17 +1,17 @@
 #!/usr/bin/env node
-/** Effects stay at this edge: the commands read flags, call the pure compile,
-    check, build and server core, and print. */
+/** Command boundary: read flags, run the typed build/session Effects, translate
+    their failures into terminal output, and keep diagnostics as report values. */
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { runBuild } from "./build/run.js";
+import { buildErrorMessage, runBuild } from "./build/run.js";
 import { formatJson, formatText } from "./check/report.js";
 import { runCheck, type CheckOutcome } from "./check/run.js";
-import { PrLocator } from "./pr/locate.js";
+import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
-import { APP_BUNDLE_MISSING, findAppBundle, serve } from "./server/serve.js";
-import { prepareSession, type Selection } from "./server/session.js";
+import { findAppBundle, serve } from "./server/serve.js";
+import { prepareSession, sessionErrorMessage, type Selection } from "./server/session.js";
 
 const VERSION = "0.1.0";
 
@@ -64,18 +64,12 @@ const openTargets = Argument.variadic(
   ),
 );
 
-/** A PR target answers a located selection, or prints why it cannot and yields `null`. */
+/** A PR target answers a located selection; the command boundary prints typed failures. */
 const locateSelection = Effect.fn("locateSelection")(function* (target: PrTarget) {
   const locator = yield* PrLocator;
-  return yield* locator.locate(process.cwd(), target).pipe(
-    Effect.map((located): Selection => ({ kind: "located", ...located })),
-    Effect.catch((error) =>
-      Effect.sync((): Selection | null => {
-        stop({ kind: "note", message: error.note });
-        return null;
-      }),
-    ),
-  );
+  return yield* locator
+    .locate(process.cwd(), target)
+    .pipe(Effect.map((located): Selection => ({ kind: "located", ...located })));
 });
 
 const open = Command.make(
@@ -83,36 +77,60 @@ const open = Command.make(
   { files: openTargets, lang: langFlag, port: portFlag },
   (config) =>
     Effect.gen(function* () {
-      const appDir = findAppBundle();
-      if (appDir === null) {
-        process.stderr.write(`${APP_BUNDLE_MISSING}\n`);
-        process.exitCode = 1;
-        return;
-      }
+      const appDir = yield* findAppBundle().pipe(
+        Effect.map(Option.some),
+        Effect.catchTag("AppBundleMissing", (error) =>
+          Effect.sync(() => {
+            stop({ kind: "note", message: error.note });
+            return Option.none<string>();
+          }),
+        ),
+      );
+      if (Option.isNone(appDir)) return;
 
       const target = parseOpenTarget(config.files);
       if (target.kind === "invalid") {
         stop({ kind: "note", message: target.message });
         return;
       }
-      const selection = target.kind === "pr" ? yield* locateSelection(target.pr) : target;
-      if (selection === null) return;
+      const selection =
+        target.kind === "pr"
+          ? yield* locateSelection(target.pr).pipe(
+              Effect.map(Option.some),
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  stop({ kind: "note", message: locateErrorMessage(error) });
+                  return Option.none<Selection>();
+                }),
+              ),
+            )
+          : Option.some<Selection>(target);
+      if (Option.isNone(selection)) return;
 
-      const prepared = prepareSession({
+      const prepared = yield* prepareSession({
         cwd: process.cwd(),
-        selection,
+        selection: selection.value,
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-      });
-      if (prepared.kind !== "ready") {
-        stop(prepared);
+      }).pipe(
+        Effect.map(Option.some),
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            stop({ kind: "note", message: sessionErrorMessage(error) });
+            return Option.none();
+          }),
+        ),
+      );
+      if (Option.isNone(prepared)) return;
+      if (prepared.value.kind !== "ready") {
+        stop(prepared.value);
         return;
       }
 
-      const session = prepared.session;
+      const session = prepared.value.session;
       yield* Effect.addFinalizer(() => Effect.sync(() => session.close()));
       printSoft(session.outcome);
 
-      const url = yield* serve({ appDir, port: config.port, api: session.api });
+      const url = yield* serve({ appDir: appDir.value, port: config.port, api: session.api });
       process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
       return yield* Effect.never;
     }).pipe(Effect.scoped),
@@ -145,19 +163,28 @@ const served = (paths: readonly string[]): string =>
   paths.length === 1 ? (paths[0] ?? "") : `${paths.length} walkthroughs`;
 
 const build = Command.make("build", { files: buildFile, lang: langFlag, out: outFlag }, (config) =>
-  Effect.sync(() => {
-    const result = runBuild({
+  Effect.gen(function* () {
+    const result = yield* runBuild({
       cwd: process.cwd(),
       paths: config.files,
       ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
       ...(Option.isSome(config.out) ? { out: config.out.value } : {}),
-    });
-    if (result.kind !== "built") {
-      stop(result);
+    }).pipe(
+      Effect.map(Option.some),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          stop({ kind: "note", message: buildErrorMessage(error) });
+          return Option.none();
+        }),
+      ),
+    );
+    if (Option.isNone(result)) return;
+    if (result.value.kind !== "built") {
+      stop(result.value);
       return;
     }
-    printSoft(result.outcome);
-    process.stdout.write(`balade wrote ${result.file} (${size(result.bytes)})\n`);
+    printSoft(result.value.outcome);
+    process.stdout.write(`balade wrote ${result.value.file} (${size(result.value.bytes)})\n`);
   }),
 ).pipe(Command.withDescription("Export one self-contained HTML file"));
 
