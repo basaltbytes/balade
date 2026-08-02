@@ -6,7 +6,7 @@ import { useStrings } from "../ui/strings";
 const shell = "my-4 border border-border rounded-md overflow-x-auto";
 const head = "bg-card text-left text-muted-foreground";
 
-export function Fields({ rows }: { rows: FieldRow[] }) {
+export function Fields({ rows }: { rows: ReadonlyArray<FieldRow> }) {
   const strings = useStrings();
   return (
     <div className={shell}>
@@ -59,8 +59,8 @@ export function Matrix({
   head: columns,
   rows,
 }: {
-  head: string[];
-  rows: { label: string; cells: boolean[] }[];
+  head: ReadonlyArray<string>;
+  rows: ReadonlyArray<{ readonly label: string; readonly cells: ReadonlyArray<boolean> }>;
 }) {
   return (
     <div className={shell}>
@@ -103,8 +103,8 @@ export function DataTable({
   rows,
   firstColMono,
 }: {
-  head: Inline[][];
-  rows: Inline[][][];
+  head: ReadonlyArray<ReadonlyArray<Inline>>;
+  rows: ReadonlyArray<ReadonlyArray<ReadonlyArray<Inline>>>;
   firstColMono?: boolean;
 }) {
   return (
@@ -142,7 +142,13 @@ export function DataTable({
   );
 }
 
-export function I18nTable({ rows, note }: { rows: I18nRow[]; note?: Inline[] }) {
+export function I18nTable({
+  rows,
+  note,
+}: {
+  rows: ReadonlyArray<I18nRow>;
+  note?: ReadonlyArray<Inline>;
+}) {
   const strings = useStrings();
   return (
     <div className="my-4">

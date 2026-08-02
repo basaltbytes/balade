@@ -75,6 +75,12 @@ describe("the locator", () => {
   let origin: FixtureRepo;
   let clone: FixtureClone;
 
+  it("uses the Windows root basename when no origin URL is readable", () => {
+    expect(repoSlug(String.raw`C:\Users\RUNNER~1\AppData\Local\Temp\balade-clone-example`)).toBe(
+      "balade-clone-example",
+    );
+  });
+
   beforeAll(() => {
     origin = createFixtureRepo();
     origin.addWalkthrough("valid.md", "valid.md");
@@ -107,8 +113,8 @@ describe("the locator", () => {
 
   it("fetches pull/<n>/head when the working tree has nothing", () => {
     const located = locate(clone.dir, 42, null);
-    /* git answers the resolved path; macOS tempdirs sit behind a symlink. */
-    expect(located.root).toBe(realpathSync(clone.dir));
+    /* Git and Node can spell the same path differently across platforms. */
+    expect(realpathSync.native(located.root)).toBe(realpathSync.native(clone.dir));
     expect(located.paths).toEqual(["walkthroughs/valid.md"]);
     expect(located.at).toMatch(/^[0-9a-f]{40}$/);
   });

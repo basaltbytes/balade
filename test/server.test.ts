@@ -131,6 +131,10 @@ async function exercise(url: string, path: string): Promise<void> {
     "{ not json",
     JSON.stringify({ version: 2 }),
     JSON.stringify({ ...state, walkthrough: "other.md" }),
+    JSON.stringify({
+      ...state,
+      sections: { overview: { hash: 7, at: "2026-08-01T10:12:00.000Z" } },
+    }),
   ]) {
     const refused = await fetch(`${url}/api/state${query}`, { method: "PUT", headers: json, body });
     expect(refused.status).toBe(400);
@@ -263,6 +267,24 @@ describe("review-state files", () => {
     expect(store.read("walkthroughs/broken.md")).toBeNull();
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("broken.review.json");
+  });
+
+  it("reads a schema-invalid state as absent and says so on stderr", () => {
+    const warnings: string[] = [];
+    const store = fileReviewStore({ repoRoot: repo.dir, warn: (m) => warnings.push(m) });
+    writeFileSync(
+      join(repo.dir, ".balade", stateFileName("walkthroughs/invalid.md")),
+      JSON.stringify({
+        ...state,
+        walkthrough: "walkthroughs/invalid.md",
+        sections: { overview: { hash: 7, at: "2026-08-01T10:12:00.000Z" } },
+      }),
+      "utf8",
+    );
+
+    expect(store.read("walkthroughs/invalid.md")).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("invalid.review.json");
   });
 
   it("ignores a file that names another walkthrough", () => {

@@ -1,7 +1,7 @@
 /* Review state, as pure functions over the payload and the stored marks.
    Nothing here touches the network, storage, or the DOM. */
 
-import type { FileEntry, Payload, ReviewState, Section } from "../contract";
+import type { FileEntry, Payload, ReviewMark, ReviewState, Section } from "../contract";
 
 export interface Progress {
   done: number;
@@ -62,21 +62,23 @@ export function fileByPath(payload: Payload): Map<string, FileEntry> {
  * name them.
  */
 export function reconcile(payload: Payload, stored: ReviewState | null): Reconciled {
-  const state = emptyState(payload);
+  const base = emptyState(payload);
   const reset: ResetReport = { sections: [], files: [] };
-  if (!stored) return { state, reset, changed: false };
+  if (stored === null) return { state: base, reset, changed: false };
 
   const sections = sectionById(payload);
   const files = fileByPath(payload);
+  const keptSections: Record<string, ReviewMark> = {};
+  const keptFiles: Record<string, ReviewMark> = {};
 
-  for (const [id, mark] of Object.entries(stored.sections ?? {})) {
+  for (const [id, mark] of Object.entries(stored.sections)) {
     const section = sections.get(id);
     if (!section) continue;
-    if (section.hash === mark.hash) state.sections[id] = mark;
+    if (section.hash === mark.hash) keptSections[id] = mark;
     else reset.sections.push(section.title);
   }
 
-  for (const [key, mark] of Object.entries(stored.files ?? {})) {
+  for (const [key, mark] of Object.entries(stored.files)) {
     const split = key.indexOf("//");
     if (split < 0) continue;
     const sectionId = key.slice(0, split);
@@ -84,9 +86,11 @@ export function reconcile(payload: Payload, stored: ReviewState | null): Reconci
     if (!sections.has(sectionId)) continue;
     const entry = files.get(path);
     if (!entry) continue;
-    if (entry.hash === mark.hash) state.files[key] = mark;
+    if (entry.hash === mark.hash) keptFiles[key] = mark;
     else reset.files.push(path);
   }
+
+  const state: ReviewState = { ...base, sections: keptSections, files: keptFiles };
 
   const changed =
     reset.sections.length > 0 ||

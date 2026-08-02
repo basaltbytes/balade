@@ -1,7 +1,11 @@
 /* Where the payload comes from, in order: the baked global of a static export,
    then the served endpoint, then — only under `vite dev` — the pr-96 fixture. */
 
-import { isRecord } from "../../../src/payload/parse-review";
+import { Schema } from "effect";
+import {
+  IndexPayload as IndexPayloadSchema,
+  Payload as PayloadSchema,
+} from "../../../src/payload/schema";
 import type { IndexPayload, Payload } from "../contract";
 
 declare global {
@@ -21,29 +25,19 @@ export interface RouteLocation {
   pathname: string;
 }
 
-const isIndex = (value: Record<string, unknown>): value is Record<string, unknown> & IndexPayload =>
-  value["kind"] === "index" && Array.isArray(value["entries"]);
-
-const isWalkthrough = (
-  value: Record<string, unknown>,
-): value is Record<string, unknown> & Payload =>
-  value["walkthrough"] === 1 &&
-  Array.isArray(value["sections"]) &&
-  Array.isArray(value["files"]) &&
-  Array.isArray(value["nav"]) &&
-  isRecord(value["pr"]) &&
-  typeof value["storageKey"] === "string";
+const decodePayload = Schema.decodeUnknownResult(
+  Schema.Union([PayloadSchema, IndexPayloadSchema]),
+  { onExcessProperty: "error" },
+);
 
 /**
  * The baked global and every CLI answer are edges: nothing becomes a `Payload`
- * without passing here. The block trees are checked as arrays, not walked — a
- * node kind the renderer does not know already draws a labeled placeholder.
+ * without passing here. The shared contract walks every nested field; a
+ * namespaced block kind the renderer does not know still draws a placeholder.
  */
 export function parsePayload(value: unknown): Payload | IndexPayload | null {
-  if (!isRecord(value)) return null;
-  if (isIndex(value)) return value;
-  if (isWalkthrough(value)) return value;
-  return null;
+  const decoded = decodePayload(value);
+  return decoded._tag === "Success" ? decoded.success : null;
 }
 
 /** The walkthrough the location names, through `?path=`, `#/<path>` or `/w/<path>`. */

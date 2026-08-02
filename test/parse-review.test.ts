@@ -19,14 +19,14 @@ describe("parseReviewState", () => {
     expect(parseReviewState(JSON.parse(JSON.stringify(state)))).toEqual(state);
   });
 
-  it("drops a corrupt mark and keeps the others", () => {
-    const parsed = parseReviewState({
-      ...state,
-      sections: { ...state.sections, broken: { hash: 7, at: "2026-01-01T09:00:00.000Z" } },
-      files: { "intro//x.py": null },
-    });
-    expect(parsed?.sections).toEqual(state.sections);
-    expect(parsed?.files).toEqual({});
+  it("refuses a corrupt nested mark", () => {
+    expect(
+      parseReviewState({
+        ...state,
+        sections: { ...state.sections, broken: { hash: 7, at: "2026-01-01T09:00:00.000Z" } },
+        files: { "intro//x.py": null },
+      }),
+    ).toBeNull();
   });
 
   it("refuses another schema version", () => {

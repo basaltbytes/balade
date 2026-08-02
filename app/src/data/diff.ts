@@ -30,8 +30,8 @@ export interface CodeExcerptDiff {
  * block header carries the file range.
  */
 export function codeExcerptDiff(
-  lines: string[],
-  changed: number[],
+  lines: ReadonlyArray<string>,
+  changed: ReadonlyArray<number>,
   from: number,
   path: string,
 ): CodeExcerptDiff {

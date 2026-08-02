@@ -32,10 +32,10 @@ export function Diagram({
   nodes,
   edges,
 }: {
-  intro?: Inline[];
-  hint?: Inline[];
-  nodes: DiagramNode[];
-  edges: DiagramEdge[];
+  intro?: ReadonlyArray<Inline>;
+  hint?: ReadonlyArray<Inline>;
+  nodes: ReadonlyArray<DiagramNode>;
+  edges: ReadonlyArray<DiagramEdge>;
 }) {
   const [hover, setHover] = useState<string | null>(null);
   const cols = Math.max(1, ...nodes.map((node) => node.col));

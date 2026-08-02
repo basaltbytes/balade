@@ -116,7 +116,7 @@ function NavTree({
   sections,
   depth,
 }: {
-  nodes: NavNode[];
+  nodes: ReadonlyArray<NavNode>;
   active: string;
   sections: Map<string, Section>;
   depth: number;

@@ -3,27 +3,84 @@
  * optional `meta` map and `preset`; every other top-level key is an error.
  */
 
+import { Result, Schema, SchemaIssue } from "effect";
+import { Frontmatter as FrontmatterSchema } from "../payload/schema.js";
+import type { CheckDiagnostic, Frontmatter as FrontmatterType } from "../payload/types.js";
 import { parse as parseYaml } from "yaml";
-import { isRecord } from "../payload/parse-review.js";
-import type { CheckDiagnostic } from "../payload/types.js";
+
+export type { Frontmatter } from "../payload/types.js";
 
 const SCHEMA_VERSION = 1;
-
-export interface Frontmatter {
-  walkthrough: 1;
-  title: string;
-  pr: number;
-  commit: string;
-  meta: Record<string, string>;
-  preset?: string;
-}
 
 const REQUIRED = ["walkthrough", "title", "pr", "commit"] as const;
 const OPTIONAL = ["meta", "preset"] as const;
 const KNOWN: readonly string[] = [...REQUIRED, ...OPTIONAL];
 
+type RequiredKey = (typeof REQUIRED)[number];
+
+const REQUIRED_HINTS: Readonly<Record<RequiredKey, string>> = {
+  walkthrough: `Write \`walkthrough: ${SCHEMA_VERSION}\` — it declares the schema version.`,
+  title: 'Write `title: "…"` — it heads the walkthrough.',
+  pr: "Write `pr: 96` — the pull-request number the walkthrough describes.",
+  commit: "Write `commit: <sha>` — the commit the walkthrough was authored against.",
+};
+
+const INVALID_FIELDS = [
+  {
+    key: "walkthrough",
+    message: (value: unknown) => `Unsupported schema version \`${String(value)}\`.`,
+    hint: `This build reads schema version ${SCHEMA_VERSION}. Write \`walkthrough: ${SCHEMA_VERSION}\`, or run a newer balade.`,
+  },
+  {
+    key: "title",
+    message: () => "`title` must be a string.",
+    hint: 'Write `title: "…"`.',
+  },
+  {
+    key: "pr",
+    message: () => "`pr` must be the pull-request number.",
+    hint: "Write `pr: 96`, without quotes or a `#`.",
+  },
+  {
+    key: "commit",
+    message: () => "`commit` must be the stamped commit SHA.",
+    hint: "Write the SHA of the PR head you authored against: `commit: 9f3c2ad…`.",
+  },
+  {
+    key: "preset",
+    message: () => "`preset` must be a preset name.",
+    hint: "Write `preset: odoo`.",
+  },
+] as const;
+
+/** YAML scalars under `meta` become strings in the resolved contract. */
+const MetaScalar = Schema.Union([Schema.String, Schema.Finite, Schema.Boolean]);
+const { walkthrough, title, pr, commit } = FrontmatterSchema.fields;
+const RequiredFrontmatterInput = Schema.Struct({
+  walkthrough,
+  title,
+  pr,
+  commit,
+});
+const FrontmatterInput = Schema.Struct({
+  ...RequiredFrontmatterInput.fields,
+  meta: Schema.optionalKey(Schema.Record(Schema.String, MetaScalar)),
+  preset: Schema.optionalKey(Schema.String),
+});
+
+const decodeInput = Schema.decodeUnknownResult(FrontmatterInput, {
+  errors: "all",
+  onExcessProperty: "error",
+});
+const decodeMap = Schema.decodeUnknownResult(Schema.Record(Schema.String, Schema.Unknown));
+const decodeRequired = Schema.decodeUnknownResult(RequiredFrontmatterInput);
+const decodeFrontmatter = Schema.decodeUnknownSync(FrontmatterSchema, {
+  onExcessProperty: "error",
+});
+const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1();
+
 export interface FrontmatterResult {
-  frontmatter: Frontmatter | null;
+  frontmatter: FrontmatterType | null;
   diagnostics: CheckDiagnostic[];
 }
 
@@ -77,7 +134,8 @@ export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
     return { frontmatter: null, diagnostics };
   }
 
-  if (!isRecord(data)) {
+  const decodedMap = decodeMap(data);
+  if (Result.isFailure(decodedMap)) {
     diagnostics.push({
       code: "frontmatter-invalid",
       level: "error",
@@ -89,152 +147,93 @@ export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
     return { frontmatter: null, diagnostics };
   }
 
-  const map = data;
+  const map = decodedMap.success;
   const at = (key: string): number => frontmatterLine(raw, key);
-  /* Only a broken envelope stops resolution; everything else keeps the one-pass report. */
-  let stopped = false;
-  const bad = (
-    code: string,
-    key: string,
-    message: string,
-    hint: string,
-    options: { stopsResolution: boolean } = { stopsResolution: true },
-  ): void => {
+  const invalid = invalidPaths(decodeInput(map));
+  const bad = (code: string, key: string, message: string, hint: string): void => {
     diagnostics.push({ code, level: "error", file, line: at(key), message, hint });
-    if (options.stopsResolution) stopped = true;
   };
 
+  /* Schema owns which paths are invalid; this mapping keeps the CLI's stable
+     diagnostic vocabulary, line lookup and one-pass ordering. */
   for (const key of Object.keys(map)) {
-    if (!KNOWN.includes(key)) {
+    if (!KNOWN.includes(key) && invalid.has(pathKey(key))) {
       bad(
         "frontmatter-key-unknown",
         key,
         `Unknown frontmatter key \`${key}\`.`,
         `Keep domain keys under \`meta\`: meta:\n  ${key}: …`,
-        { stopsResolution: false },
       );
     }
   }
   for (const key of REQUIRED) {
-    if (map[key] === undefined) {
-      bad("frontmatter-invalid", key, `The frontmatter misses \`${key}\`.`, requiredHint(key));
+    if (map[key] === undefined && invalid.has(pathKey(key))) {
+      bad("frontmatter-invalid", key, `The frontmatter misses \`${key}\`.`, REQUIRED_HINTS[key]);
     }
   }
 
-  const version = map["walkthrough"];
-  if (version !== undefined && version !== SCHEMA_VERSION) {
+  for (const field of INVALID_FIELDS) {
+    const value = map[field.key];
+    if (value !== undefined && invalid.has(pathKey(field.key))) {
+      bad("frontmatter-invalid", field.key, field.message(value), field.hint);
+    }
+  }
+
+  const rawMeta = map["meta"];
+  const metaMap = rawMeta === undefined ? undefined : decodeMap(rawMeta);
+  if (metaMap !== undefined && Result.isFailure(metaMap)) {
     bad(
       "frontmatter-invalid",
-      "walkthrough",
-      `Unsupported schema version \`${String(version)}\`.`,
-      `This build reads schema version ${SCHEMA_VERSION}. Write \`walkthrough: ${SCHEMA_VERSION}\`, or run a newer balade.`,
+      "meta",
+      "`meta` must be a map of domain keys.",
+      "Write `meta:` then indented `key: value` lines.",
     );
-  }
-  let title: string | undefined;
-  const rawTitle = map["title"];
-  if (rawTitle !== undefined) {
-    if (typeof rawTitle === "string") title = rawTitle;
-    else bad("frontmatter-invalid", "title", "`title` must be a string.", 'Write `title: "…"`.');
-  }
-
-  let pr: number | undefined;
-  const rawPr = map["pr"];
-  if (rawPr !== undefined) {
-    if (typeof rawPr === "number" && Number.isInteger(rawPr)) pr = rawPr;
-    else
-      bad(
-        "frontmatter-invalid",
-        "pr",
-        "`pr` must be the pull-request number.",
-        "Write `pr: 96`, without quotes or a `#`.",
-      );
-  }
-
-  let commit: string | undefined;
-  const rawCommit = map["commit"];
-  if (rawCommit !== undefined) {
-    if (typeof rawCommit === "string" && /^[0-9a-f]{7,40}$/i.test(rawCommit)) commit = rawCommit;
-    else
-      bad(
-        "frontmatter-invalid",
-        "commit",
-        "`commit` must be the stamped commit SHA.",
-        "Write the SHA of the PR head you authored against: `commit: 9f3c2ad…`.",
-      );
-  }
-
-  let preset: string | undefined;
-  const rawPreset = map["preset"];
-  if (rawPreset !== undefined) {
-    if (typeof rawPreset === "string") preset = rawPreset;
-    else
-      bad(
-        "frontmatter-invalid",
-        "preset",
-        "`preset` must be a preset name.",
-        "Write `preset: odoo`.",
-        {
-          stopsResolution: false,
-        },
-      );
-  }
-
-  const meta: Record<string, string> = {};
-  const rawMeta = map["meta"];
-  if (rawMeta !== undefined) {
-    if (!isRecord(rawMeta)) {
-      bad(
-        "frontmatter-invalid",
-        "meta",
-        "`meta` must be a map of domain keys.",
-        "Write `meta:` then indented `key: value` lines.",
-        {
-          stopsResolution: false,
-        },
-      );
-    } else {
-      for (const [key, value] of Object.entries(rawMeta)) {
-        if (value === null || typeof value === "object") {
-          bad(
-            "frontmatter-invalid",
-            "meta",
-            `\`meta.${key}\` must be a scalar.`,
-            "Meta values render as header chips; keep them short strings.",
-            {
-              stopsResolution: false,
-            },
-          );
-          continue;
-        }
-        meta[key] = String(value);
+  } else if (metaMap !== undefined) {
+    for (const key of Object.keys(metaMap.success)) {
+      if (invalid.has(pathKey("meta", key))) {
+        bad(
+          "frontmatter-invalid",
+          "meta",
+          `\`meta.${key}\` must be a scalar.`,
+          "Meta values render as header chips; keep them short strings.",
+        );
       }
     }
   }
 
-  if (stopped || title === undefined || pr === undefined || commit === undefined) {
-    return { frontmatter: null, diagnostics };
+  const required = decodeRequired(map);
+  if (Result.isFailure(required)) return { frontmatter: null, diagnostics };
+
+  const meta: Record<string, string> = {};
+  if (metaMap !== undefined && Result.isSuccess(metaMap)) {
+    for (const [key, value] of Object.entries(metaMap.success)) {
+      if (!invalid.has(pathKey("meta", key))) meta[key] = String(value);
+    }
   }
 
-  const frontmatter: Frontmatter = {
-    walkthrough: SCHEMA_VERSION,
-    title,
-    pr,
-    commit,
-    meta,
-    ...(preset !== undefined ? { preset } : {}),
+  const preset = map["preset"];
+  return {
+    frontmatter: decodeFrontmatter({
+      ...required.success,
+      meta,
+      ...(typeof preset === "string" ? { preset } : {}),
+    }),
+    diagnostics,
   };
-  return { frontmatter, diagnostics };
 }
 
-function requiredHint(key: string): string {
-  switch (key) {
-    case "walkthrough":
-      return `Write \`walkthrough: ${SCHEMA_VERSION}\` — it declares the schema version.`;
-    case "title":
-      return 'Write `title: "…"` — it heads the walkthrough.';
-    case "pr":
-      return "Write `pr: 96` — the pull-request number the walkthrough describes.";
-    default:
-      return "Write `commit: <sha>` — the commit the walkthrough was authored against.";
+/** Schema issue paths flattened into stable string keys for diagnostic mapping. */
+function invalidPaths(result: ReturnType<typeof decodeInput>): ReadonlySet<string> {
+  if (Result.isSuccess(result)) return new Set();
+  const paths = new Set<string>();
+  for (const issue of formatIssues(result.failure.issue).issues) {
+    const parts = (issue.path ?? []).map((part) =>
+      typeof part === "object" && part !== null ? part.key : part,
+    );
+    paths.add(pathKey(...parts));
   }
+  return paths;
 }
+
+const pathKey = (...parts: ReadonlyArray<PropertyKey>): string =>
+  parts.map((part) => String(part)).join("\u0000");

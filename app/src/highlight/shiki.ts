@@ -105,7 +105,11 @@ export async function ensureLangs(langs: Iterable<string>): Promise<HighlighterC
  * The two per-line marks the code block needs: the change overlay and the
  * author's `mark=` highlight, both addressed by absolute file line.
  */
-export const lineMarks = (from: number, changed: number[], mark: number[]): ShikiTransformer => {
+export const lineMarks = (
+  from: number,
+  changed: ReadonlyArray<number>,
+  mark: ReadonlyArray<number>,
+): ShikiTransformer => {
   const added = new Set(changed);
   const highlighted = new Set(mark);
   return {

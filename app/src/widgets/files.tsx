@@ -165,7 +165,7 @@ function FileRow({ entry }: { entry: FileEntry }) {
   );
 }
 
-export function Files({ paths }: { paths: string[] }) {
+export function Files({ paths }: { paths: ReadonlyArray<string> }) {
   const payload = usePayload();
   const strings = useStrings();
   const byPath = fileByPath(payload);

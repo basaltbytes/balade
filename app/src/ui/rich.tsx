@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import type { Inline } from "../contract";
 
-export function Rich({ v }: { v: Inline | Inline[] | undefined }): ReactNode {
+export function Rich({ v }: { v: Inline | undefined }): ReactNode {
   if (v === undefined || v === null) return null;
   if (typeof v === "string") return v;
   if (Array.isArray(v)) return v.map((x, k) => <Rich key={k} v={x} />);

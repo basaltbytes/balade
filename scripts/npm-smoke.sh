@@ -14,19 +14,8 @@ cd "$ROOT"
 
 pnpm build
 
-PACK_JSON="$(pnpm pack --pack-destination "$TMP_ROOT" --json)"
-TARBALL="$(
-  PACK_JSON="$PACK_JSON" node -e '
-    const data = JSON.parse(process.env.PACK_JSON);
-    const item = Array.isArray(data) ? data[0] : data;
-    console.log(item.filename ?? item.path);
-  '
-)"
-
-case "$TARBALL" in
-  /*) ;;
-  *) TARBALL="$ROOT/$TARBALL" ;;
-esac
+TARBALL="$TMP_ROOT/balade-smoke.tgz"
+pnpm pack --out "$TARBALL" >/dev/null
 
 PACKAGE_VERSION="$(node -p "require('./package.json').version")"
 PROJECT="$TMP_ROOT/project"
