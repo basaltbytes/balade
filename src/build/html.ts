@@ -1,0 +1,74 @@
+/**
+ * The single-file export document: one JS, one CSS, and the resolved payload
+ * baked as `window.__BALADE__` ahead of the app.
+ *
+ * Everything here is a pure string transform. The escapes below are the whole
+ * of the HTML contract, and each one is load-bearing — a `file://` page has no
+ * second chance.
+ */
+
+import type { Payload } from "../payload/types.js";
+
+export interface ExportAssets {
+  /** The export bundle's single entry chunk. */
+  js: string;
+  /** The export bundle's single stylesheet. */
+  css: string;
+}
+
+export function exportHtml(payload: Payload, assets: ExportAssets): string {
+  return [
+    "<!doctype html>",
+    `<html lang="${payload.lang}">`,
+    "<head>",
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    `<title>${escapeText(payload.title)}</title>`,
+    `<style>${styleText(assets.css)}</style>`,
+    "</head>",
+    "<body>",
+    '<div id="root"></div>',
+    `<script>window.__BALADE__=${bake(payload)}</script>`,
+    /* `import.meta` in the bundle: a module script, not a classic one. Inline,
+       because a `src=` to a sibling file is exactly what this export is not. */
+    `<script type="module">${scriptText(assets.js)}</script>`,
+    "</body>",
+    "</html>",
+    "",
+  ].join("\n");
+}
+
+/**
+ * The payload as a JavaScript expression. Every `<` leaves as its JSON escape,
+ * which settles `</script`, `<!--` and `<script` at once, whatever the prose
+ * holds. The two line separators are legal in JSON and were not legal in a
+ * JavaScript string before ES2019.
+ */
+export function bake(value: unknown): string {
+  return JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
+}
+
+/**
+ * Code cannot be escaped the way data can, so the two sequences that end or
+ * derail script data take a backslash the JavaScript grammar ignores:
+ *
+ * - `</script` can only sit inside a string, a template or a comment — a bare
+ *   `/` would close a regular expression literal — and `\/` is `/` in all three.
+ * - `<!--` opens the tokenizer's escaped state, where a later `<script>` makes
+ *   the closing tag stop closing. `\!` is `!` in a string and in a regular
+ *   expression; under a `/u` flag it is a syntax error, never a silent change.
+ */
+export function scriptText(js: string): string {
+  return js.replaceAll(/<\/script/gi, "<\\/script").replaceAll("<!--", "<\\!--");
+}
+
+/** `<style>` is raw text: only its own end tag closes it. */
+export function styleText(css: string): string {
+  return css.replaceAll(/<\/style/gi, "<\\/style");
+}
+
+const escapeText = (text: string): string =>
+  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");

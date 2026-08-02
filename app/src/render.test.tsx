@@ -1,0 +1,66 @@
+/* A payload-driven renderer fails per block kind, not globally, so the cheapest
+   useful net is: render the whole fixture and see that nothing throws. The
+   fixture exercises all 15 block families. */
+
+import { renderToString } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import type { Payload } from "./contract";
+import { pr96 } from "./fixtures/pr96";
+import { WalkthroughRoute } from "./routes/walkthrough";
+import { StringsProvider } from "./ui/strings";
+
+const render = (payload: Payload, lang: "en" | "fr" = "en"): string =>
+  renderToString(
+    <StringsProvider lang={lang}>
+      <WalkthroughRoute payload={payload} served={false} devStale={false} onToggleDevStale={null} />
+    </StringsProvider>,
+  );
+
+describe("the walkthrough route", () => {
+  const html = render(pr96);
+
+  it("renders the header, the nav and every section", () => {
+    expect(html).toContain("Add live planning pool items");
+    for (const section of pr96.sections) expect(html).toContain(`id="${section.id}"`);
+  });
+
+  it("puts the review controls on screen", () => {
+    expect(html).toContain("Mark reviewed");
+    expect(html).toContain(`0/${pr96.sections.length} sections reviewed`);
+    expect(html).toContain("Next unreviewed");
+  });
+
+  it("shows the expect ribbon of the mismatching block", () => {
+    expect(html).toContain("expect mismatch");
+  });
+
+  it("surfaces the unresolved reference as an error card", () => {
+    expect(html).toContain("range-unresolvable");
+  });
+
+  it("renders a labeled placeholder for a preset node it cannot draw", () => {
+    const withPreset: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "preset",
+          title: "Preset",
+          hash: "sha256:preset",
+          blocks: [{ b: "odoo/security", rows: [] }],
+        },
+      ],
+    };
+    expect(render(withPreset)).toContain("odoo/security");
+  });
+
+  it("takes its chrome language from the payload", () => {
+    const fr = render({ ...pr96, lang: "fr" }, "fr");
+    expect(fr).toContain("Marquer comme relu");
+    expect(fr).not.toContain("Mark reviewed");
+  });
+
+  it("raises the stale banner only when the head has moved", () => {
+    expect(html).not.toContain("head moved by");
+    expect(render({ ...pr96, headDistance: 2 })).toContain("head moved by 2 commits");
+  });
+});

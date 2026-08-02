@@ -1,0 +1,9 @@
+trustPolicy: no-downgrade
+
+# Old releases that predate npm provenance; excluded case by case, never wholesale.
+trustPolicyExclude:
+  - undici-types@6.21.0
+  - semver@6.3.1
+
+onlyBuiltDependencies:
+  - esbuild

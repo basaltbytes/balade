@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+@source "./";
+
+/* Primer dark expressed as shadcn slot names, plus the seven domain colors as
+   @theme colors. Values are the approved token map; no raw Primer hex appears
+   past this block (shiki inlines its own). */
+@theme {
+  --color-background: #0d1117;
+  --color-foreground: #e6edf3;
+  --color-card: #161b22;
+  --color-card-foreground: #e6edf3;
+  --color-popover: #161b22;
+  --color-popover-foreground: #e6edf3;
+  --color-primary: #2f81f7;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #21262d;
+  --color-secondary-foreground: #c9d1d9;
+  --color-muted: #21262d;
+  --color-muted-foreground: #7d8590;
+  --color-accent: #21262d;
+  --color-accent-foreground: #e6edf3;
+  --color-destructive: #f85149;
+  --color-border: #30363d;
+  --color-input: #30363d;
+  --color-ring: #2f81f7;
+
+  /* domain extensions — tailwind @theme colors, no shadcn slot */
+  --color-added: #3fb950;
+  --color-modified: #d29922;
+  --color-removed: #f85149;
+  --color-context: #6e7681;
+  --color-done: #a371f7;
+  --color-open: #238636;
+  --color-accent-muted: #79c0ff;
+  --color-border-soft: #21262d;
+
+  --radius-md: 6px;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-background text-foreground font-sans text-[14px] leading-normal antialiased;
+}
+
+section[id] {
+  scroll-margin-top: 20px;
+}
+
+/* ---- shiki code blocks ------------------------------------------------ */
+/* Line numbers are CSS counters over shiki `.line` spans; the block sets
+   `--ln-start` so numbering matches the file, not the excerpt. */
+.codeblock pre.shiki {
+  margin: 0;
+  padding: 12px 0;
+  font-size: 12.5px;
+  line-height: 20px;
+  overflow: auto;
+  max-height: 520px;
+  background: var(--color-background) !important;
+  counter-reset: ln var(--ln-start, 0);
+  tab-size: 4;
+}
+.codeblock pre.shiki code {
+  display: block;
+  min-width: max-content;
+}
+.codeblock .line {
+  display: inline-block;
+  width: 100%;
+  padding-right: 16px;
+}
+.codeblock .line::before {
+  counter-increment: ln;
+  content: counter(ln);
+  display: inline-block;
+  width: 56px;
+  padding-right: 16px;
+  text-align: right;
+  color: var(--color-muted-foreground);
+  position: sticky;
+  left: 0;
+  background: inherit;
+  user-select: none;
+}
+
+/* change view: added-line wash derives from --color-added at the fixed alpha */
+.view-change .line.add {
+  background: color-mix(in srgb, var(--color-added) 15%, transparent);
+}
+.view-change .line.add::before {
+  content: counter(ln) " +";
+  color: var(--color-added);
+  background: color-mix(in srgb, var(--color-added) 30%, transparent);
+}
+
+/* mark= block highlight: primary wash + 2px inset bar, in every view */
+.codeblock .line.hl {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
+.view-change .line.add.hl {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+/* collapse is a state class on the block */
+.codeblock.collapsed .cbody {
+  display: none;
+}
+
+/* ---- @git-diff-view/react: its variables, our tokens, the sample alphas -- */
+.diff-tailwindcss-wrapper {
+  font-family: var(--font-mono);
+}
+.diff-tailwindcss-wrapper[data-theme="dark"] .diff-style-root {
+  --diff-border--: var(--color-border);
+  --diff-add-content--: color-mix(in srgb, var(--color-added) 15%, transparent);
+  --diff-add-lineNumber--: color-mix(in srgb, var(--color-added) 30%, transparent);
+  --diff-add-content-highlight--: color-mix(in srgb, var(--color-added) 40%, transparent);
+  --diff-del-content--: color-mix(in srgb, var(--color-destructive) 12%, transparent);
+  --diff-del-lineNumber--: color-mix(in srgb, var(--color-destructive) 30%, transparent);
+  --diff-del-content-highlight--: color-mix(in srgb, var(--color-destructive) 40%, transparent);
+  --diff-hunk-content--: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --diff-hunk-lineNumber--: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --diff-hunk-lineNumber-hover--: var(--color-primary);
+  --diff-hunk-content-color--: var(--color-accent-muted);
+  --diff-empty-content--: color-mix(in srgb, var(--color-muted) 45%, transparent);
+  --diff-plain-content--: var(--color-background);
+  --diff-plain-lineNumber--: var(--color-card);
+  --diff-plain-lineNumber-color--: var(--color-muted-foreground);
+  --diff-expand-content--: var(--color-card);
+  --diff-expand-lineNumber--: var(--color-card);
+  --diff-expand-lineNumber-color--: var(--color-muted-foreground);
+  --diff-add-widget--: var(--color-primary);
+  --diff-add-widget-color--: var(--color-primary-foreground);
+}
+.diff-tailwindcss-wrapper[data-theme="dark"] [data-state="diff"],
+.diff-tailwindcss-wrapper[data-theme="dark"] [data-state="plain"],
+.diff-tailwindcss-wrapper[data-theme="dark"] [data-state="hunk"] {
+  color: var(--color-foreground);
+}
+
+/* the code block's diff view ships one hunk covering the whole excerpt, so the
+   expand affordance has nothing to reveal */
+.code-diff .diff-tailwindcss-wrapper [data-state="hunk"] {
+  display: none;
+}
+
+/* ---- reviewed state --------------------------------------------------- */
+.hide-reviewed .reviewed-section > .section-body,
+.hide-reviewed .reviewed-file > .file-body {
+  display: none;
+}
+.hide-reviewed .reviewed-section > .section-head,
+.hide-reviewed .reviewed-file > .file-head {
+  opacity: 0.55;
+}
