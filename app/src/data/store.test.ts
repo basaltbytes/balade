@@ -42,25 +42,27 @@ const answering =
   () =>
     Promise.resolve(new Response(body, { status }));
 
+const ignoreWarning = () => {};
+
 describe("the browser store", () => {
   it("reads its copy back through the parser", async () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(state) });
-    expect(await localStore(KEY, storage).load()).toEqual(state);
+    expect(await localStore(KEY, storage, ignoreWarning).load()).toEqual(state);
   });
 
   it("answers null on a copy it cannot read", async () => {
     const storage = memoryStorage({ [KEY]: "{ not json" });
-    expect(await localStore(KEY, storage).load()).toBeNull();
+    expect(await localStore(KEY, storage, ignoreWarning).load()).toBeNull();
   });
 
   it("names a write the browser refused", async () => {
-    expect(await localStore(KEY, refusingStorage).save(state)).toBe("failed");
+    expect(await localStore(KEY, refusingStorage, ignoreWarning).save(state)).toBe("failed");
   });
 });
 
 describe("the served store", () => {
   const withFetch = (fetch: FetchLike, storage: StorageLike) =>
-    httpStore("walkthroughs/one.md", localStore(KEY, storage), fetch);
+    httpStore("walkthroughs/one.md", localStore(KEY, storage, ignoreWarning), fetch, ignoreWarning);
 
   it("consults the browser copy when the CLI holds nothing", async () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(state) });

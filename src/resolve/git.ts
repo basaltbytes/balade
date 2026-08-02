@@ -4,12 +4,12 @@
  * enriches the PR header when it is there and authenticated.
  */
 
-import { Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { basename, win32 } from "node:path";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../payload/types.js";
 import type { ResolveContext } from "../resolve/context.js";
 import { changedLines, splitDiff } from "./diff.js";
-import { gh, gitOut, gitToplevel } from "./exec.js";
+import { gh, gitOut, gitToplevel, type CommandFailed, type NotARepository } from "./exec.js";
 import { sha256 } from "./hash.js";
 import { langOf } from "./lang.js";
 
@@ -21,6 +21,8 @@ export interface ResolveOptions {
   commit: string;
   /** Repo-relative path of the walkthrough file, for diagnostics. */
   file: string;
+  /** Stamped blobs the pure compiler may inspect. */
+  references: readonly string[];
   /** Fetched commit served without a checkout; tried as the head before local fallbacks. */
   at?: string;
   /** `false` skips gh entirely — CI without auth, and the test fixtures. */
@@ -28,9 +30,16 @@ export interface ResolveOptions {
 }
 
 export interface ResolveResult {
-  ctx: ResolveContext | null;
+  ctx: ResolveContext;
   diagnostics: CheckDiagnostic[];
 }
+
+export class CommitUnresolvable extends Schema.TaggedErrorClass<CommitUnresolvable>()(
+  "CommitUnresolvable",
+  { commit: Schema.String, file: Schema.String },
+) {}
+
+export type ResolveError = NotARepository | CommandFailed | CommitUnresolvable;
 
 /** What the resolver keeps of `gh pr view`, once every field has been checked. */
 interface PullRequest {
@@ -45,7 +54,7 @@ interface PullRequest {
 }
 
 interface PullRequestResult {
-  readonly pull: PullRequest | null;
+  readonly pull: Option.Option<PullRequest>;
   readonly diagnostics: readonly CheckDiagnostic[];
 }
 
@@ -64,83 +73,105 @@ const PullRequestResponse = Schema.Struct({
   commits: Schema.Array(Schema.Unknown),
 });
 
-const decodePullRequest = Schema.decodeUnknownResult(PullRequestResponse, {
+const decodePullRequest = Schema.decodeUnknownEffect(PullRequestResponse, {
   onExcessProperty: "error",
 });
 
-export function resolveContext(options: ResolveOptions): ResolveResult {
+export const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOptions) {
   const diagnostics: CheckDiagnostic[] = [];
-  const root = gitToplevel(options.cwd);
-  if (root === null) {
-    diagnostics.push({
-      code: "repo-unresolvable",
-      level: "error",
-      file: options.file,
-      message: "This directory is not inside a git repository.",
-      hint: "Run balade from the repository that holds the walkthrough.",
-    });
-    return { ctx: null, diagnostics };
-  }
+  const root = yield* gitToplevel(options.cwd);
 
-  const pin = gitOut(
-    ["rev-parse", "--verify", "--quiet", `${options.commit}^{commit}`],
-    root,
-  )?.trim();
-  if (pin === undefined || pin === "") {
-    diagnostics.push({
-      code: "commit-unresolvable",
-      level: "error",
-      file: options.file,
-      message: `The stamped commit \`${options.commit}\` is not in this clone.`,
-      hint: "Fetch the branch (CI needs `fetch-depth: 0`), or re-stamp the walkthrough against a commit you have.",
-    });
-    return { ctx: null, diagnostics };
-  }
+  const pinProbe = yield* resolveCommit(root, options.commit);
+  if (Option.isNone(pinProbe))
+    return yield* new CommitUnresolvable({ commit: options.commit, file: options.file });
+  const pin = pinProbe.value;
 
   /* Lazy: when gh supplied both base fields, the probes never run. */
   let probedDefault: string | undefined;
-  const defaultBranch = (): string => (probedDefault ??= findDefaultBranch(root));
+  const defaultBranch = Effect.suspend(() =>
+    probedDefault === undefined
+      ? findDefaultBranch(root).pipe(
+          Effect.tap((branch) => Effect.sync(() => (probedDefault = branch))),
+        )
+      : Effect.succeed(probedDefault),
+  );
   const requested =
-    options.useGh === false ? null : readPullRequest(root, options.pr, options.file);
-  if (requested !== null) diagnostics.push(...requested.diagnostics);
-  const pull = requested?.pull ?? null;
+    options.useGh === false ? undefined : yield* readPullRequest(root, options.pr, options.file);
+  if (requested !== undefined) diagnostics.push(...requested.diagnostics);
+  const pull =
+    requested !== undefined && Option.isSome(requested.pull) ? requested.pull.value : undefined;
 
-  const head = firstSha(root, [pull?.headRefOid, options.at, pull?.headRefName, "HEAD"]) ?? pin;
-  const base =
-    firstSha(root, [pull?.baseRefOid]) ??
-    mergeBase(root, defaultBranch(), pin) ??
-    parentOf(root, pin) ??
-    pin;
+  const headOption = yield* firstSha(root, [
+    pull?.headRefOid,
+    options.at,
+    pull?.headRefName,
+    "HEAD",
+  ]);
+  const head = Option.getOrElse(headOption, () => pin);
+  const directBase = yield* firstSha(root, [pull?.baseRefOid]);
+  const base = Option.isSome(directBase)
+    ? directBase.value
+    : yield* Effect.gen(function* () {
+        const branch = yield* defaultBranch;
+        const merged = yield* mergeBase(root, branch, pin);
+        if (Option.isSome(merged)) return merged.value;
+        const parent = yield* parentOf(root, pin);
+        return Option.getOrElse(parent, () => pin);
+      });
 
-  const entries = readFiles(root, base, pin);
-  const changed = readOverlay(root, base, pin);
+  const entries = yield* readFiles(root, base, pin);
+  const changed = yield* readOverlay(root, base, pin);
   const headDistance = Number(
-    gitOut(["rev-list", "--count", `${pin}..${head}`], root)?.trim() ?? "0",
+    (yield* gitOut(["rev-list", "--count", `${pin}..${head}`], root)).trim(),
   );
   const touched = new Set(
-    (gitOut(["log", "--format=", "--name-only", `${pin}..${head}`], root) ?? "")
+    (yield* gitOut(["log", "--format=", "--name-only", `${pin}..${head}`], root))
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line !== ""),
   );
-
-  /* The PR files already carry their content at the pin; only other paths cost a `git show`. */
-  const blobs = new Map<string, readonly string[] | null>();
+  /* The PR files already carry their content at the pin. Other referenced blobs
+     are fetched before compilation, so the compiler's lookup remains pure. */
+  const blobs = new Map<string, Option.Option<readonly string[]>>();
   for (const entry of entries) {
     if (entry.diff !== null) {
       blobs.set(
         entry.path,
-        entry.diff.newContent === null ? null : splitLines(entry.diff.newContent),
+        entry.diff.newContent === null
+          ? Option.none()
+          : Option.some(splitLines(entry.diff.newContent)),
       );
     }
   }
-  const blob = (path: string): readonly string[] | null => {
-    const cached = blobs.get(path);
-    if (cached !== undefined) return cached;
-    const out = gitOut(["show", `${pin}:${path}`], root);
-    const lines = out === null ? null : splitLines(out);
-    blobs.set(path, lines);
-    return lines;
+  const pending = [...new Set(options.references)].filter((path) => !blobs.has(path));
+  if (pending.length > 0) {
+    const held = new Set(
+      (yield* gitOut(
+        [
+          "ls-tree",
+          "-r",
+          "--name-only",
+          "-z",
+          pin,
+          "--",
+          ...pending.map((path) => `:(literal)${path}`),
+        ],
+        root,
+      ))
+        .split("\0")
+        .filter((path) => path !== ""),
+    );
+    for (const path of pending) {
+      blobs.set(
+        path,
+        held.has(path)
+          ? Option.some(splitLines(yield* gitOut(["show", `${pin}:${path}`], root)))
+          : Option.none(),
+      );
+    }
+  }
+  const blob = (path: string): Option.Option<readonly string[]> => {
+    return blobs.get(path) ?? Option.none();
   };
 
   const stats = entries.reduce(
@@ -152,18 +183,19 @@ export function resolveContext(options: ResolveOptions): ResolveResult {
     { files: 0, additions: 0, deletions: 0 },
   );
 
-  const slug = repoSlug(root);
+  const slug = yield* repoSlug(root);
   const pr: Payload["pr"] = {
     number: options.pr,
     url: pull?.url ?? `https://github.com/${slug}/pull/${options.pr}`,
-    author: pull?.author ?? gitOut(["log", "-1", "--format=%an", pin], root)?.trim() ?? "unknown",
+    author:
+      pull?.author ??
+      ((yield* gitOut(["log", "-1", "--format=%an", pin], root)).trim() || "unknown"),
     state: prState(pull?.state),
-    base: pull?.baseRefName ?? defaultBranch(),
-    head:
-      pull?.headRefName ?? gitOut(["rev-parse", "--abbrev-ref", "HEAD"], root)?.trim() ?? "HEAD",
+    base: pull?.baseRefName ?? (yield* defaultBranch),
+    head: pull?.headRefName ?? Option.getOrElse(yield* symbolicHead(root), () => "HEAD"),
     commits:
       pull?.commits ??
-      Number(gitOut(["rev-list", "--count", `${base}..${head}`], root)?.trim() ?? "0"),
+      Number((yield* gitOut(["rev-list", "--count", `${base}..${head}`], root)).trim()),
     stats,
   };
 
@@ -181,7 +213,7 @@ export function resolveContext(options: ResolveOptions): ResolveResult {
     blob,
   };
   return { ctx, diagnostics };
-}
+});
 
 /* ------------------------------------------------------------------ */
 /* git plumbing                                                        */
@@ -193,52 +225,99 @@ function splitLines(content: string): string[] {
   return lines;
 }
 
-function firstSha(root: string, candidates: readonly (string | undefined)[]): string | null {
+const firstSha = Effect.fn("firstSha")(function* (
+  root: string,
+  candidates: readonly (string | undefined)[],
+) {
   for (const candidate of candidates) {
     if (candidate === undefined || candidate === "") continue;
-    const sha = gitOut(["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`], root)?.trim();
-    if (sha !== undefined && sha !== "") return sha;
+    const probe = yield* resolveCommit(root, candidate);
+    if (Option.isSome(probe)) return probe;
   }
-  return null;
-}
+  return Option.none<string>();
+});
 
-function mergeBase(root: string, branch: string, pin: string): string | null {
+const mergeBase = Effect.fn("mergeBase")(function* (root: string, branch: string, pin: string) {
   for (const ref of [`origin/${branch}`, branch]) {
-    const out = gitOut(["merge-base", ref, pin], root)?.trim();
-    if (out !== undefined && out !== "") return out;
+    const resolved = yield* resolveCommit(root, ref);
+    if (Option.isNone(resolved)) continue;
+    const probe = yield* optionOnExitOne(gitOut(["merge-base", resolved.value, pin], root));
+    if (Option.isSome(probe) && probe.value.trim() !== "") return Option.some(probe.value.trim());
   }
-  return null;
-}
+  return Option.none<string>();
+});
 
-function parentOf(root: string, pin: string): string | null {
-  const out = gitOut(["rev-parse", "--verify", "--quiet", `${pin}^1^{commit}`], root)?.trim();
-  return out === undefined || out === "" ? null : out;
-}
+const parentOf = (root: string, pin: string) => resolveCommit(root, `${pin}^1`);
 
-function findDefaultBranch(root: string): string {
-  const head = gitOut(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], root)?.trim();
-  if (head !== undefined && head.startsWith("origin/")) return head.slice("origin/".length);
+const findDefaultBranch = Effect.fn("findDefaultBranch")(function* (root: string) {
+  const head = yield* optionOnExitOne(
+    gitOut(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], root),
+  );
+  if (Option.isSome(head) && head.value.trim().startsWith("origin/")) {
+    return head.value.trim().slice("origin/".length);
+  }
   for (const name of ["main", "master", "dev", "develop"]) {
-    if (gitOut(["rev-parse", "--verify", "--quiet", `refs/heads/${name}`], root) !== null)
-      return name;
-    if (gitOut(["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${name}`], root) !== null)
-      return name;
+    const local = yield* resolveCommit(root, `refs/heads/${name}`);
+    if (Option.isSome(local)) return name;
+    const remote = yield* resolveCommit(root, `refs/remotes/origin/${name}`);
+    if (Option.isSome(remote)) return name;
   }
   return "main";
-}
+});
 
 /**
  * `owner/name` from the origin remote, else the repository directory name.
  * The fallback accepts both POSIX and Windows absolute paths.
  */
-export function repoSlug(root: string): string {
-  const url = gitOut(["remote", "get-url", "origin"], root)?.trim();
-  if (url !== undefined && url !== "") {
+export const repoSlug = Effect.fn("repoSlug")(function* (root: string) {
+  const remote = yield* optionOnExitOne(gitOut(["config", "--get", "remote.origin.url"], root));
+  if (Option.isSome(remote) && remote.value.trim() !== "") {
+    const url = remote.value.trim();
     const match = /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/.exec(url);
     if (match?.[1] !== undefined) return match[1];
   }
-  return win32.isAbsolute(root) ? win32.basename(root) : basename(root);
-}
+  return repoName(root);
+});
+
+/** Repository directory name for POSIX and Windows absolute paths. */
+export const repoName = (root: string): string =>
+  win32.isAbsolute(root) ? win32.basename(root) : basename(root);
+
+/** A commit-ish resolved by a quiet probe; only git's documented exit 1 is absence. */
+export const resolveCommit = Effect.fn("resolveCommit")(function* (root: string, revision: string) {
+  const out = yield* optionOnExitOne(
+    gitOut(["rev-parse", "--verify", "--quiet", `${revision}^{commit}`], root),
+  );
+  return Option.flatMap(out, (value) => {
+    const sha = value.trim();
+    return sha === "" ? Option.none() : Option.some(sha);
+  });
+});
+
+const resolveObject = Effect.fn("resolveObject")(function* (root: string, revision: string) {
+  const out = yield* optionOnExitOne(gitOut(["rev-parse", "--verify", "--quiet", revision], root));
+  return Option.flatMap(out, (value) => {
+    const oid = value.trim();
+    return oid === "" ? Option.none() : Option.some(oid);
+  });
+});
+
+const symbolicHead = (root: string) =>
+  optionOnExitOne(gitOut(["symbolic-ref", "--quiet", "--short", "HEAD"], root)).pipe(
+    Effect.map(Option.map((out) => out.trim())),
+  );
+
+const optionOnExitOne = <A, R>(
+  effect: Effect.Effect<A, CommandFailed, R>,
+): Effect.Effect<Option.Option<A>, CommandFailed, R> =>
+  effect.pipe(
+    Effect.map(Option.some),
+    Effect.catchTag(
+      "CommandFailed",
+      (error): Effect.Effect<Option.Option<A>, CommandFailed> =>
+        error.code === 1 ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
+    ),
+  );
 
 function prState(state: string | undefined): "open" | "closed" | "merged" {
   const value = (state ?? "").toLowerCase();
@@ -250,8 +329,8 @@ function prState(state: string | undefined): "open" | "closed" | "merged" {
  * that is missing, unauthenticated or offline is a warning the report carries,
  * never a silent downgrade of the PR header.
  */
-function readPullRequest(root: string, number: number, file: string): PullRequestResult {
-  const res = gh(
+const readPullRequest = (root: string, number: number, file: string) =>
+  gh(
     [
       "pr",
       "view",
@@ -260,42 +339,47 @@ function readPullRequest(root: string, number: number, file: string): PullReques
       "url,state,author,baseRefName,headRefName,baseRefOid,headRefOid,commits",
     ],
     root,
+  ).pipe(
+    Effect.matchEffect({
+      onFailure: (error) =>
+        Effect.succeed<PullRequestResult>({
+          pull: Option.none(),
+          diagnostics: [ghWarning(file, `exit ${error.code}: ${firstLine(error.stderr)}`)],
+        }),
+      onSuccess: (stdout) =>
+        Effect.try({
+          try: () => JSON.parse(stdout) as unknown,
+          catch: () => ghWarning(file, "its answer was not JSON"),
+        }).pipe(
+          Effect.flatMap((body) =>
+            decodePullRequest(body).pipe(
+              Effect.mapError(() =>
+                ghWarning(file, "its answer did not match the requested fields"),
+              ),
+            ),
+          ),
+          Effect.match({
+            onFailure: (diagnostic): PullRequestResult => ({
+              pull: Option.none(),
+              diagnostics: [diagnostic],
+            }),
+            onSuccess: (response): PullRequestResult => ({
+              pull: Option.some({
+                url: response.url,
+                state: response.state,
+                author: response.author?.login,
+                baseRefName: response.baseRefName,
+                headRefName: response.headRefName,
+                baseRefOid: response.baseRefOid,
+                headRefOid: response.headRefOid,
+                commits: response.commits.length,
+              }),
+              diagnostics: [],
+            }),
+          }),
+        ),
+    }),
   );
-  if (!res.ok)
-    return {
-      pull: null,
-      diagnostics: [ghWarning(file, `exit ${res.code}: ${firstLine(res.stderr)}`)],
-    };
-
-  let body: unknown;
-  try {
-    body = JSON.parse(res.stdout);
-  } catch {
-    return { pull: null, diagnostics: [ghWarning(file, "its answer was not JSON")] };
-  }
-  const decoded = decodePullRequest(body);
-  if (decoded._tag === "Failure") {
-    return {
-      pull: null,
-      diagnostics: [ghWarning(file, "its answer did not match the requested fields")],
-    };
-  }
-
-  const response = decoded.success;
-  return {
-    pull: {
-      url: response.url,
-      state: response.state,
-      author: response.author?.login,
-      baseRefName: response.baseRefName,
-      headRefName: response.headRefName,
-      baseRefOid: response.baseRefOid,
-      headRefOid: response.headRefOid,
-      commits: response.commits.length,
-    },
-    diagnostics: [],
-  };
-}
 
 function ghWarning(file: string, detail: string): CheckDiagnostic {
   return {
@@ -385,67 +469,73 @@ function parseNumStat(out: string): Map<string, NumStat> {
   return stats;
 }
 
-function readFiles(root: string, base: string, pin: string): FileEntry[] {
+const readFiles = Effect.fn("readFiles")(function* (root: string, base: string, pin: string) {
   const nameStatus = parseNameStatus(
-    gitOut(["diff", "-M", "--name-status", "-z", base, pin], root) ?? "",
+    yield* gitOut(["diff", "-M", "--name-status", "-z", base, pin], root),
   );
-  const numStat = parseNumStat(gitOut(["diff", "-M", "--numstat", "-z", base, pin], root) ?? "");
+  const numStat = parseNumStat(yield* gitOut(["diff", "-M", "--numstat", "-z", base, pin], root));
   const diffs = new Map(
-    splitDiff(gitOut(["diff", "-M", "--unified=3", base, pin], root) ?? "").map((record) => [
+    splitDiff(yield* gitOut(["diff", "-M", "--unified=3", base, pin], root)).map((record) => [
       record.path,
       record,
     ]),
   );
 
-  const contents = new Map<string, string | null>();
-  const content = (sha: string, path: string): string | null => {
+  const contents = new Map<string, string>();
+  const content = (sha: string, path: string): Effect.Effect<string, CommandFailed> => {
     const key = `${sha}:${path}`;
     const cached = contents.get(key);
-    if (cached !== undefined) return cached;
-    const out = gitOut(["show", `${sha}:${path}`], root);
-    contents.set(key, out);
-    return out;
+    if (cached !== undefined) return Effect.succeed(cached);
+    return gitOut(["show", `${sha}:${path}`], root).pipe(
+      Effect.tap((out) => Effect.sync(() => contents.set(key, out))),
+    );
   };
 
-  return nameStatus.map((record): FileEntry => {
+  const entries: FileEntry[] = [];
+  for (const record of nameStatus) {
     const stat = numStat.get(record.path) ?? { additions: 0, deletions: 0, binary: false };
     const diff = diffs.get(record.path);
     const oldPath = record.oldPath ?? diff?.oldPath ?? undefined;
     const binary = stat.binary || diff?.binary === true;
-    return {
+    const oldContent = record.status === "A" ? null : yield* content(base, oldPath ?? record.path);
+    const newContent = record.status === "D" ? null : yield* content(pin, record.path);
+    entries.push({
       path: record.path,
       status: record.status,
       additions: stat.additions,
       deletions: stat.deletions,
-      hash: entryHash(root, pin, record.path, diff?.body ?? ""),
+      hash: yield* entryHash(root, pin, record.path, diff?.body ?? ""),
       lang: langOf(record.path),
       diff: binary
         ? null
         : {
             unified: diff?.body ?? "",
-            oldContent: record.status === "A" ? null : content(base, oldPath ?? record.path),
-            newContent: record.status === "D" ? null : content(pin, record.path),
+            oldContent,
+            newContent,
           },
       ...(oldPath !== undefined && record.status === "R" ? { oldPath } : {}),
-    };
-  });
-}
+    });
+  }
+  return entries;
+});
 
 /**
  * The review-state reset key. A pure rename and a binary change carry no diff
  * body, and hashing the empty string would give every one of them the same key:
  * the path plus the blob at the pin keeps them apart and moves when the bytes do.
  */
-function entryHash(root: string, pin: string, path: string, body: string): string {
-  if (body !== "") return sha256(body);
-  const blob = gitOut(["rev-parse", `${pin}:${path}`], root)?.trim() ?? "";
-  return sha256(`${path} ${blob}`);
-}
+const entryHash = (root: string, pin: string, path: string, body: string) => {
+  if (body !== "") return Effect.succeed(sha256(body));
+  return resolveObject(root, `${pin}:${path}`).pipe(
+    Effect.map((probe) => sha256(`${path}\0${Option.getOrElse(probe, () => "")}`)),
+  );
+};
 
-function readOverlay(root: string, base: string, pin: string): Map<string, ReadonlySet<number>> {
+const readOverlay = Effect.fn("readOverlay")(function* (root: string, base: string, pin: string) {
   const overlay = new Map<string, ReadonlySet<number>>();
-  for (const record of splitDiff(gitOut(["diff", "-M", "--unified=0", base, pin], root) ?? "")) {
+  const diff = yield* gitOut(["diff", "-M", "--unified=0", base, pin], root);
+  for (const record of splitDiff(diff)) {
     overlay.set(record.path, changedLines(record.body));
   }
   return overlay;
-}
+});

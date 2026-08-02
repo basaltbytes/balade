@@ -4,48 +4,76 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { Effect, Schema } from "effect";
 
-export interface ExecResult {
-  readonly ok: boolean;
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly code: number;
+export class CommandFailed extends Schema.TaggedErrorClass<CommandFailed>()("CommandFailed", {
+  file: Schema.String,
+  args: Schema.Array(Schema.String),
+  cwd: Schema.String,
+  stderr: Schema.String,
+  code: Schema.Finite,
+}) {}
+
+export class NotARepository extends Schema.TaggedErrorClass<NotARepository>()("NotARepository", {
+  cwd: Schema.String,
+}) {
+  get note(): string {
+    return "Not inside a git repository — run balade from the repository that holds the walkthrough.";
+  }
 }
+
+export type ExecError = CommandFailed | NotARepository;
 
 /* Diffs of large PRs and whole-file blobs pass through stdout. */
 const MAX_BUFFER = 256 * 1024 * 1024;
 
-const ENV = { ...process.env, GIT_PAGER: "cat", GIT_OPTIONAL_LOCKS: "0" };
+const ENV = {
+  ...process.env,
+  GIT_PAGER: "cat",
+  GIT_OPTIONAL_LOCKS: "0",
+  /* Git's stderr is part of the adapter's failure classification below. */
+  LC_ALL: "C",
+};
 
-export function exec(file: string, args: readonly string[], cwd: string): ExecResult {
+export const exec = Effect.fn("exec")(function* (
+  file: string,
+  args: readonly string[],
+  cwd: string,
+) {
   const res = spawnSync(file, [...args], {
     cwd,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,
     env: ENV,
   });
-  if (res.error !== undefined) {
-    return { ok: false, stdout: "", stderr: res.error.message, code: -1 };
-  }
   const code = res.status ?? -1;
-  return { ok: code === 0, stdout: res.stdout ?? "", stderr: res.stderr ?? "", code };
-}
+  if (res.error !== undefined || code !== 0) {
+    return yield* new CommandFailed({
+      file,
+      args,
+      cwd,
+      stderr: res.error?.message ?? res.stderr ?? "",
+      code,
+    });
+  }
+  return res.stdout ?? "";
+});
 
-function git(args: readonly string[], cwd: string): ExecResult {
-  return exec("git", args, cwd);
-}
+export const gitOut = (args: readonly string[], cwd: string) => exec("git", args, cwd);
 
-export function gitOut(args: readonly string[], cwd: string): string | null {
-  const res = git(args, cwd);
-  return res.ok ? res.stdout : null;
-}
+export const gh = (args: readonly string[], cwd: string) => exec("gh", args, cwd);
 
-export function gh(args: readonly string[], cwd: string): ExecResult {
-  return exec("gh", args, cwd);
-}
-
-/** Absolute repository root holding `cwd`, or `null` outside any repository. */
-export function gitToplevel(cwd: string): string | null {
-  const out = gitOut(["rev-parse", "--show-toplevel"], cwd)?.trim();
-  return out === undefined || out === "" ? null : out;
-}
+/** Absolute repository root holding `cwd`. */
+export const gitToplevel = Effect.fn("gitToplevel")(function* (cwd: string) {
+  const out = yield* gitOut(["rev-parse", "--show-toplevel"], cwd).pipe(
+    Effect.catchTag(
+      "CommandFailed",
+      (error): Effect.Effect<never, ExecError> =>
+        error.file === "git" && error.stderr.includes("not a git repository")
+          ? Effect.fail(new NotARepository({ cwd }))
+          : Effect.fail(error),
+    ),
+  );
+  const root = out.trim();
+  return root === "" ? yield* new NotARepository({ cwd }) : root;
+});

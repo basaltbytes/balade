@@ -1,5 +1,6 @@
 import { basename } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Effect } from "effect";
+import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { loadWalkthrough, type LoadResult } from "../src/compile/load.js";
 import type { Payload } from "../src/payload/types.js";
 import { sha256 } from "../src/resolve/hash.js";
@@ -12,10 +13,10 @@ describe("compile", () => {
   let loaded: LoadResult;
   let payload: Payload;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     repo = createFixtureRepo();
     path = repo.addWalkthrough("valid.md", "valid.md");
-    loaded = loadWalkthrough({ cwd: repo.dir, path, useGh: false });
+    loaded = await Effect.runPromise(loadWalkthrough({ cwd: repo.dir, path, useGh: false }));
     if (loaded.payload === null) throw new Error(JSON.stringify(loaded.diagnostics, null, 2));
     payload = loaded.payload;
   });
@@ -226,18 +227,20 @@ describe("compile", () => {
     expect(pot?.entries).toEqual({ new: 3 });
   });
 
-  it("hashes sections and files reproducibly", () => {
-    const again = loadWalkthrough({ cwd: repo.dir, path, useGh: false }).payload;
-    expect(again).not.toBeNull();
-    for (const section of payload.sections) {
-      expect(section.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
-      expect(again?.sections.find((entry) => entry.id === section.id)?.hash).toBe(section.hash);
-    }
-    const unique = new Set(payload.sections.map((section) => section.hash));
-    expect(unique.size).toBe(payload.sections.length);
-    for (const file of payload.files) {
-      expect(file.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
-      expect(again?.files.find((entry) => entry.path === file.path)?.hash).toBe(file.hash);
-    }
-  });
+  it.effect("hashes sections and files reproducibly", () =>
+    Effect.gen(function* () {
+      const again = (yield* loadWalkthrough({ cwd: repo.dir, path, useGh: false })).payload;
+      expect(again).not.toBeNull();
+      for (const section of payload.sections) {
+        expect(section.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+        expect(again?.sections.find((entry) => entry.id === section.id)?.hash).toBe(section.hash);
+      }
+      const unique = new Set(payload.sections.map((section) => section.hash));
+      expect(unique.size).toBe(payload.sections.length);
+      for (const file of payload.files) {
+        expect(file.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+        expect(again?.files.find((entry) => entry.path === file.path)?.hash).toBe(file.hash);
+      }
+    }),
+  );
 });

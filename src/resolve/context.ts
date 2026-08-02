@@ -4,6 +4,7 @@
  * any object with this shape.
  */
 
+import type { Option } from "effect";
 import type { FileEntry, Payload } from "../payload/types.js";
 
 export interface ResolveContext {
@@ -26,6 +27,6 @@ export interface ResolveContext {
   files: readonly FileEntry[];
   /** Change overlay per path: new-file line numbers the PR added or modified. */
   changed: ReadonlyMap<string, ReadonlySet<number>>;
-  /** Source lines of a file at the pinned commit; `null` when it does not exist. */
-  blob(path: string): readonly string[] | null;
+  /** Source lines of a file at the pinned commit; `None` when it does not exist. */
+  blob(path: string): Option.Option<readonly string[]>;
 }

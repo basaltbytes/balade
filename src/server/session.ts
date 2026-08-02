@@ -3,21 +3,29 @@
  * serves, the payload cache in front of the resolver, the review-state files,
  * and a watcher that drops a cached payload when its file changes.
  *
- * Nothing here throws and nothing here is an Effect: preparing either answers a
- * session, a note saying there is nothing to serve, or the check outcome that
- * stopped it.
+ * Preparation is an Effect: discovery, path resolution and eager compilation
+ * preserve their failures until the CLI boundary. Domain diagnostics remain in
+ * the successful check outcome.
  */
 
 import { watch, type FSWatcher } from "node:fs";
 import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
-import { discoverWalkthroughs, NO_WALKTHROUGH, NOT_A_REPO } from "../check/discover.js";
+import { Effect } from "effect";
+import {
+  discoverWalkthroughs,
+  NO_WALKTHROUGH,
+  NOT_A_REPO,
+  type DiscoveryError,
+} from "../check/discover.js";
 import { softReport, type CheckOutcome } from "../check/run.js";
+import type { LoadError } from "../compile/load.js";
+import { describeFailure } from "../failure.js";
 import { gitToplevel } from "../resolve/exec.js";
-import { repoRelative } from "../resolve/paths.js";
+import { repoRelative, type PathResolutionFailed } from "../resolve/paths.js";
 import { fileReviewStore } from "../state/store.js";
 import { createApi, type Api } from "./api.js";
 import { payloadCache, type PayloadCache } from "./cache.js";
-import { serverRepo, type ServerRepo } from "./repo.js";
+import { serverRepo, type ServerRepo, type ServerRepoError } from "./repo.js";
 
 /**
  * Where the served set comes from: the command line, discovery, or the PR
@@ -36,7 +44,7 @@ export interface SessionOptions {
   lang?: "en" | "fr";
   /** `false` skips gh entirely. */
   useGh?: boolean;
-  /** Where an unreadable state file and a failed exclude are reported. */
+  /** Where file-watcher failures are reported after the session has started. */
   warn?: (message: string) => void;
 }
 
@@ -62,38 +70,67 @@ type Selected =
   | { kind: "ok"; root: string; paths: readonly string[]; at?: string }
   | { kind: "note"; message: string };
 
+export type SessionError = DiscoveryError | LoadError | PathResolutionFailed | ServerRepoError;
+
+export function sessionErrorMessage(error: SessionError): string {
+  switch (error._tag) {
+    case "NotARepository":
+      return error.note;
+    case "CommandFailed":
+      return `${error.file} ${error.args.join(" ")} failed (exit ${error.code}).`;
+    case "WalkthroughReadFailed":
+    case "WalkthroughFileReadFailed":
+    case "ServerSourceReadFailed":
+      return `Could not read ${error.path} (${describeFailure(error.cause)}).`;
+    case "CommitUnresolvable":
+      return `The stamped commit ${error.commit} is not in this clone.`;
+    case "PathResolutionFailed":
+      return `Could not resolve ${error.path} (${describeFailure(error.cause)}).`;
+  }
+}
+
 /** Named files are made repo-relative; discovery and the locator already answer in that shape. */
-function select(options: SessionOptions): Selected {
+const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
   if (options.selection.kind === "located") {
     const { root, paths, at } = options.selection;
-    return { kind: "ok", root, paths, ...(at === undefined ? {} : { at }) };
+    return { kind: "ok", root, paths, ...(at === undefined ? {} : { at }) } satisfies Selected;
   }
 
   if (options.selection.kind === "discovered") {
-    const found = discoverWalkthroughs(options.cwd);
-    if (found.repoRoot === null) return { kind: "note", message: NOT_A_REPO };
-    if (found.paths.length === 0) return { kind: "note", message: NO_WALKTHROUGH };
-    return { kind: "ok", root: found.repoRoot, paths: found.paths };
+    return yield* discoverWalkthroughs(options.cwd).pipe(
+      Effect.map(
+        (found): Selected =>
+          found.paths.length === 0
+            ? { kind: "note", message: NO_WALKTHROUGH }
+            : { kind: "ok", root: found.repoRoot, paths: found.paths },
+      ),
+      Effect.catchTag("NotARepository", () =>
+        Effect.succeed<Selected>({ kind: "note", message: NOT_A_REPO }),
+      ),
+    );
   }
 
-  const root = gitToplevel(options.cwd);
-  if (root === null) return { kind: "note", message: NOT_A_REPO };
-  const paths = options.selection.paths.map((path) =>
-    repoRelative(root, isAbsolute(path) ? path : resolvePath(options.cwd, path)),
+  const root = yield* gitToplevel(options.cwd).pipe(
+    Effect.catchTag("NotARepository", () => Effect.void),
   );
-  return paths.length === 0
-    ? { kind: "note", message: NO_WALKTHROUGH }
-    : { kind: "ok", root, paths };
-}
+  if (root === undefined) return { kind: "note", message: NOT_A_REPO } satisfies Selected;
+  const paths: string[] = [];
+  for (const path of options.selection.paths) {
+    paths.push(yield* repoRelative(root, isAbsolute(path) ? path : resolvePath(options.cwd, path)));
+  }
+  return (
+    paths.length === 0 ? { kind: "note", message: NO_WALKTHROUGH } : { kind: "ok", root, paths }
+  ) satisfies Selected;
+});
 
-export function prepareSession(options: SessionOptions): Prepared {
+export const prepareSession = Effect.fn("prepareSession")(function* (options: SessionOptions) {
   const warn = options.warn ?? ((message: string) => process.stderr.write(`${message}\n`));
 
-  const selected = select(options);
+  const selected = yield* select(options);
   if (selected.kind === "note") return selected;
   const { root, paths, at } = selected;
 
-  const repo: ServerRepo = serverRepo({
+  const repo: ServerRepo = yield* serverRepo({
     root,
     ...(at === undefined ? {} : { at }),
     ...(options.lang !== undefined ? { lang: options.lang } : {}),
@@ -106,14 +143,14 @@ export function prepareSession(options: SessionOptions): Prepared {
      with a blank app. Discovery serves an index, which needs frontmatter only. */
   const outcome =
     options.selection.kind === "discovered"
-      ? { ok: true, reports: [] }
-      : compileEagerly(payloads, paths);
-  if (!outcome.ok) return { kind: "failed", outcome };
+      ? ({ ok: true, reports: [] } satisfies CheckOutcome)
+      : yield* compileEagerly(payloads, paths);
+  if (!outcome.ok) return { kind: "failed", outcome } satisfies Prepared;
 
   const api = createApi({
     paths,
     payloads,
-    state: fileReviewStore({ repoRoot: root, warn }),
+    state: fileReviewStore({ repoRoot: root }),
     repo,
   });
 
@@ -127,18 +164,23 @@ export function prepareSession(options: SessionOptions): Prepared {
       close:
         at === undefined ? watchWalkthroughs({ root, paths, cache: payloads, warn }) : () => {},
     },
-  };
-}
+  } satisfies Prepared;
+});
 
 /**
  * A payload is dead when the compiler could not build one at all — no
  * repository, no PR, no file. An unresolvable range is not: it rides along as
  * an in-app error card (#15, soft `open`).
  */
-function compileEagerly(payloads: PayloadCache, paths: readonly string[]): CheckOutcome {
-  const reports = paths.map((path) => softReport(payloads.get(path)));
+const compileEagerly = Effect.fn("compileEagerly")(function* (
+  payloads: PayloadCache,
+  paths: readonly string[],
+) {
+  const reports = yield* Effect.forEach(paths, (path) =>
+    payloads.get(path).pipe(Effect.map(softReport)),
+  );
   return { ok: reports.every((report) => report.ok), reports };
-}
+});
 
 /**
  * Directories, not files: an editor that saves through a rename replaces the

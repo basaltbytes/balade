@@ -7,9 +7,16 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { discoverWalkthroughs, NO_WALKTHROUGH, NOT_A_REPO } from "../check/discover.js";
+import { Effect, Schema } from "effect";
+import {
+  discoverWalkthroughs,
+  NO_WALKTHROUGH,
+  NOT_A_REPO,
+  type DiscoveryError,
+} from "../check/discover.js";
 import { softReport, type CheckOutcome } from "../check/run.js";
-import { loadWalkthrough } from "../compile/load.js";
+import { loadWalkthrough, type LoadError } from "../compile/load.js";
+import { describeFailure } from "../failure.js";
 import { exportHtml, type ExportAssets } from "./html.js";
 
 export interface BuildOptions {
@@ -29,10 +36,22 @@ export interface BuildOptions {
 export type BuildOutcome =
   /** Written; `outcome` may still carry warnings and error cards. */
   | { kind: "built"; file: string; bytes: number; outcome: CheckOutcome }
-  /** A dead repository, PR or file: `build` prints this and stops. */
+  /** The walkthrough parsed but could not produce a payload. */
   | { kind: "failed"; outcome: CheckOutcome }
   /** Nothing to build, and the sentence that says why. */
   | { kind: "note"; message: string };
+
+export class ExportBundleReadFailed extends Schema.TaggedErrorClass<ExportBundleReadFailed>()(
+  "ExportBundleReadFailed",
+  { dir: Schema.String, cause: Schema.Defect() },
+) {}
+
+export class ExportWriteFailed extends Schema.TaggedErrorClass<ExportWriteFailed>()(
+  "ExportWriteFailed",
+  { path: Schema.String, cause: Schema.Defect() },
+) {}
+
+export type BuildError = DiscoveryError | LoadError | ExportBundleReadFailed | ExportWriteFailed;
 
 /** The export bundle ships beside the compiled CLI: `dist/cli.js` next to `dist/export/`. */
 const BUNDLE_DIR = fileURLToPath(new URL("../export/", import.meta.url));
@@ -42,25 +61,22 @@ const EXPORT_BUNDLE_MISSING =
   "in an install, reinstall balade.";
 
 /** The two files the export vite mode emits, read as text. */
-function readExportBundle(dir: string = BUNDLE_DIR): ExportAssets | null {
-  try {
-    return {
+const readExportBundle = (dir: string = BUNDLE_DIR) =>
+  Effect.try({
+    try: (): ExportAssets => ({
       js: readFileSync(join(dir, "app.js"), "utf8"),
       css: readFileSync(join(dir, "app.css"), "utf8"),
-    };
-  } catch {
-    return null;
-  }
-}
+    }),
+    catch: (cause) => new ExportBundleReadFailed({ dir, cause }),
+  });
 
-export function runBuild(options: BuildOptions): BuildOutcome {
-  const target = pick(options);
+export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) {
+  const target = yield* pick(options);
   if (typeof target !== "string") return target;
 
-  const assets = readExportBundle(options.bundleDir);
-  if (assets === null) return { kind: "note", message: EXPORT_BUNDLE_MISSING };
+  const assets = yield* readExportBundle(options.bundleDir);
 
-  const loaded = loadWalkthrough({
+  const loaded = yield* loadWalkthrough({
     cwd: options.cwd,
     path: target,
     ...(options.lang !== undefined ? { lang: options.lang } : {}),
@@ -68,44 +84,43 @@ export function runBuild(options: BuildOptions): BuildOutcome {
   });
   const report = softReport(loaded);
   const outcome: CheckOutcome = { ok: report.ok, reports: [report] };
-  if (loaded.payload === null) return { kind: "failed", outcome };
+  if (loaded.payload === null) return { kind: "failed", outcome } satisfies BuildOutcome;
 
   const file = outputPath(options, target);
   const html = exportHtml(loaded.payload, assets);
-  try {
-    writeFileSync(file, html, "utf8");
-  } catch (error) {
-    return {
-      kind: "note",
-      message: `balade: could not write ${file} (${error instanceof Error ? error.message : String(error)}).`,
-    };
-  }
-  return { kind: "built", file, bytes: Buffer.byteLength(html), outcome };
-}
+  yield* Effect.try({
+    try: () => writeFileSync(file, html, "utf8"),
+    catch: (cause) => new ExportWriteFailed({ path: file, cause }),
+  });
+  return { kind: "built", file, bytes: Buffer.byteLength(html), outcome } satisfies BuildOutcome;
+});
 
 /** Zero arguments list what discovery found (#21): the index is served-mode
     only, so `build` never picks for the author. */
-function pick(options: BuildOptions): string | { kind: "note"; message: string } {
+const pick = Effect.fn("pickBuildTarget")(function* (options: BuildOptions) {
   const [first, second] = options.paths;
   if (second !== undefined) {
     return {
       kind: "note",
       message: `balade build exports one walkthrough at a time. Name one of the ${options.paths.length} you passed.`,
-    };
+    } satisfies BuildOutcome;
   }
   if (first !== undefined) return first;
 
-  const found = discoverWalkthroughs(options.cwd);
-  if (found.repoRoot === null) return { kind: "note", message: NOT_A_REPO };
-  if (found.paths.length === 0) return { kind: "note", message: NO_WALKTHROUGH };
+  const found = yield* discoverWalkthroughs(options.cwd).pipe(
+    Effect.catchTag("NotARepository", () => Effect.void),
+  );
+  if (found === undefined) return { kind: "note", message: NOT_A_REPO } satisfies BuildOutcome;
+  if (found.paths.length === 0)
+    return { kind: "note", message: NO_WALKTHROUGH } satisfies BuildOutcome;
   return {
     kind: "note",
     message: [
       "balade build exports one walkthrough at a time. Name one of:",
       ...found.paths.map((path) => `  ${path}`),
     ].join("\n"),
-  };
-}
+  } satisfies BuildOutcome;
+});
 
 function outputPath(options: BuildOptions, target: string): string {
   if (options.out !== undefined) {
@@ -113,4 +128,27 @@ function outputPath(options: BuildOptions, target: string): string {
   }
   const absolute = isAbsolute(target) ? target : resolvePath(options.cwd, target);
   return join(dirname(absolute), `${basename(absolute, extname(absolute))}.html`);
+}
+
+export function buildErrorMessage(error: BuildError): string {
+  switch (error._tag) {
+    case "ExportBundleReadFailed":
+      return error.dir === BUNDLE_DIR
+        ? EXPORT_BUNDLE_MISSING
+        : `balade: no export bundle at ${error.dir}.`;
+    case "ExportWriteFailed":
+      return `balade: could not write ${error.path} (${describeFailure(error.cause)}).`;
+    case "WalkthroughFileReadFailed":
+      return `balade: could not read ${error.path} (${describeFailure(error.cause)}).`;
+    case "NotARepository":
+      return NOT_A_REPO;
+    case "CommitUnresolvable":
+      return `balade: the stamped commit ${error.commit} is not in this clone.`;
+    case "PathResolutionFailed":
+      return `balade: could not resolve ${error.path} (${describeFailure(error.cause)}).`;
+    case "CommandFailed":
+      return `balade: ${error.file} ${error.args.join(" ")} failed (exit ${error.code}).`;
+    case "WalkthroughReadFailed":
+      return `balade: could not read ${error.path} (${describeFailure(error.cause)}).`;
+  }
 }

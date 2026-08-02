@@ -5,9 +5,10 @@
  */
 
 import { join } from "node:path";
-import { loadWalkthrough, type LoadResult } from "../compile/load.js";
+import { Effect } from "effect";
+import { loadErrorDiagnostic, loadWalkthrough, type LoadResult } from "../compile/load.js";
 import type { CheckReport } from "../payload/types.js";
-import { discoverWalkthroughs, NO_WALKTHROUGH } from "./discover.js";
+import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discover.js";
 
 export interface CheckFileOptions {
   cwd: string;
@@ -46,15 +47,32 @@ export function runCheck(options: CheckOptions): CheckOutcome {
     return { ok: reports.every((report) => report.ok), reports };
   }
 
-  const found = discoverWalkthroughs(options.cwd);
-  if (found.repoRoot === null) {
-    return { ok: true, reports: [], note: "Not inside a git repository — nothing to check." };
+  const found = Effect.runSync(
+    discoverWalkthroughs(options.cwd).pipe(
+      Effect.match({
+        onFailure: (error) => ({
+          kind: "failure" as const,
+          error,
+        }),
+        onSuccess: (discovery) => ({ kind: "success" as const, discovery }),
+      }),
+    ),
+  );
+  if (found.kind === "failure") {
+    return found.error._tag === "NotARepository"
+      ? { ok: true, reports: [], note: "Not inside a git repository — nothing to check." }
+      : {
+          ok: false,
+          reports: [],
+          note: `Walkthrough discovery failed: ${discoveryErrorMessage(found.error)}`,
+        };
   }
-  if (found.paths.length === 0) {
+  const { discovery } = found;
+  if (discovery.paths.length === 0) {
     return { ok: true, reports: [], note: NO_WALKTHROUGH };
   }
-  const root = found.repoRoot;
-  const reports = found.paths.map((path) => one(join(root, path)));
+  const root = discovery.repoRoot;
+  const reports = discovery.paths.map((path) => one(join(root, path)));
   return { ok: reports.every((report) => report.ok), reports };
 }
 
@@ -70,11 +88,23 @@ export function softReport(loaded: LoadResult): CheckReport {
 
 export function checkOne(options: CheckFileOptions): CheckReport {
   const { cwd, path } = options;
-  const loaded = loadWalkthrough({
-    cwd,
-    path,
-    ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-  });
+  const loaded = Effect.runSync(
+    loadWalkthrough({
+      cwd,
+      path,
+      ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
+    }).pipe(
+      Effect.match({
+        onFailure: (error): LoadResult => ({
+          sourcePath: path,
+          payload: null,
+          diagnostics: [loadErrorDiagnostic(error)],
+          ranges: [],
+        }),
+        onSuccess: (result) => result,
+      }),
+    ),
+  );
   return {
     file: loaded.sourcePath,
     ok: !loaded.diagnostics.some((diagnostic) => diagnostic.level === "error"),

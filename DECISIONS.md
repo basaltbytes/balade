@@ -54,6 +54,42 @@ rather than wrapped in it. One version note: the pinned `effect@4.0.0-beta.102`
 `ServiceMap` is later naming that most docs already use. Verify every API
 against the installed `.d.ts` under `node_modules/effect/dist/`.
 
+## Failures are tagged errors; absence is `Option`
+
+Process execution, discovery, path resolution, review-state storage, loading,
+building and served mode now expose per-area `Schema.TaggedErrorClass` unions.
+Callers translate errors at their own boundary: `check` turns load failures into
+`CheckDiagnostic` values, the CLI prints build and session failures, and the HTTP
+edge maps `ApiError` tags to status codes. Diagnostics produced by parsing and
+compilation still travel in successful `LoadResult` values.
+
+`Option` means that nothing exists and the caller may continue: no state file,
+no matching walkthrough state, an unreadable frontmatter envelope, or a git
+probe that did not find a ref or blob. Corrupt JSON, unreadable files, failed
+commands and writes are errors. In particular, `gitOut`, `parseReviewState` and
+`resolveContext` no longer erase failures as `null`; the required served-app
+bundle similarly fails as `AppBundleMissing` instead of returning a nullable
+path.
+
+Git absence is classified at the command that defines it. Quiet `rev-parse`,
+`symbolic-ref` and `git config --get` map only their documented exit 1 to
+`Option.none`; spawn failures and every other exit remain `CommandFailed`.
+Walkthrough parsing collects the stamped file references before resolution,
+which lets the resolver fetch those blobs effectfully and hand the pure compiler
+a completed lookup map. No synchronous Effect runner hides behind
+`ResolveContext.blob`.
+
+The old state-store warning callback is gone. A failed state write reaches the
+HTTP caller; the store itself logs failure to add `.balade/` to
+`.git/info/exclude`, and the completed state write still succeeds. Index reads
+do not degrade failures into omitted rows: repository or state failures reach
+the HTTP error boundary. The file-watcher callback remains a
+logging port because watcher errors can arrive after `prepareSession` has
+returned its session. Phase 3 may replace that port with the runtime logger when
+the session becomes an Effect service. Until Phase 5 moves the SPA store to
+Effect, browser storage and network fallbacks log their caught exception before
+returning their existing fallback outcome.
+
 ## `typecheck` carries the Effect language service
 
 `@effect/tsgo` patches the native `tsc` binary in place — the `prepare` script

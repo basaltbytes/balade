@@ -1,3 +1,4 @@
+import { Option } from "effect";
 import { describe, expect, it } from "vitest";
 import { compileBlocks, parseMark, type CompileEnv } from "../src/compile/blocks.js";
 import { diagramNodes } from "../src/compile/diagram.js";
@@ -168,7 +169,7 @@ describe("blocks without a repository", () => {
     },
     files: [],
     changed: new Map(),
-    blob: () => null,
+    blob: () => Option.none(),
   };
 
   function compile(body: string): { blocks: Block[]; diagnostics: CheckDiagnostic[] } {

@@ -3,11 +3,11 @@
  * four JSON endpoints under `/api`, and a Node server whose lifetime is the
  * caller's scope — closing the scope closes the port.
  *
- * Effect stops here. Everything below answers plain values.
+ * This is the translation boundary for typed `ApiError` failures.
  */
 
 import { NodeHttpServer } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import {
   HttpRouter,
   HttpServer,
@@ -19,7 +19,7 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Answer, Api } from "./api.js";
+import { ApiReviewStateInvalid, apiErrorResponse, type Api, type ApiError } from "./api.js";
 
 /** A review tool listens for the reviewer, not for the network. */
 const HOST = "127.0.0.1";
@@ -35,15 +35,24 @@ export interface ServeOptions {
 /** The prebuilt SPA ships beside the compiled CLI: `dist/cli.js` next to `dist/app/`. */
 const APP_DIR = fileURLToPath(new URL("../app/", import.meta.url));
 
-/** The bundle directory, or `null` when this install carries none. */
-export function findAppBundle(): string | null {
-  return existsSync(join(APP_DIR, "index.html")) ? APP_DIR : null;
+export class AppBundleMissing extends Schema.TaggedErrorClass<AppBundleMissing>()(
+  "AppBundleMissing",
+  { path: Schema.String },
+) {
+  get note(): string {
+    return (
+      `balade: no app bundle at ${this.path}. In a checkout, run \`pnpm run build:app\`; ` +
+      "in an install, reinstall balade."
+    );
+  }
 }
 
-/** What `open` prints when the bundle was never built, or never shipped. */
-export const APP_BUNDLE_MISSING =
-  `balade: no app bundle at ${APP_DIR}. In a checkout, run \`pnpm run build:app\`; ` +
-  "in an install, reinstall balade.";
+/** The required served-app bundle directory. */
+export const findAppBundle = Effect.fn("findAppBundle")(function* () {
+  return existsSync(join(APP_DIR, "index.html"))
+    ? APP_DIR
+    : yield* new AppBundleMissing({ path: APP_DIR });
+});
 
 /** Starts listening and answers the URL. The server closes with the scope. */
 export const serve = (options: ServeOptions) =>
@@ -90,25 +99,28 @@ const queryPath = Effect.gen(function* () {
   return value ?? null;
 });
 
-const answering = (answer: (path: string | null) => Answer) =>
-  Effect.map(queryPath, (path) => respond(answer(path)));
+const answering = (answer: (path: string | null) => Effect.Effect<unknown, ApiError>) =>
+  Effect.flatMap(queryPath, answer).pipe(
+    Effect.match({ onFailure: respondError, onSuccess: respondJson }),
+  );
 
 const putState = (api: Api) =>
   Effect.gen(function* () {
     const path = yield* queryPath;
     const request = yield* HttpServerRequest.HttpServerRequest;
-    /* A body that is not JSON and a body that is the wrong JSON fail the caller
-       the same way: neither is a review state, and `writeState` says so. */
-    const body = yield* Effect.orElseSucceed(request.json, (): unknown => undefined);
-    return respond(api.writeState(path, body));
-  });
+    const body = yield* request.json.pipe(Effect.mapError(() => new ApiReviewStateInvalid({})));
+    return yield* api.writeState(path, body);
+  }).pipe(Effect.match({ onFailure: respondError, onSuccess: respondJson }));
 
 /**
  * `jsonUnsafe` skips the serialisation error channel: every body here is a
  * payload the CLI just built out of strings, numbers and plain objects, so a
  * value JSON cannot take would be a defect, not a request failure.
  */
-const respond = (answer: Answer): HttpServerResponse.HttpServerResponse =>
-  answer.kind === "json"
-    ? HttpServerResponse.jsonUnsafe(answer.body)
-    : HttpServerResponse.jsonUnsafe({ error: answer.message }, { status: answer.status });
+const respondJson = (body: unknown): HttpServerResponse.HttpServerResponse =>
+  HttpServerResponse.jsonUnsafe(body);
+
+const respondError = (error: ApiError): HttpServerResponse.HttpServerResponse => {
+  const response = apiErrorResponse(error);
+  return HttpServerResponse.jsonUnsafe({ error: response.message }, { status: response.status });
+};

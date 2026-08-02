@@ -5,6 +5,12 @@
 
 import { realpathSync } from "node:fs";
 import { relative, sep } from "node:path";
+import { Effect, Schema } from "effect";
+
+export class PathResolutionFailed extends Schema.TaggedErrorClass<PathResolutionFailed>()(
+  "PathResolutionFailed",
+  { path: Schema.String, cause: Schema.Defect() },
+) {}
 
 /**
  * `absolute` relative to `root`, as git spells it. `git rev-parse` answers
@@ -12,9 +18,11 @@ import { relative, sep } from "node:path";
  * 8.3 short-name (`RUNNER~1` on Windows) spelling of the same place, which
  * would otherwise turn the relative path into a climb out of the repo.
  */
-export function repoRelative(root: string, absolute: string): string {
-  return relative(real(root), real(absolute)).replaceAll(sep, "/");
-}
+export const repoRelative = Effect.fn("repoRelative")(function* (root: string, absolute: string) {
+  const finalRoot = yield* real(root);
+  const finalAbsolute = yield* real(absolute);
+  return relative(finalRoot, finalAbsolute).replaceAll(sep, "/");
+});
 
 /** The last segment of a git-spelled path. */
 export function fileName(path: string): string {
@@ -22,16 +30,17 @@ export function fileName(path: string): string {
 }
 
 /* `realpathSync.native` expands Windows 8.3 short names, which the portable
-   implementation keeps; where the OS call is unsupported the portable answer
-   still resolves symlinks, and a path that resolves nowhere answers itself. */
-function real(path: string): string {
-  try {
-    return realpathSync.native(path);
-  } catch {
-    try {
-      return realpathSync(path);
-    } catch {
-      return path;
-    }
-  }
-}
+   implementation keeps. When the native call is unsupported the portable
+   implementation gets one chance; a second failure stays typed. */
+const real = (path: string) =>
+  Effect.try({
+    try: () => realpathSync.native(path),
+    catch: (cause) => new PathResolutionFailed({ path, cause }),
+  }).pipe(
+    Effect.catchTag("PathResolutionFailed", () =>
+      Effect.try({
+        try: () => realpathSync(path),
+        catch: (cause) => new PathResolutionFailed({ path, cause }),
+      }),
+    ),
+  );
