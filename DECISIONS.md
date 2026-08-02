@@ -3,26 +3,44 @@
 Trade-offs this package has already weighed. Each entry states what holds today
 and what would move it.
 
-## The payload contract stays plain interfaces
+## The payload contract moves to Effect Schema
 
-`src/payload/types.ts` crosses into the SPA, which imports it as types only. A
-schema library there would either follow it across the boundary or force a
-second declaration of the same shape. Economy of change: the contract stays
-plain, and the edges that read it parse before they trust —
-`app/src/data/source.ts` for the payload, and `src/payload/parse-review.ts` for
-review state.
+Supersedes "the payload contract stays plain interfaces" (2026-08-02). The
+source of truth becomes `src/payload/schema.ts`, with `src/payload/types.ts`
+derived from it (`typeof X.Type`) — still the type-only entry the SPA imports
+through `app/src/contract.ts`. The original worry — a schema library following
+the types across the boundary — is now accepted deliberately: the SPA decodes
+payloads through the same schemas, and the export-bundle size delta gets
+measured and recorded when that lands. The encoded JSON of every persisted or
+transported shape stays byte-compatible. Until Phase 1 of the migration
+umbrella ([#1](https://github.com/basaltbytes/balade/issues/1)) lands, the
+plain interfaces remain the contract and the edges keep their hand-rolled
+guards.
 
-That last one is the exception to "app imports the CLI as types only": the
-server and the SPA guard the same JSON, so the pure function lives beside the
-contract and both sides import it. What stays forbidden is CLI *runtime* — git,
-fs, process — reaching `app/`.
+The `src/payload/parse-review.ts` exception to "app imports the CLI as types
+only" stands: the server and the SPA guard the same JSON, so the shared code
+lives beside the contract. What stays forbidden is CLI *runtime* — git, fs,
+process — reaching `app/`.
 
-## The core returns records; Effect stays at the CLI edge
+## Effect v4 is the codebase idiom
 
-Every core function answers `{ value, diagnostics }` (or `{ payload, … }`) and
-throws nothing a caller must catch. Effect appears only in `src/cli.ts`, where
-it owns argument parsing and process exit. One dialect per layer; a full Effect
-migration would buy retries and typed error channels the core has no use for.
+Supersedes "the core returns records; Effect stays at the CLI edge"
+(2026-08-02): the owner rejected that reading — Effect v4 (services, layers,
+typed error channels) is the idiom throughout, per the stack preference on the
+spec map. The migration runs through
+[#1](https://github.com/basaltbytes/balade/issues/1) in phases: Schema
+contract, one error dialect, services and layers, core pipelines, the SPA.
+During the transition the two dialects coexist — converted seams speak Effect,
+the rest still answers `{ value, diagnostics }` records; each phase lands with
+the pipeline green.
+
+Two things survive the supersession: diagnostics stay values (`CheckDiagnostic`
+is the product of `check`, not a failure — the error channel is for real
+failures), and pure parse/compile functions stay pure, orchestrated from Effect
+rather than wrapped in it. One version note: the pinned `effect@4.0.0-beta.102`
+(the current `beta` dist-tag) names the service API `Context.Service` —
+`ServiceMap` is later naming that most docs already use. Verify every API
+against the installed `.d.ts` under `node_modules/effect/dist/`.
 
 ## `typecheck` carries the Effect language service
 

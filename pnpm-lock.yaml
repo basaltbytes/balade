@@ -24,6 +24,9 @@ importers:
       '@effect/tsgo':
         specifier: 0.24.3
         version: 0.24.3
+      '@effect/vitest':
+        specifier: 4.0.0-beta.102
+        version: 4.0.0-beta.102(effect@4.0.0-beta.102)(vitest@4.1.10(@types/node@24.13.3)(vite@8.2.0(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0)))
       '@git-diff-view/react':
         specifier: 0.1.7
         version: 0.1.7(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -132,6 +135,12 @@ packages:
   '@effect/tsgo@0.24.3':
     resolution: {integrity: sha512-WQxKU3MFzWzI38GbE9cf0POkVX4y0xahD8QqDjLfixW1AEValuHNfOQvyKM2MDWOLdGff4hP8VnIOeduwQt66A==}
     hasBin: true
+
+  '@effect/vitest@4.0.0-beta.102':
+    resolution: {integrity: sha512-4dipFAYG6imOzrY3zy3BgzCJkbb9xESyzUef0WSx8bsK0/SpITqbJpdwKeOyDWLZ+rimjua8IbTFMAde865pIQ==}
+    peerDependencies:
+      effect: ^4.0.0-beta.102
+      vitest: ^3.0.0 || ^4.0.0
 
   '@emnapi/core@2.0.0-alpha.3':
     resolution: {integrity: sha512-AZypUeJ/yByuxyS7BlSNRDOMLMlROYtjYdIAuBmJssVz1UJDSeYxLrdizhXCFYhedC5bqd/ASy8EuNXbVVXp9g==}
@@ -1600,6 +1609,11 @@ snapshots:
       '@effect/tsgo-linux-x64': 0.24.3
       '@effect/tsgo-win32-arm64': 0.24.3
       '@effect/tsgo-win32-x64': 0.24.3
+
+  '@effect/vitest@4.0.0-beta.102(effect@4.0.0-beta.102)(vitest@4.1.10(@types/node@24.13.3)(vite@8.2.0(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0)))':
+    dependencies:
+      effect: 4.0.0-beta.102
+      vitest: 4.1.10(@types/node@24.13.3)(vite@8.2.0(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))
 
   '@emnapi/core@2.0.0-alpha.3':
     dependencies:
