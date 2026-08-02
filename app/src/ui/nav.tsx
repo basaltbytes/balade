@@ -81,7 +81,12 @@ function NavLeaf({
         active ? "border-primary bg-primary/10" : "border-transparent hover:bg-secondary/60"
       } ${reviewed && review.hideReviewed ? "opacity-50" : ""}`}
     >
-      <MarkButton reviewed={reviewed} onToggle={() => review.markSection(node.ref)} compact />
+      <MarkButton
+        reviewed={reviewed}
+        onToggle={() => review.markSection(node.ref)}
+        compact
+        disabled={!review.ready}
+      />
       <JumpLink id={node.ref} className="flex items-center gap-2 min-w-0 flex-1">
         {node.kind === "file" ? (
           <>

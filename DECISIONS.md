@@ -54,6 +54,33 @@ rather than wrapped in it. One version note: the pinned `effect@4.0.0-beta.102`
 `ServiceMap` is later naming that most docs already use. Verify every API
 against the installed `.d.ts` under `node_modules/effect/dist/`.
 
+## The SPA has one browser runtime; React still owns render state
+
+The SPA builds one module-level `ManagedRuntime` from live browser fetch and
+storage layers. Payload loading returns an Effect with tagged unreadable/fetch
+failures, and review persistence composes the `localStore` and `httpStore`
+layers once behind a `ReviewStore` service. Those layers take the browser
+capabilities as inputs; the service selects served or export behavior and its
+public methods have `R = never`. React components cross the boundary through
+one `runAppEffect` helper inside `useEffect`, but
+`review-context.tsx` continues to own the state, reconciliation and persistence
+badges. A browser-storage or served-state failure is logged inside the service
+and deliberately becomes the existing fallback/failed product value. The helper
+returns the Effect fiber interruptor, so React cleanup aborts pending browser
+IO. Review writes share a one-permit semaphore, so rapid marks persist in state
+order. Review controls remain disabled until the initial read has reconciled;
+this prevents a late read from overwriting an optimistic mark and prevents
+unflushed marks when navigation interrupts a stalled read.
+
+The Phase 5 production build was measured against commit `8e82aca`. The
+single-file export JS grew from 4,054,328 to 4,072,550 bytes (+18,222); Vite's
+reported gzip size moved from 789.63 to 795.61 kB (+5.98 kB). The served entry
+grew from 1,627,728 to 1,645,938 bytes (+18,210), with reported gzip from 514.04
+to 520.44 kB (+6.40 kB). The export already carried Effect Schema; this delta is
+the runtime, layers and typed browser workflows. It is accepted so the SPA uses
+the same dependency, error and parsing model as the CLI without handing render
+state to a second state system.
+
 ## The effectful shell has shared and session-scoped layer stacks
 
 The CLI provides `cliLayer` once at its entry point. That layer holds Effect's
@@ -136,9 +163,9 @@ into the session scope: the platform stream acquires and releases the OS watcher
 scope closure interrupts it, and late watcher failures go to the Effect runtime
 logger. Any event invalidates the served walkthroughs in that directory; this
 keeps editor rename saves correct without trusting an OS-specific event path.
-The manual close and warning callbacks are gone. Until Phase 5 moves the SPA
-store to Effect, browser storage and network fallbacks log their caught exception
-before returning their existing fallback outcome.
+The manual close and warning callbacks are gone. The SPA review-store service
+likewise logs browser-storage and network failures in Effect before returning
+its existing fallback outcome.
 
 ## `typecheck` carries the Effect language service
 
@@ -236,14 +263,15 @@ label, arrow kind and colour is not done either.
 
 ## No property tests yet
 
-The parsers — `parseFrontmatter`, `parseReviewState`, `parsePayload`, `splitDiff`,
+The parsers — `parseFrontmatter`, `parseReviewState`, `loadPayload`, `splitDiff`,
 `parsePo` — are what properties would pay for: roundtrips, idempotence, "junk in
 never yields a half-built value". `fast-check` is not a dependency, so the suite
 is example-based. The gap is named, not hidden.
 
-## The renderer has no DOM-level test
+## DOM tests cover the renderer's IO lifecycle
 
-`app/src/data/` is covered at parse level, and `render.test.tsx` renders the whole
-fixture to a string. Nothing exercises a click, a `useEffect`, or the store from
-inside a component: that needs `jsdom`, which is not a dependency. The stores take
-their storage and fetch as parameters, so the seam is ready when it is.
+`render.test.tsx` still renders the whole fixture to a string. A focused jsdom
+suite now crosses the browser runtime from `useReviewApi`: it exercises a click
+while the initial load is pending, ordered persistence, and interruption on
+unmount. The data suites continue to inject storage and fetch layers directly
+for exhaustive adapter behavior.

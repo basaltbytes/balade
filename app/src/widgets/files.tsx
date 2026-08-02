@@ -104,6 +104,7 @@ function FileRow({ entry }: { entry: FileEntry }) {
             type="checkbox"
             checked={viewed}
             onChange={() => review.markFile(sectionId, entry.path)}
+            disabled={!review.ready}
             className="accent-primary"
           />
           {strings.files.viewed}

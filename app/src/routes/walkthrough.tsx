@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo } from "react";
 import type { ErrorCard, Payload, Section } from "../contract";
-import { storeFor } from "../data/store";
+import type { ReviewStoreTarget } from "../data/store";
 import { ensureLangs } from "../highlight/shiki";
 import { Chip, MarkButton } from "../ui/bits";
 import {
@@ -93,7 +93,11 @@ function SectionView({
           ))}
 
           <div className="mt-6 flex justify-end">
-            <MarkButton reviewed={reviewed} onToggle={() => review.markSection(section.id)} />
+            <MarkButton
+              reviewed={reviewed}
+              onToggle={() => review.markSection(section.id)}
+              disabled={!review.ready}
+            />
           </div>
         </div>
       </section>
@@ -184,11 +188,18 @@ export function WalkthroughRoute({
   devStale: boolean;
   onToggleDevStale: (() => void) | null;
 }) {
-  const store = useMemo(
-    () => storeFor(payload, { mode: served ? "served" : "export" }),
-    [payload, served],
+  const target = useMemo<ReviewStoreTarget>(
+    () =>
+      served
+        ? {
+            mode: "served",
+            storageKey: payload.storageKey,
+            sourcePath: payload.sourcePath,
+          }
+        : { mode: "export", storageKey: payload.storageKey },
+    [payload.sourcePath, payload.storageKey, served],
   );
-  const review = useReviewApi(payload, store);
+  const review = useReviewApi(payload, target);
   usePayloadLanguages(payload);
 
   useEffect(() => {

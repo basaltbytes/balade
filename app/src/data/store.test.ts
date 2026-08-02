@@ -1,11 +1,20 @@
-/* The two stores, driven through their own seams: a memory storage and a fake
-   fetch, no module mocking. The shared parse is covered in `test/parse-review.test.ts`. */
+/* The two store layers, driven through dependency layers for memory storage and
+   fake fetch. The shared parser is covered in `test/parse-review.test.ts`. */
 
-import { describe, expect, it } from "vitest";
+import { Effect, Layer, Option } from "effect";
+import { describe, expect, it } from "@effect/vitest";
 import type { ReviewState } from "../contract";
-import { httpStore, localStore, type FetchLike, type StorageLike } from "./store";
+import { fetchLayer, storageLayer, type FetchLike, type StorageLike } from "./browser";
+import { loadReview, reviewStoreLayer, saveReview, type ReviewStoreTarget } from "./store";
 
 const KEY = "balade:acme/repo#42:walkthroughs/one.md";
+
+const exportTarget = { mode: "export", storageKey: KEY } satisfies ReviewStoreTarget;
+const servedTarget = {
+  mode: "served",
+  storageKey: KEY,
+  sourcePath: "walkthroughs/one.md",
+} satisfies ReviewStoreTarget;
 
 const state: ReviewState = {
   version: 1,
@@ -42,59 +51,79 @@ const answering =
   () =>
     Promise.resolve(new Response(body, { status }));
 
-const ignoreWarning = () => {};
+const storeTestLayer = (fetch: FetchLike, storage: StorageLike) =>
+  reviewStoreLayer.pipe(Layer.provide(Layer.merge(fetchLayer(fetch), storageLayer(storage))));
+
+const unusedFetch: FetchLike = () => Promise.reject(new Error("fetch should not be used"));
 
 describe("the browser store", () => {
-  it("reads its copy back through the parser", async () => {
+  it.effect("reads its copy back through the parser", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(state) });
-    expect(await localStore(KEY, storage, ignoreWarning).load()).toEqual(state);
+    return Effect.gen(function* () {
+      expect(Option.getOrNull(yield* loadReview(exportTarget))).toEqual(state);
+    }).pipe(Effect.provide(storeTestLayer(unusedFetch, storage)));
   });
 
-  it("answers null on a copy it cannot read", async () => {
+  it.effect("answers None on a copy it cannot read", () => {
     const storage = memoryStorage({ [KEY]: "{ not json" });
-    expect(await localStore(KEY, storage, ignoreWarning).load()).toBeNull();
+    return Effect.gen(function* () {
+      expect(Option.isNone(yield* loadReview(exportTarget))).toBe(true);
+    }).pipe(Effect.provide(storeTestLayer(unusedFetch, storage)));
   });
 
-  it("names a write the browser refused", async () => {
-    expect(await localStore(KEY, refusingStorage, ignoreWarning).save(state)).toBe("failed");
-  });
+  it.effect("names a write the browser refused", () =>
+    Effect.gen(function* () {
+      expect(yield* saveReview(exportTarget, state)).toBe("failed");
+    }).pipe(Effect.provide(storeTestLayer(unusedFetch, refusingStorage))),
+  );
 });
 
 describe("the served store", () => {
-  const withFetch = (fetch: FetchLike, storage: StorageLike) =>
-    httpStore("walkthroughs/one.md", localStore(KEY, storage, ignoreWarning), fetch, ignoreWarning);
-
-  it("consults the browser copy when the CLI holds nothing", async () => {
+  it.effect("consults the browser copy when the CLI holds nothing", () => {
     const storage = memoryStorage({ [KEY]: JSON.stringify(state) });
-    /* Marks made while the CLI was down must survive its 404. */
-    expect(await withFetch(answering(404), storage).load()).toEqual(state);
+    return Effect.gen(function* () {
+      expect(Option.getOrNull(yield* loadReview(servedTarget))).toEqual(state);
+    }).pipe(Effect.provide(storeTestLayer(answering(404), storage)));
   });
 
-  it("takes the CLI answer when there is one", async () => {
+  it.effect("takes the CLI answer when there is one", () =>
+    Effect.gen(function* () {
+      expect(Option.getOrNull(yield* loadReview(servedTarget))).toEqual(state);
+    }).pipe(Effect.provide(storeTestLayer(answering(200, JSON.stringify(state)), memoryStorage()))),
+  );
+
+  it.effect("uses the browser copy when the CLI answer is invalid", () => {
+    const storage = memoryStorage({ [KEY]: JSON.stringify(state) });
+    return Effect.gen(function* () {
+      expect(Option.getOrNull(yield* loadReview(servedTarget))).toEqual(state);
+    }).pipe(Effect.provide(storeTestLayer(answering(200, "{ not json"), storage)));
+  });
+
+  it.effect("reports a failed PUT and keeps the marks in the browser", () => {
     const storage = memoryStorage();
-    const store = withFetch(answering(200, JSON.stringify(state)), storage);
-    expect(await store.load()).toEqual(state);
+    return Effect.gen(function* () {
+      expect(yield* saveReview(servedTarget, state)).toBe("fallback");
+      expect(JSON.parse(storage.entries.get(KEY) ?? "null")).toEqual(state);
+    }).pipe(Effect.provide(storeTestLayer(answering(503), storage)));
   });
 
-  it("reports a failed PUT and keeps the marks in the browser", async () => {
-    const storage = memoryStorage();
-    const store = withFetch(answering(503), storage);
-    expect(await store.save(state)).toBe("fallback");
-    expect(JSON.parse(storage.entries.get(KEY) ?? "null")).toEqual(state);
-  });
+  it.effect("reports a write that reached nothing at all", () =>
+    Effect.gen(function* () {
+      expect(yield* saveReview(servedTarget, state)).toBe("failed");
+    }).pipe(
+      Effect.provide(storeTestLayer(() => Promise.reject(new Error("offline")), refusingStorage)),
+    ),
+  );
 
-  it("reports a write that reached nothing at all", async () => {
-    const store = withFetch(() => Promise.reject(new Error("offline")), refusingStorage);
-    expect(await store.save(state)).toBe("failed");
-  });
-
-  it("says so when the PUT went through", async () => {
+  it.effect("says so when the PUT went through", () => {
     const calls: string[] = [];
     const fetch: FetchLike = (url, init) => {
       calls.push(`${init?.method ?? "GET"} ${url}`);
       return Promise.resolve(new Response("", { status: 200 }));
     };
-    expect(await withFetch(fetch, memoryStorage()).save(state)).toBe("saved");
-    expect(calls).toEqual(["PUT /api/state?path=walkthroughs%2Fone.md"]);
+    return Effect.gen(function* () {
+      expect(yield* saveReview(servedTarget, state)).toBe("saved");
+      expect(calls).toEqual(["PUT /api/state?path=walkthroughs%2Fone.md"]);
+    }).pipe(Effect.provide(storeTestLayer(fetch, memoryStorage())));
   });
 });

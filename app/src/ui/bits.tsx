@@ -106,10 +106,12 @@ export function MarkButton({
   reviewed,
   onToggle,
   compact,
+  disabled = false,
 }: {
   reviewed: boolean;
   onToggle: () => void;
   compact?: boolean;
+  disabled?: boolean;
 }) {
   const strings = useStrings();
   const label = reviewed ? strings.reviewed : strings.markReviewed;
@@ -121,7 +123,8 @@ export function MarkButton({
         aria-label={label}
         aria-pressed={reviewed}
         onClick={onToggle}
-        className={`shrink-0 cursor-pointer ${reviewed ? "text-added" : "text-muted-foreground/50 hover:text-muted-foreground"}`}
+        disabled={disabled}
+        className={`shrink-0 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${reviewed ? "text-added" : "text-muted-foreground/50 hover:text-muted-foreground"}`}
       >
         <Octicon name={reviewed ? "check-circle-fill" : "circle"} size={13} />
       </button>
@@ -132,7 +135,8 @@ export function MarkButton({
       type="button"
       aria-pressed={reviewed}
       onClick={onToggle}
-      className={`inline-flex items-center gap-2 text-[12.5px] border rounded-md px-3 py-[5px] cursor-pointer ${
+      disabled={disabled}
+      className={`inline-flex items-center gap-2 text-[12.5px] border rounded-md px-3 py-[5px] ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
         reviewed
           ? "text-added border-added/40 bg-added/10"
           : "text-secondary-foreground border-border hover:border-primary hover:text-foreground"
