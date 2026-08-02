@@ -68,8 +68,9 @@ describe("build", () => {
   it.effect("writes one HTML file beside the walkthrough, with the payload baked in", () =>
     Effect.gen(function* () {
       const result = yield* build(["walkthroughs/valid.md"]);
-      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      if (result._tag !== "Built") throw new Error(`build refused: ${JSON.stringify(result)}`);
 
+      expect(result.reports).toHaveLength(1);
       expect(result.file).toBe(join(repo.dir, "walkthroughs/valid.html"));
       expect(readdirSync(join(repo.dir, "walkthroughs")).sort()).toEqual([
         "valid.html",
@@ -90,7 +91,7 @@ describe("build", () => {
   it.effect("names no file but itself", () =>
     Effect.gen(function* () {
       const result = yield* build(["walkthroughs/valid.md"]);
-      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      if (result._tag !== "Built") throw new Error(`build refused: ${JSON.stringify(result)}`);
       const html = readFileSync(result.file, "utf8");
 
       for (const [, url] of html.matchAll(/(?:src|href)\s*=\s*"([^"]*)"/g)) {
@@ -111,7 +112,7 @@ describe("build", () => {
         bundleDir,
         lang: "fr",
       });
-      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      if (result._tag !== "Built") throw new Error(`build refused: ${JSON.stringify(result)}`);
       /* The fixture frontmatter says `lang: en`; the flag wins. */
       expect(bakedPayload(readFileSync(result.file, "utf8")).lang).toBe("fr");
       expect(readFileSync(result.file, "utf8")).toContain('<html lang="fr">');
@@ -134,7 +135,7 @@ describe("build", () => {
 
       repo.write("export/.keep", "");
       const again = yield* build(["walkthroughs/valid.md"], "export/pool.html");
-      if (again.kind !== "built") throw new Error(`build refused: ${JSON.stringify(again)}`);
+      if (again._tag !== "Built") throw new Error(`build refused: ${JSON.stringify(again)}`);
       expect(again.file).toBe(out);
       expect(bakedPayload(readFileSync(out, "utf8")).title).toBe("Add live planning pool items");
     }),
@@ -144,7 +145,7 @@ describe("build", () => {
     Effect.gen(function* () {
       repo.addWalkthrough("script-prose.md", "script-prose.md");
       const result = yield* build(["walkthroughs/script-prose.md"]);
-      if (result.kind !== "built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      if (result._tag !== "Built") throw new Error(`build refused: ${JSON.stringify(result)}`);
       const html = readFileSync(result.file, "utf8");
 
       /* The payload survives the round trip a browser makes through it. */
@@ -163,7 +164,9 @@ describe("build", () => {
   it.effect("stops with the discovered paths when no file is named", () =>
     Effect.gen(function* () {
       const result = yield* build([]);
-      if (result.kind !== "note") throw new Error(`expected a note, got ${result.kind}`);
+      if (result._tag !== "BuildNotRun") {
+        throw new Error(`expected a note, got ${result._tag}`);
+      }
       expect(result.message).toContain("walkthroughs/valid.md");
       expect(result.message).toContain("walkthroughs/script-prose.md");
     }),
@@ -172,7 +175,18 @@ describe("build", () => {
   it.effect("exports one walkthrough at a time", () =>
     Effect.gen(function* () {
       const result = yield* build(["walkthroughs/valid.md", "walkthroughs/script-prose.md"]);
-      expect(result).toMatchObject({ kind: "note" });
+      expect(result).toMatchObject({ _tag: "BuildNotRun" });
+    }),
+  );
+
+  it.effect("keeps an unbuildable document as a tagged soft failure", () =>
+    Effect.gen(function* () {
+      repo.write("walkthroughs/invalid.md", "# Missing frontmatter\n");
+      const result = yield* build(["walkthroughs/invalid.md"]);
+      expect(result).toMatchObject({
+        _tag: "BuildFailed",
+        reports: [{ ok: false }],
+      });
     }),
   );
 

@@ -3,12 +3,13 @@
     their failures into terminal output, and keep diagnostics as report values. */
 
 import { NodeRuntime } from "@effect/platform-node";
-import { Effect, Option } from "effect";
+import { Effect, Match, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { buildErrorMessage, runBuild } from "./build/run.js";
 import { formatJson, formatText } from "./check/report.js";
-import { runCheck, type CheckOutcome } from "./check/run.js";
+import { runCheck } from "./check/run.js";
 import { cliLayer } from "./live.js";
+import type { CheckReport } from "./payload/types.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
 import { findAppBundle, serve } from "./server/serve.js";
@@ -50,7 +51,7 @@ const check = Command.make("check", { files, json: jsonFlag }, (config) =>
     const outcome = yield* runCheck({ cwd: process.cwd(), paths: config.files });
     yield* Effect.sync(() => {
       process.stdout.write(config.json ? `${formatJson(outcome)}\n` : formatText(outcome));
-      if (!outcome.ok) process.exitCode = 1;
+      if (outcome._tag === "CheckFailed") process.exitCode = 1;
     });
   }),
 ).pipe(
@@ -84,7 +85,7 @@ const open = Command.make(
         Effect.map(Option.some),
         Effect.catchTag("AppBundleMissing", (error) =>
           Effect.sync(() => {
-            stop({ kind: "note", message: error.note });
+            stopMessage(error.note);
             return Option.none<string>();
           }),
         ),
@@ -93,7 +94,7 @@ const open = Command.make(
 
       const target = parseOpenTarget(config.files);
       if (target.kind === "invalid") {
-        stop({ kind: "note", message: target.message });
+        stopMessage(target.message);
         return;
       }
       const selection =
@@ -102,7 +103,7 @@ const open = Command.make(
               Effect.map(Option.some),
               Effect.catch((error) =>
                 Effect.sync(() => {
-                  stop({ kind: "note", message: locateErrorMessage(error) });
+                  stopMessage(locateErrorMessage(error));
                   return Option.none<Selection>();
                 }),
               ),
@@ -118,46 +119,45 @@ const open = Command.make(
         Effect.map(Option.some),
         Effect.catch((error) =>
           Effect.sync(() => {
-            stop({ kind: "note", message: sessionErrorMessage(error) });
+            stopMessage(sessionErrorMessage(error));
             return Option.none();
           }),
         ),
       );
       if (Option.isNone(prepared)) return;
-      if (prepared.value.kind !== "ready") {
-        stop(prepared.value);
-        return;
-      }
-
-      const session = prepared.value.session;
-      printSoft(session.outcome);
-
-      const url = yield* serve({ appDir: appDir.value, port: config.port, api: session.api });
-      process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
-      return yield* Effect.never;
+      return yield* Match.valueTags(prepared.value, {
+        SessionReady: ({ session }) =>
+          Effect.gen(function* () {
+            printSoft(session.reports);
+            const url = yield* serve({ appDir: appDir.value, port: config.port, api: session.api });
+            process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
+            return yield* Effect.never;
+          }),
+        SessionNotStarted: ({ message }) => Effect.sync(() => stopMessage(message)),
+        SessionFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
+      });
     }).pipe(Effect.scoped),
 ).pipe(Command.withDescription("Serve the interactive walkthrough app"));
 
 /** The boundary echo is a `check` affordance for the author; `open` shows diagnostics. */
-const diagnosticsOnly = (outcome: CheckOutcome): CheckOutcome => ({
-  ...outcome,
-  reports: outcome.reports.map((report) => ({ ...report, ranges: [] })),
-});
+const diagnosticsOnly = (reports: readonly CheckReport[]): readonly CheckReport[] =>
+  reports.map((report) => ({ ...report, ranges: [] }));
 
-/** Prints why a soft command stops — a note, or the outcome that failed — and sets the exit code. */
-const stop = (
-  result: { kind: "note"; message: string } | { kind: "failed"; outcome: CheckOutcome },
-): void => {
-  if (result.kind === "note") process.stderr.write(`${result.message}\n`);
-  else process.stdout.write(formatText(diagnosticsOnly(result.outcome)));
+const stopReports = (reports: readonly CheckReport[]): void => {
+  process.stdout.write(formatText({ reports: diagnosticsOnly(reports) }));
+  process.exitCode = 1;
+};
+
+const stopMessage = (message: string): void => {
+  process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 };
 
 /** Soft commands: what did not resolve is printed here and rides on as error cards. */
-const printSoft = (outcome: CheckOutcome): void => {
-  const notes = diagnosticsOnly(outcome);
-  if (notes.reports.some((report) => report.diagnostics.length > 0)) {
-    process.stdout.write(formatText(notes));
+const printSoft = (reports: readonly CheckReport[]): void => {
+  const diagnostics = diagnosticsOnly(reports);
+  if (diagnostics.some((report) => report.diagnostics.length > 0)) {
+    process.stdout.write(formatText({ reports: diagnostics }));
   }
 };
 
@@ -175,18 +175,21 @@ const build = Command.make("build", { files: buildFile, lang: langFlag, out: out
       Effect.map(Option.some),
       Effect.catch((error) =>
         Effect.sync(() => {
-          stop({ kind: "note", message: buildErrorMessage(error) });
+          stopMessage(buildErrorMessage(error));
           return Option.none();
         }),
       ),
     );
     if (Option.isNone(result)) return;
-    if (result.value.kind !== "built") {
-      stop(result.value);
-      return;
-    }
-    printSoft(result.value.outcome);
-    process.stdout.write(`balade wrote ${result.value.file} (${size(result.value.bytes)})\n`);
+    return yield* Match.valueTags(result.value, {
+      Built: ({ reports, file, bytes }) =>
+        Effect.sync(() => {
+          printSoft(reports);
+          process.stdout.write(`balade wrote ${file} (${size(bytes)})\n`);
+        }),
+      BuildNotRun: ({ message }) => Effect.sync(() => stopMessage(message)),
+      BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
+    });
   }),
 ).pipe(Command.withDescription("Export one self-contained HTML file"));
 

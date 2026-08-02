@@ -77,6 +77,31 @@ errors. The only `node:path` use left in the resolver is the pure cross-platform
 repository-name parser, which must recognize Windows strings while running on a
 different host.
 
+## Core pipelines separate failures from report values
+
+`loadWalkthrough`, `resolveContext`, `runCheck`, `runBuild`, `prepareSession`
+and the four served API methods are named `Effect.fn` pipelines. They request
+filesystem, path, command and repository capabilities through services. The
+Markdoc parser, diff parser and document compiler remain ordinary pure
+functions called by those pipelines; wrapping them in `Effect` would add an
+execution model without adding a failure or dependency.
+
+A file read, git command, export write or state-store failure stays in the
+typed error channel until the boundary that can explain it. `check` is the one
+deliberate translation: it turns `LoadError` into a `CheckDiagnostic` because a
+complete report for every requested path is the command's product. An optional
+`gh` enrichment failure also remains a warning in a successful resolve; git
+still supplies the data needed to compile the walkthrough.
+
+`check` uses `_tag` outcomes (`CheckPassed` / `CheckFailed`) for its strict
+validation policy. Build and session preparation use their own `_tag` unions
+and carry reports directly: an error diagnostic may still be renderable, while
+a missing payload stops those commands. Terminal and HTTP reporting use
+exhaustive `Match.valueTags` mappings, so adding a result or error variant
+forces its reporting boundary to handle it. These tags never cross a JSON
+edge: `check --json` still emits only `ok` and `reports`, while the four `/api`
+response bodies keep their established shapes.
+
 ## Failures are tagged errors; absence is `Option`
 
 Process execution, discovery, path resolution, review-state storage, loading,

@@ -25,12 +25,45 @@ export interface CheckOptions {
   useGh?: boolean;
 }
 
-export interface CheckOutcome {
-  ok: boolean;
-  reports: CheckReport[];
+export interface CheckPassed {
+  readonly _tag: "CheckPassed";
+  readonly reports: readonly CheckReport[];
   /** Set when zero-argument discovery found nothing. */
-  note?: string;
+  readonly note?: string;
 }
+
+export interface CheckFailed {
+  readonly _tag: "CheckFailed";
+  readonly reports: readonly CheckReport[];
+  /** Set when discovery itself failed before a report could be built. */
+  readonly note?: string;
+}
+
+export type CheckOutcome = CheckPassed | CheckFailed;
+
+const checkPassed = (
+  reports: readonly CheckReport[],
+  /** Set when zero-argument discovery found nothing. */
+  note?: string,
+): CheckPassed => ({
+  _tag: "CheckPassed",
+  reports,
+  ...(note === undefined ? {} : { note }),
+});
+
+const checkFailed = (
+  reports: readonly CheckReport[],
+  /** Set when discovery itself failed before a report could be built. */
+  note?: string,
+): CheckFailed => ({
+  _tag: "CheckFailed",
+  reports,
+  ...(note === undefined ? {} : { note }),
+});
+
+/** Builds the outcome tag from report values; diagnostics never enter the Effect error channel. */
+export const outcomeFromReports = (reports: readonly CheckReport[]): CheckOutcome =>
+  reports.every((report) => report.ok) ? checkPassed(reports) : checkFailed(reports);
 
 export const runCheck = Effect.fn("runCheck")(function* (options: CheckOptions) {
   const pathService = yield* Path.Path;
@@ -44,28 +77,24 @@ export const runCheck = Effect.fn("runCheck")(function* (options: CheckOptions) 
   const explicit = options.paths ?? [];
   if (explicit.length > 0) {
     const reports = yield* Effect.forEach(explicit, one);
-    return { ok: reports.every((report) => report.ok), reports };
+    return outcomeFromReports(reports);
   }
 
   const found = yield* Effect.result(discoverWalkthroughs(options.cwd));
   if (Result.isFailure(found)) {
     return found.failure._tag === "NotARepository"
-      ? { ok: true, reports: [], note: "Not inside a git repository — nothing to check." }
-      : {
-          ok: false,
-          reports: [],
-          note: `Walkthrough discovery failed: ${discoveryErrorMessage(found.failure)}`,
-        };
+      ? checkPassed([], "Not inside a git repository — nothing to check.")
+      : checkFailed([], `Walkthrough discovery failed: ${discoveryErrorMessage(found.failure)}`);
   }
   const discovery = found.success;
   if (discovery.paths.length === 0) {
-    return { ok: true, reports: [], note: NO_WALKTHROUGH };
+    return checkPassed([], NO_WALKTHROUGH);
   }
   const root = discovery.repoRoot;
   const reports = yield* Effect.forEach(discovery.paths, (path) =>
     one(pathService.join(root, path)),
   );
-  return { ok: reports.every((report) => report.ok), reports };
+  return outcomeFromReports(reports);
 });
 
 /** The soft commands' report: `ok` asks only that a payload built; diagnostics ride along as error cards. */
@@ -80,25 +109,24 @@ export function softReport(loaded: LoadResult): CheckReport {
 
 export const checkOne = Effect.fn("checkOne")(function* (options: CheckFileOptions) {
   const { cwd, path } = options;
-  const loaded = yield* loadWalkthrough({
+  return yield* loadWalkthrough({
     cwd,
     path,
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   }).pipe(
     Effect.match({
-      onFailure: (error): LoadResult => ({
-        sourcePath: path,
-        payload: null,
+      onFailure: (error): CheckReport => ({
+        file: path,
+        ok: false,
         diagnostics: [loadErrorDiagnostic(error)],
         ranges: [],
       }),
-      onSuccess: (result) => result,
+      onSuccess: (loaded): CheckReport => ({
+        file: loaded.sourcePath,
+        ok: !loaded.diagnostics.some((diagnostic) => diagnostic.level === "error"),
+        diagnostics: loaded.diagnostics,
+        ranges: loaded.ranges,
+      }),
     }),
   );
-  return {
-    file: loaded.sourcePath,
-    ok: !loaded.diagnostics.some((diagnostic) => diagnostic.level === "error"),
-    diagnostics: loaded.diagnostics,
-    ranges: loaded.ranges,
-  };
 });
