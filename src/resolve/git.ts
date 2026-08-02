@@ -5,11 +5,11 @@
  */
 
 import { Schema } from "effect";
+import { basename, win32 } from "node:path";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../payload/types.js";
 import type { ResolveContext } from "../resolve/context.js";
 import { changedLines, splitDiff } from "./diff.js";
 import { gh, gitOut, gitToplevel } from "./exec.js";
-import { fileName } from "./paths.js";
 import { sha256 } from "./hash.js";
 import { langOf } from "./lang.js";
 
@@ -227,14 +227,17 @@ function findDefaultBranch(root: string): string {
   return "main";
 }
 
-/** `owner/name` from the origin remote, else the repository directory name. */
+/**
+ * `owner/name` from the origin remote, else the repository directory name.
+ * The fallback accepts both POSIX and Windows absolute paths.
+ */
 export function repoSlug(root: string): string {
   const url = gitOut(["remote", "get-url", "origin"], root)?.trim();
   if (url !== undefined && url !== "") {
     const match = /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/.exec(url);
     if (match?.[1] !== undefined) return match[1];
   }
-  return fileName(root);
+  return win32.isAbsolute(root) ? win32.basename(root) : basename(root);
 }
 
 function prState(state: string | undefined): "open" | "closed" | "merged" {
