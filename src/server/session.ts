@@ -8,11 +8,12 @@
  * stopped it.
  */
 
-import { realpathSync, watch, type FSWatcher } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve as resolvePath } from "node:path";
+import { watch, type FSWatcher } from "node:fs";
+import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
 import { discoverWalkthroughs, NO_WALKTHROUGH } from "../check/discover.js";
 import type { CheckOutcome } from "../check/run.js";
 import { gitOut } from "../resolve/exec.js";
+import { repoRelative } from "../resolve/paths.js";
 import { fileReviewStore } from "../state/store.js";
 import { createApi, type Api } from "./api.js";
 import { payloadCache, type PayloadCache } from "./cache.js";
@@ -68,7 +69,9 @@ function select(options: SessionOptions): Selected {
 
   const root = gitOut(["rev-parse", "--show-toplevel"], options.cwd)?.trim();
   if (root === undefined || root === "") return { kind: "note", message: NOT_A_REPO };
-  const paths = options.selection.paths.map((path) => toRepoRelative(root, options.cwd, path));
+  const paths = options.selection.paths.map((path) =>
+    repoRelative(root, isAbsolute(path) ? path : resolvePath(options.cwd, path)),
+  );
   return paths.length === 0
     ? { kind: "note", message: NO_WALKTHROUGH }
     : { kind: "ok", root, paths };
@@ -182,19 +185,4 @@ function watchWalkthroughs(options: {
   return () => {
     for (const watcher of watchers) watcher.close();
   };
-}
-
-/* `git rev-parse` answers the real path; a symlinked directory — /var on macOS,
-   for one — would otherwise turn the relative path into a climb out of the repo. */
-function toRepoRelative(root: string, cwd: string, path: string): string {
-  const absolute = isAbsolute(path) ? path : resolvePath(cwd, path);
-  return relative(real(root), real(absolute));
-}
-
-function real(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return path;
-  }
 }

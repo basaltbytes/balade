@@ -3,10 +3,11 @@
  * served mode calls this per request; `check` calls it per discovered file.
  */
 
-import { readFileSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve as resolvePath } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path";
 import type { CheckDiagnostic, Payload, RangeEcho } from "../payload/types.js";
 import { resolveContext } from "../resolve/git.js";
+import { repoRelative } from "../resolve/paths.js";
 import { compileDocument } from "./compile.js";
 import { parseDocument, type ValidDocument } from "./document.js";
 
@@ -30,21 +31,21 @@ export interface LoadResult {
 
 export function loadWalkthrough(options: LoadOptions): LoadResult {
   const absolute = isAbsolute(options.path) ? options.path : resolvePath(options.cwd, options.path);
-  const repoRelative = toRepoRelative(absolute, options.cwd);
+  const givenPath = toGivenPath(absolute, options.cwd);
 
   let source: string;
   try {
     source = readFileSync(absolute, "utf8");
   } catch {
     return {
-      sourcePath: repoRelative,
+      sourcePath: givenPath,
       payload: null,
       ranges: [],
       diagnostics: [
         {
           code: "file-unresolvable",
           level: "error",
-          file: repoRelative,
+          file: givenPath,
           message: "The walkthrough file does not exist.",
           hint: "Check the path, or run `balade check` with no argument to validate every discovered walkthrough.",
         },
@@ -52,10 +53,10 @@ export function loadWalkthrough(options: LoadOptions): LoadResult {
     };
   }
 
-  const doc = parseDocument(source, repoRelative);
+  const doc = parseDocument(source, givenPath);
   const { frontmatter } = doc;
   if (frontmatter === null) {
-    return { sourcePath: repoRelative, payload: null, diagnostics: doc.diagnostics, ranges: [] };
+    return { sourcePath: givenPath, payload: null, diagnostics: doc.diagnostics, ranges: [] };
   }
   const valid: ValidDocument = {
     ast: doc.ast,
@@ -69,16 +70,15 @@ export function loadWalkthrough(options: LoadOptions): LoadResult {
     cwd: dirname(absolute),
     pr: frontmatter.pr,
     commit: frontmatter.commit,
-    file: repoRelative,
+    file: givenPath,
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   });
   const diagnostics = [...doc.diagnostics, ...resolved.diagnostics];
   if (resolved.ctx === null) {
-    return { sourcePath: repoRelative, payload: null, diagnostics, ranges: [] };
+    return { sourcePath: givenPath, payload: null, diagnostics, ranges: [] };
   }
 
-  /* `git rev-parse` returns the real path; a symlinked temp dir would break the relative path. */
-  const sourcePath = relative(real(resolved.ctx.repoRoot), real(absolute)) || repoRelative;
+  const sourcePath = repoRelative(resolved.ctx.repoRoot, absolute) || givenPath;
   const compiled = compileDocument({
     doc: valid,
     ctx: resolved.ctx,
@@ -97,15 +97,8 @@ export function loadWalkthrough(options: LoadOptions): LoadResult {
   };
 }
 
-function toRepoRelative(absolute: string, cwd: string): string {
+/** The given path spelled relative to `cwd` where it fits beneath it, with forward slashes. */
+function toGivenPath(absolute: string, cwd: string): string {
   const rel = relative(cwd, absolute);
-  return rel === "" || rel.startsWith("..") ? absolute : rel;
-}
-
-function real(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return path;
-  }
+  return rel === "" || rel.startsWith("..") ? absolute : rel.replaceAll(sep, "/");
 }
