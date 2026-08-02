@@ -34,6 +34,20 @@ error-level findings fail the build, suggestions print but do not (the
 the installed TypeScript by gitHead, so the two packages move together — bump
 `typescript` and `@effect/tsgo` in the same change.
 
+## A PR target serves from `pull/<n>/head` when the branch is not checked out
+
+`open <pr-url>` (spec #26, #27) looks in the working tree first; when the
+walkthrough is not there, it fetches the PR's advertised ref and reads every
+source as a blob at that commit. Three consequences are accepted: there is no
+file watcher (content at a SHA is immutable — edits on the remote need a
+reopen); the payload cache and staleness anchor on the fetched commit instead
+of `HEAD`; and the fetch requires a GitHub origin — `pull/<n>/head` is a GitHub
+refspec, and a failed fetch stops with a note. Review state is unaffected:
+`.balade/` is keyed by walkthrough path, so marks made against a fetched ref
+reappear when the branch is eventually checked out. The locator is an Effect
+service (`src/pr/locate.ts`) with typed errors — the first piece of the
+Effect-throughout direction; the sync core it calls into is unchanged.
+
 ## Resolution shells out through `spawnSync`
 
 One resolve costs 2576 ms across 25 processes — fine for `check`, too slow to

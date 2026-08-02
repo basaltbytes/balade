@@ -13,12 +13,17 @@ No install needed; the package ships the app bundle.
 
 ```sh
 npx balade open   walkthroughs/pr-96-loan-refactor.md   # serve the review app on localhost
+npx balade open   https://github.com/acme/tools/pull/96 # serve a PR's walkthrough — no checkout needed
 npx balade build  walkthroughs/pr-96-loan-refactor.md   # write one self-contained HTML file
 npx balade check  walkthroughs/pr-96-loan-refactor.md   # validate; exit code is the contract
 ```
 
 - `open` with no file discovers every walkthrough in the repository and serves
   an index. `--lang en|fr` sets the chrome language, `--port` the port.
+- `open` also takes a pull request — the URL, or `#96`. When the branch is
+  checked out the walkthrough is served from the working tree; otherwise balade
+  fetches the PR's own `pull/96/head` ref and reads it from there. Reviewing
+  needs a clone of the repository, not a checkout of the branch.
 - `build` takes exactly one file and writes `<name>.html` beside it, or
   wherever `--out` says. The HTML carries the app and the resolved payload
   inline: no server, no network, no sibling assets.

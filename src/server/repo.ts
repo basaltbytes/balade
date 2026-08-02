@@ -48,6 +48,8 @@ export interface ServerRepo {
 export interface RepoOptions {
   /** Absolute repository root; every `sourcePath` is relative to it. */
   root: string;
+  /** Commit the walkthrough sources are read at; absent means the working tree. */
+  at?: string;
   /** Chrome language override (`--lang`). */
   lang?: "en" | "fr";
   /** `false` skips gh entirely. */
@@ -55,12 +57,16 @@ export interface RepoOptions {
 }
 
 export function serverRepo(options: RepoOptions): ServerRepo {
-  const { root } = options;
+  const { root, at } = options;
   const absolute = (sourcePath: string): string => join(root, sourcePath);
 
-  /** The file as it is on disk now, with its envelope proven. */
+  /** The walkthrough text as served: the working tree, or a blob at `at`. */
+  const readSource = (sourcePath: string): string | null =>
+    at === undefined ? read(absolute(sourcePath)) : gitOut(["show", `${at}:${sourcePath}`], root);
+
+  /** The source as it is served now, with its envelope proven. */
   const envelope = (sourcePath: string): { source: string; frontmatter: Frontmatter } | null => {
-    const source = read(absolute(sourcePath));
+    const source = readSource(sourcePath);
     if (source === null) return null;
     const block = frontmatterBlock(source);
     if (block === null) return null;
@@ -72,12 +78,12 @@ export function serverRepo(options: RepoOptions): ServerRepo {
     root,
     slug: repoSlug(root),
 
-    head: () => gitOut(["rev-parse", "HEAD"], root)?.trim() ?? "",
+    head: () => at ?? gitOut(["rev-parse", "HEAD"], root)?.trim() ?? "",
 
     pin: (sourcePath) => envelope(sourcePath)?.frontmatter.commit ?? null,
 
     distance: (pin) => {
-      const out = gitOut(["rev-list", "--count", `${pin}..HEAD`], root)?.trim();
+      const out = gitOut(["rev-list", "--count", `${pin}..${at ?? "HEAD"}`], root)?.trim();
       if (out === undefined) return null;
       const count = Number(out);
       return Number.isFinite(count) ? count : null;
@@ -90,18 +96,26 @@ export function serverRepo(options: RepoOptions): ServerRepo {
         title: found.frontmatter.title,
         pr: found.frontmatter.pr,
         meta: found.frontmatter.meta,
-        updatedAt: gitOut(["log", "-1", "--format=%cI", "--", sourcePath], root)?.trim() ?? "",
+        updatedAt:
+          gitOut(
+            ["log", "-1", "--format=%cI", ...(at === undefined ? [] : [at]), "--", sourcePath],
+            root,
+          )?.trim() ?? "",
         sections: countSections(found.source),
       };
     },
 
-    load: (sourcePath) =>
-      loadWalkthrough({
+    load: (sourcePath) => {
+      const source = at === undefined ? null : readSource(sourcePath);
+      return loadWalkthrough({
         cwd: root,
         path: absolute(sourcePath),
+        ...(source !== null ? { source } : {}),
+        ...(at !== undefined ? { at } : {}),
         ...(options.lang !== undefined ? { lang: options.lang } : {}),
         ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-      }),
+      });
+    },
   };
 }
 

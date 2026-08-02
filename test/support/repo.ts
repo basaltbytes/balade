@@ -233,3 +233,28 @@ export function createFixtureRepo(): FixtureRepo {
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }
+
+export interface FixtureClone {
+  dir: string;
+  cleanup(): void;
+}
+
+/** Advertises a commit as `pull/<n>/head`, the ref GitHub publishes for every PR. */
+export function advertisePull(origin: FixtureRepo, pull: number, commit: string): void {
+  run(origin.dir, ["update-ref", `refs/pull/${pull}/head`, commit]);
+}
+
+/**
+ * The reviewer holding a PR URL: a clone of the fixture repository sitting on
+ * `main`, the PR branch never checked out. The fixture plays origin and
+ * advertises its current HEAD as `pull/<n>/head`.
+ */
+export function cloneOnMain(origin: FixtureRepo, pull: number): FixtureClone {
+  advertisePull(origin, pull, "HEAD");
+  const dir = mkdtempSync(join(tmpdir(), "balade-clone-"));
+  run(dir, ["clone", "--quiet", "--branch", "main", origin.dir, "."]);
+  return {
+    dir,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}

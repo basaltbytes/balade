@@ -15,6 +15,10 @@ export interface LoadOptions {
   cwd: string;
   /** Path of the walkthrough file, absolute or relative to `cwd`. */
   path: string;
+  /** Walkthrough text already read — ref mode, where the file may not be in the working tree. */
+  source?: string;
+  /** Fetched commit the walkthrough is served at (ref mode); threads to resolution. */
+  at?: string;
   /** Chrome language override (`--lang`). */
   lang?: "en" | "fr";
   /** `false` skips gh entirely. */
@@ -35,7 +39,7 @@ export function loadWalkthrough(options: LoadOptions): LoadResult {
 
   let source: string;
   try {
-    source = readFileSync(absolute, "utf8");
+    source = options.source ?? readFileSync(absolute, "utf8");
   } catch {
     return {
       sourcePath: givenPath,
@@ -66,11 +70,14 @@ export function loadWalkthrough(options: LoadOptions): LoadResult {
     preset: doc.preset,
   };
 
+  /* Ref mode: the walkthrough's directory may not exist on disk, so git runs
+     from `cwd` — the repository root the server resolved. */
   const resolved = resolveContext({
-    cwd: dirname(absolute),
+    cwd: options.source === undefined ? dirname(absolute) : options.cwd,
     pr: frontmatter.pr,
     commit: frontmatter.commit,
     file: givenPath,
+    ...(options.at !== undefined ? { at: options.at } : {}),
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   });
   const diagnostics = [...doc.diagnostics, ...resolved.diagnostics];

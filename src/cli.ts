@@ -3,11 +3,13 @@
     check, build and server core, and print. */
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { runBuild } from "./build/run.js";
 import { formatJson, formatText } from "./check/report.js";
 import { runCheck, type CheckOutcome } from "./check/run.js";
+import { PrLocator } from "./pr/locate.js";
+import { parseOpenTarget, type PrTarget } from "./pr/target.js";
 import { APP_BUNDLE_MISSING, findAppBundle, serve } from "./server/serve.js";
 import { prepareSession, type Selection } from "./server/session.js";
 
@@ -54,35 +56,66 @@ const check = Command.make("check", { files, json: jsonFlag }, (config) =>
   ),
 );
 
-const open = Command.make("open", { files, lang: langFlag, port: portFlag }, (config) =>
-  Effect.gen(function* () {
-    const appDir = findAppBundle();
-    if (appDir === null) {
-      process.stderr.write(`${APP_BUNDLE_MISSING}\n`);
-      process.exitCode = 1;
-      return;
-    }
+const openTargets = Argument.variadic(
+  Argument.string("target").pipe(
+    Argument.withDescription(
+      "Walkthrough file or pull request (URL, #number); omit to use every discovered walkthrough",
+    ),
+  ),
+);
 
-    const selection: Selection =
-      config.files.length > 0 ? { kind: "files", paths: config.files } : { kind: "discovered" };
-    const prepared = prepareSession({
-      cwd: process.cwd(),
-      selection,
-      ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-    });
-    if (prepared.kind !== "ready") {
-      stop(prepared);
-      return;
-    }
+/** A PR target answers a located selection, or prints why it cannot and yields `null`. */
+const locateSelection = Effect.fn("locateSelection")(function* (target: PrTarget) {
+  const locator = yield* PrLocator;
+  return yield* locator.locate(process.cwd(), target).pipe(
+    Effect.map((located): Selection => ({ kind: "located", ...located })),
+    Effect.catch((error) =>
+      Effect.sync((): Selection | null => {
+        stop({ kind: "note", message: error.note });
+        return null;
+      }),
+    ),
+  );
+});
 
-    const session = prepared.session;
-    yield* Effect.addFinalizer(() => Effect.sync(() => session.close()));
-    printSoft(session.outcome);
+const open = Command.make(
+  "open",
+  { files: openTargets, lang: langFlag, port: portFlag },
+  (config) =>
+    Effect.gen(function* () {
+      const appDir = findAppBundle();
+      if (appDir === null) {
+        process.stderr.write(`${APP_BUNDLE_MISSING}\n`);
+        process.exitCode = 1;
+        return;
+      }
 
-    const url = yield* serve({ appDir, port: config.port, api: session.api });
-    process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
-    return yield* Effect.never;
-  }).pipe(Effect.scoped),
+      const target = parseOpenTarget(config.files);
+      if (target.kind === "invalid") {
+        stop({ kind: "note", message: target.message });
+        return;
+      }
+      const selection = target.kind === "pr" ? yield* locateSelection(target.pr) : target;
+      if (selection === null) return;
+
+      const prepared = prepareSession({
+        cwd: process.cwd(),
+        selection,
+        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+      });
+      if (prepared.kind !== "ready") {
+        stop(prepared);
+        return;
+      }
+
+      const session = prepared.session;
+      yield* Effect.addFinalizer(() => Effect.sync(() => session.close()));
+      printSoft(session.outcome);
+
+      const url = yield* serve({ appDir, port: config.port, api: session.api });
+      process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
+      return yield* Effect.never;
+    }).pipe(Effect.scoped),
 ).pipe(Command.withDescription("Serve the interactive walkthrough app"));
 
 /** The boundary echo is a `check` affordance for the author; `open` shows diagnostics. */
@@ -137,5 +170,7 @@ const balade = Command.make("balade").pipe(
 );
 
 NodeRuntime.runMain(
-  Command.run(balade, { version: VERSION }).pipe(Effect.provide(NodeServices.layer)),
+  Command.run(balade, { version: VERSION }).pipe(
+    Effect.provide(Layer.mergeAll(NodeServices.layer, PrLocator.layer)),
+  ),
 );

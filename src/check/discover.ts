@@ -36,14 +36,47 @@ export function discoverWalkthroughs(cwd: string): Discovery {
   return { repoRoot: root, paths };
 }
 
-/** Reads only the first 4096 bytes — enough for any frontmatter block. */
+/**
+ * The walkthroughs a commit holds: the same convention, read from the object
+ * store — served ref mode looks here when the branch is not checked out.
+ */
+export function discoverWalkthroughsAt(root: string, commit: string): string[] {
+  const listed = (gitOut(["ls-tree", "-r", "--name-only", "-z", commit], root) ?? "")
+    .split("\0")
+    .filter((path) => path !== "");
+  return listed
+    .filter((path) => WALKTHROUGH_PATH.test(path))
+    .filter((path) => {
+      const source = gitOut(["show", `${commit}:${path}`], root);
+      return source !== null && carriesWalkthroughKey(source);
+    })
+    .sort();
+}
+
+/**
+ * The PR number a walkthrough source names, or `null` when the envelope does
+ * not say. A scalar read, not a parse: a file whose other keys are broken still
+ * names its PR here, and compilation reports what is actually wrong.
+ */
+export function walkthroughPr(source: string): number | null {
+  const block = frontmatterBlock(source.slice(0, 4096));
+  if (block === null) return null;
+  const match = /^pr\s*:\s*(\d+)\s*$/m.exec(block);
+  return match?.[1] === undefined ? null : Number(match[1]);
+}
+
 function hasWalkthroughKey(absolute: string): boolean {
-  let head: string;
+  let source: string;
   try {
-    head = readFileSync(absolute, "utf8").slice(0, 4096);
+    source = readFileSync(absolute, "utf8");
   } catch {
     return false;
   }
-  const block = frontmatterBlock(head);
-  return block !== null && /^walkthrough\s*:/m.test(block);
+  return carriesWalkthroughKey(source);
 }
+
+/** Looks only at the first 4096 bytes — enough for any frontmatter block. */
+const carriesWalkthroughKey = (source: string): boolean => {
+  const block = frontmatterBlock(source.slice(0, 4096));
+  return block !== null && /^walkthrough\s*:/m.test(block);
+};

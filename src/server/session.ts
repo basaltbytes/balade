@@ -19,8 +19,15 @@ import { createApi, type Api } from "./api.js";
 import { payloadCache, type PayloadCache } from "./cache.js";
 import { serverRepo, type ServerRepo } from "./repo.js";
 
-/** Where the served set comes from: the command line, or discovery. */
-export type Selection = { kind: "files"; paths: readonly string[] } | { kind: "discovered" };
+/**
+ * Where the served set comes from: the command line, discovery, or the PR
+ * locator. A located selection already answers repo-relative paths; `at` is the
+ * fetched commit the sources are read from when the branch is not checked out.
+ */
+export type Selection =
+  | { kind: "files"; paths: readonly string[] }
+  | { kind: "discovered" }
+  | { kind: "located"; root: string; paths: readonly string[]; at?: string };
 
 export interface SessionOptions {
   cwd: string;
@@ -52,11 +59,16 @@ export type Prepared =
   | { kind: "failed"; outcome: CheckOutcome };
 
 type Selected =
-  | { kind: "ok"; root: string; paths: readonly string[] }
+  | { kind: "ok"; root: string; paths: readonly string[]; at?: string }
   | { kind: "note"; message: string };
 
-/** Named files are made repo-relative; discovery already answers in that shape. */
+/** Named files are made repo-relative; discovery and the locator already answer in that shape. */
 function select(options: SessionOptions): Selected {
+  if (options.selection.kind === "located") {
+    const { root, paths, at } = options.selection;
+    return { kind: "ok", root, paths, ...(at === undefined ? {} : { at }) };
+  }
+
   if (options.selection.kind === "discovered") {
     const found = discoverWalkthroughs(options.cwd);
     if (found.repoRoot === null) return { kind: "note", message: NOT_A_REPO };
@@ -79,22 +91,23 @@ export function prepareSession(options: SessionOptions): Prepared {
 
   const selected = select(options);
   if (selected.kind === "note") return selected;
-  const { root, paths } = selected;
+  const { root, paths, at } = selected;
 
   const repo: ServerRepo = serverRepo({
     root,
+    ...(at === undefined ? {} : { at }),
     ...(options.lang !== undefined ? { lang: options.lang } : {}),
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   });
   const payloads = payloadCache(repo);
 
-  /* Named files compile before the port opens, so a dead repository, PR or path
-     stops the command instead of greeting the reviewer with a blank app.
-     Discovery serves an index, which needs frontmatter only. */
+  /* Named files and located PRs compile before the port opens, so a dead
+     repository, PR or path stops the command instead of greeting the reviewer
+     with a blank app. Discovery serves an index, which needs frontmatter only. */
   const outcome =
-    options.selection.kind === "files"
-      ? compileEagerly(payloads, paths)
-      : { ok: true, reports: [] };
+    options.selection.kind === "discovered"
+      ? { ok: true, reports: [] }
+      : compileEagerly(payloads, paths);
   if (!outcome.ok) return { kind: "failed", outcome };
 
   const api = createApi({
@@ -104,13 +117,15 @@ export function prepareSession(options: SessionOptions): Prepared {
     repo,
   });
 
+  /* Content at a fetched commit is immutable: ref mode has nothing to watch. */
   return {
     kind: "ready",
     session: {
       api,
       paths,
       outcome,
-      close: watchWalkthroughs({ root, paths, cache: payloads, warn }),
+      close:
+        at === undefined ? watchWalkthroughs({ root, paths, cache: payloads, warn }) : () => {},
     },
   };
 }

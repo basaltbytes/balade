@@ -21,6 +21,8 @@ export interface ResolveOptions {
   commit: string;
   /** Repo-relative path of the walkthrough file, for diagnostics. */
   file: string;
+  /** Fetched commit served without a checkout; tried as the head before local fallbacks. */
+  at?: string;
   /** `false` skips gh entirely — CI without auth, and the test fixtures. */
   useGh?: boolean;
 }
@@ -84,7 +86,7 @@ export function resolveContext(options: ResolveOptions): ResolveResult {
   if (requested !== null) diagnostics.push(...requested.diagnostics);
   const pull = requested?.pull ?? null;
 
-  const head = firstSha(root, [pull?.headRefOid, pull?.headRefName, "HEAD"]) ?? pin;
+  const head = firstSha(root, [pull?.headRefOid, options.at, pull?.headRefName, "HEAD"]) ?? pin;
   const base =
     firstSha(root, [pull?.baseRefOid]) ??
     mergeBase(root, defaultBranch(), pin) ??
