@@ -3,7 +3,7 @@
  * platform, computed between OS-final absolute paths.
  */
 
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, FileSystem, Option, Path, Schema } from "effect";
 
 export class PathResolutionFailed extends Schema.TaggedErrorClass<PathResolutionFailed>()(
   "PathResolutionFailed",
@@ -21,7 +21,19 @@ export const repoRelative = Effect.fn("repoRelative")(function* (root: string, a
   const path = yield* Path.Path;
   const finalRoot = yield* real(fs, root);
   const finalAbsolute = yield* real(fs, absolute);
-  return path.relative(finalRoot, finalAbsolute).replaceAll(path.sep, "/");
+  const relative = path.relative(finalRoot, finalAbsolute);
+  if (!escapesRoot(path, relative)) return gitPath(path, relative);
+
+  const rootInfo = yield* stat(fs, finalRoot);
+  const segments: string[] = [];
+  let current = finalAbsolute;
+  while (true) {
+    if (sameFile(rootInfo, yield* stat(fs, current))) return segments.reverse().join("/");
+    const parent = path.dirname(current);
+    if (parent === current) return gitPath(path, relative);
+    segments.push(path.basename(current));
+    current = parent;
+  }
 });
 
 /** The last segment of a git-spelled path. */
@@ -32,3 +44,17 @@ export function fileName(path: string): string {
 /** The platform adapter returns the operating system's final path spelling. */
 const real = (fs: FileSystem.FileSystem, path: string) =>
   fs.realPath(path).pipe(Effect.mapError((cause) => new PathResolutionFailed({ path, cause })));
+
+const stat = (fs: FileSystem.FileSystem, path: string) =>
+  fs.stat(path).pipe(Effect.mapError((cause) => new PathResolutionFailed({ path, cause })));
+
+const escapesRoot = (path: Path.Path, relative: string) =>
+  relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+
+const gitPath = (path: Path.Path, value: string) => value.replaceAll(path.sep, "/");
+
+const sameFile = (left: FileSystem.File.Info, right: FileSystem.File.Info) =>
+  left.dev === right.dev &&
+  Option.isSome(left.ino) &&
+  Option.isSome(right.ino) &&
+  left.ino.value === right.ino.value;
