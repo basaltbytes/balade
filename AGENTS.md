@@ -32,6 +32,11 @@ When working on a feature/bugfix/refactoring you need to do the following before
 - Tests go through real seams (fixture git repos, injected stores); module
   mocking is forbidden.
 
+## Public state of the library: pre-alpha
+- The library is not published anywhere, breaking changes are the norm, API is not finalized.
+- Do not preserve backward compatibility. Remove obsolete paths instead of
+adding compatibility layers, fallbacks or migrations.
+
 ## Commands
 
 - `pnpm typecheck` — both projects (CLI + tests, then the app)
