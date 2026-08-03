@@ -62,6 +62,12 @@ export function parsePo(source: string): Map<string, string> {
 function unquote(value: string): string {
   const trimmed = value.trim();
   if (!trimmed.startsWith('"')) return trimmed;
+  try {
+    const decoded: unknown = JSON.parse(trimmed);
+    if (typeof decoded === "string") return decoded;
+  } catch {
+    /* Preserve the parser's permissive fallback for malformed catalog lines. */
+  }
   const end = trimmed.lastIndexOf('"');
   return end <= 0 ? "" : trimmed.slice(1, end);
 }

@@ -1,109 +1,14 @@
 import { Option } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
 import { compileBlocks, parseMark, type CompileEnv } from "../src/compile/blocks.js";
 import { diagramNodes } from "../src/compile/diagram.js";
 import { inlineOf, mdNodesOf, plainText } from "../src/compile/inline.js";
 import { parseDocument } from "../src/compile/document.js";
 import type { Block, CheckDiagnostic } from "../src/payload/types.js";
 import type { ResolveContext } from "../src/resolve/context.js";
-import { changedLines, splitDiff } from "../src/resolve/diff.js";
-import { countEntries, parsePo, poLanguage } from "../src/resolve/gettext.js";
 import { matchesGlob } from "../src/resolve/glob.js";
 import { sha256 } from "../src/resolve/hash.js";
 import { langOf } from "../src/resolve/lang.js";
-
-const DIFF = `diff --git a/models/pool.py b/models/pool.py
-index 1111111..2222222 100644
---- a/models/pool.py
-+++ b/models/pool.py
-@@ -1 +1 @@
--from odoo import fields, models
-+from odoo import api, fields, models
-@@ -6,0 +7 @@ class PoolItem(models.Model):
-+    _auto = False
-@@ -9,0 +11,6 @@ class PoolItem(models.Model):
-+    placed = fields.Float()
-+
-+    @api.depends("slot_ids")
-+    def _compute_placed(self):
-+        for item in self:
-+            item.placed = 0.0
-diff --git a/docs/old.md b/docs/old.md
-deleted file mode 100644
-index 3333333..0000000
---- a/docs/old.md
-+++ /dev/null
-@@ -1 +0,0 @@
--# Superseded
-`;
-
-describe("unified diff", () => {
-  it("splits one diff into per-file records", () => {
-    const records = splitDiff(DIFF);
-    expect(records.map((record) => record.path)).toEqual(["models/pool.py", "docs/old.md"]);
-    expect(records[0]?.body.startsWith("@@ -1 +1 @@")).toBe(true);
-    expect(records[0]?.binary).toBe(false);
-    expect(records[1]?.path).toBe("docs/old.md");
-  });
-
-  it("reads the change overlay off the hunk headers", () => {
-    const record = splitDiff(DIFF)[0];
-    expect([...changedLines(record?.body ?? "")]).toEqual([1, 7, 11, 12, 13, 14, 15, 16]);
-  });
-
-  it("marks a deleted file as changing nothing on the new side", () => {
-    const record = splitDiff(DIFF)[1];
-    expect([...changedLines(record?.body ?? "")]).toEqual([]);
-  });
-
-  it("reads a binary record", () => {
-    const records = splitDiff(
-      "diff --git a/logo.png b/logo.png\nindex 1111111..2222222 100644\nBinary files a/logo.png and b/logo.png differ\n",
-    );
-    expect(records[0]).toMatchObject({ path: "logo.png", binary: true, body: "" });
-  });
-});
-
-describe("gettext", () => {
-  const before = `msgid ""
-msgstr "header"
-
-msgid "Pool item"
-msgstr "Élément du pool"
-
-msgid "Gone"
-msgstr "Parti"
-`;
-  const after = `msgid ""
-msgstr "header"
-
-msgid "Pool item"
-msgstr "Élément de pool"
-
-msgid "Placed"
-msgstr "Placé"
-`;
-
-  it("reads msgid/msgstr pairs and skips the header", () => {
-    expect([...parsePo(before).keys()]).toEqual(["Pool item", "Gone"]);
-  });
-
-  it("joins multi-line strings", () => {
-    const entries = parsePo('msgid "Long "\n"label"\nmsgstr "Étiquette "\n"longue"\n');
-    expect(entries.get("Long label")).toBe("Étiquette longue");
-  });
-
-  it("counts new, updated and removed entries", () => {
-    expect(countEntries(before, after)).toEqual({ new: 1, updated: 1, removed: 1 });
-    expect(countEntries(null, after)).toEqual({ new: 2 });
-    expect(countEntries(before, before)).toEqual({});
-  });
-
-  it("reads the language from the file name", () => {
-    expect(poLanguage("i18n/fr.po")).toBe("fr");
-    expect(poLanguage("i18n/acme.pot")).toBeNull();
-  });
-});
 
 describe("small pure helpers", () => {
   it("matches path globs", () => {

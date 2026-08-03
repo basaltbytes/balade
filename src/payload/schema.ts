@@ -224,12 +224,12 @@ export const DiagramBlock = Schema.Struct({
   edges: Schema.Array(DiagramEdge),
 });
 
-/** A renderer may not know the namespaced kind, but must preserve its data. */
+/** A renderer may not know the namespaced kind, but must preserve its JSON data. */
 export const PresetBlock = Schema.StructWithRest(
   Schema.Struct({
     b: Schema.TemplateLiteral([Schema.String, "/", Schema.String]),
   }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
+  [Schema.Record(Schema.String, Schema.Json)],
 );
 
 /** Core block variants are discriminated by their literal `b` field. */
