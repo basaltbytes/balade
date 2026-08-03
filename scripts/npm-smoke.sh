@@ -30,6 +30,7 @@ BIN="$PROJECT/node_modules/.bin/balade"
 
 "$BIN" --version | grep -q "$PACKAGE_VERSION"
 "$BIN" --help | grep -qi "walkthrough"
+"$BIN" generate --help | grep -qi "provider"
 
 # The tarball must carry both app bundles; open and build depend on them.
 test -f "$PROJECT/node_modules/balade/dist/app/index.html"

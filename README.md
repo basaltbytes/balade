@@ -13,12 +13,16 @@ diffs, blobs and PR metadata are read from the repository at run time.
 No install needed; the package ships the app bundle.
 
 ```sh
+npx balade generate https://github.com/acme/tools/pull/96 # draft, check and save a walkthrough
 npx balade open   walkthroughs/pr-96-loan-refactor.md   # serve the review app on localhost
 npx balade open   https://github.com/acme/tools/pull/96 # serve a PR's walkthrough — no checkout needed
 npx balade build  walkthroughs/pr-96-loan-refactor.md   # write one self-contained HTML file
 npx balade check  walkthroughs/pr-96-loan-refactor.md   # validate; exit code is the contract
 ```
 
+- `generate` takes a pull-request URL, `#96`, or `96`. It reads the PR at an
+  exact commit, asks a Pi-backed coding agent to draft the walkthrough, then
+  runs the same checks used in CI. See [Generating a walkthrough](#generating-a-walkthrough).
 - `open` with no file discovers every walkthrough in the repository and serves
   an index. `--lang en|fr` sets the chrome language, `--port` the port.
 - `open` also takes a pull request — the URL, or `#96`. When the branch is
@@ -33,6 +37,53 @@ npx balade check  walkthroughs/pr-96-loan-refactor.md   # validate; exit code is
 
 Discovery is git-tracked files matching `**/walkthroughs/*.md` whose
 frontmatter holds the `walkthrough` key.
+
+`balade` requires Node 22.22.2+, 24.15.0+, or 26+.
+
+## Generating a walkthrough
+
+Run generation inside a clone of the repository:
+
+```sh
+npx balade generate '#96'
+```
+
+If the PR branch is checked out, balade uses its current head. Otherwise it
+fetches the exact object advertised by `pull/96/head` without changing your
+checkout or `FETCH_HEAD`. The model can inspect the diff and read numbered
+source lines at that exact commit; it can't run shell commands or write files.
+
+On the first run, the provider picker offers Anthropic subscription login,
+OpenAI Codex subscription login, and API-key methods through Pi. Existing Pi
+credentials in `~/.pi/agent/auth.json` work without another login. Balade hands
+login prompts to Pi and never reads or prints the credential file.
+
+Anthropic has a billing rule you should know before choosing it: subscription
+login in third-party tools bills per token as **extra usage** and doesn't draw
+on Claude plan limits. Balade prints this warning before confirmation.
+
+Choose and confirm a provider/model in the picker. Automation can supply both
+ids and skip the prompts:
+
+```sh
+npx balade generate 96 --provider openai-codex --model gpt-5.4
+npx balade generate 96 --dir docs/walkthroughs
+```
+
+The default output is `walkthroughs/pr-96-<title>.md`. Balade stamps the PR
+number and commit itself, reports cumulative token usage and cost after every
+model turn, and won't overwrite a file with the same name. A failed check goes
+back to the model for at most two repair turns. `--dir` is repository-relative;
+paths through symlinks outside the repository and paths inside `.git` are
+rejected.
+
+Generation never stages, commits, pushes, or opens a pull request. If the draft
+still fails validation, balade keeps the file and exits with status 1; edit the
+reported lines, then check it again:
+
+```sh
+npx balade check walkthroughs/pr-96-loan-refactor.md
+```
 
 ## The walkthrough file
 

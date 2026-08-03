@@ -282,6 +282,47 @@ anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
 Codex-SDK-plus-API-key pair of adapters instead.
 
+The session runs in memory with a resource loader that exposes no Pi extensions,
+skills, prompts, themes or repository context files. Its allowlist contains only
+five balade-owned tools: list PR changes, list pinned paths, read a pinned diff,
+read numbered lines from a pinned blob, and submit the structured draft. The
+agent never receives Pi's shell or mutation tools. `submit_walkthrough` ends the
+agent loop; the adapter stamps the schema version, PR and commit after the model
+returns.
+
+A failed check gets at most two repair turns. Repairs use a new
+`AgentSession.prompt()` in the same in-memory session, rather than Pi's queued
+`followUp()`: a terminating tool leaves a tool-result message last, and
+`agent.continue()` resumes that tool turn before it can drain the queued
+follow-up. A fresh prompt puts the diagnostics and range echoes in the next
+request without paying for an unprompted continuation. The first file write is
+exclusive, so generation never overwrites an existing walkthrough; later
+repairs replace only the draft created by that run. The last invalid draft stays
+on disk after the repair budget is exhausted.
+
+Generation and compilation share one lightweight PR snapshot rather than
+probing GitHub twice. A remote pull head is resolved with `ls-remote`, then the
+advertised object id is fetched with `--no-write-fetch-head`; this pins the
+model and checker to one object without racing other Git activity through
+`FETCH_HEAD`. Changed-file summaries stay lightweight until compilation asks
+for blob content.
+
+Output paths are repository-relative, exclude `.git`, and are checked through
+their nearest existing canonical ancestor before any directory is created.
+The first draft uses an exclusive create. Each repair is written to a temporary
+file beside the draft and atomically renamed, so a failed write cannot truncate
+the retained version. If a model or write fails during repair, the typed error
+keeps both the file path and its last check report for manual recovery.
+
+One semaphore owns each Pi session's turns, and the initial turn runs while the
+scoped session is acquired instead of being exposed as a replayable effect.
+Usage is decoded and reported after every completed provider turn, including
+turns that end in provider or submission errors. Cancellation is distinct from
+authentication failure. Cleanup skips abort for an idle session; an active
+session abort is bounded and failures are logged without provider or credential
+details. Model prose is not streamed to the terminal, and every remaining
+dynamic terminal string has control sequences removed.
+
 ## Parser properties follow schema and grammar edges
 
 The parser suite now exercises the five edges that warranted properties:

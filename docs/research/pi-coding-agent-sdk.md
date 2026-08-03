@@ -3,7 +3,7 @@
 Verification of the factual claims in the issue proposing draft-walkthrough
 generation via the Pi coding-agent SDK.
 
-Sources checked on 2026-08-02, against primary material only:
+Sources first checked on 2026-08-02, against primary material only:
 
 - Source: `github.com/earendil-works/pi` at commit `4c01c709380621c5ff2719162cd7a7973dcb2799`
   (default branch `main`). The issue's link `github.com/badlogic/pi-mono` is a
@@ -11,6 +11,14 @@ Sources checked on 2026-08-02, against primary material only:
 - npm: `@earendil-works/pi-*` packages, all at 0.83.0 (published 2026-07-29).
   The former `@mariozechner/pi-coding-agent` is deprecated at 0.73.1 with the
   message "please use @earendil-works/pi-coding-agent instead going forward".
+
+Rechecked on 2026-08-03 against current `main` at
+`c6eb6281a806a9c5d7ec41d2850692f7f7ebcb59`. The package manifests still say
+0.83.0 and Node >=22.19.0, and the SDK/auth/tool contracts used below remain the
+same. Current source adds a 15-second bound to the catalog refresh that follows
+`ModelRuntime.login()`; the published 0.83.0 package refreshes after login
+without that new timeout. Balade stays on the exact published package and calls
+`getAvailable()` again after login, so the picker sees the refreshed model set.
 
 File paths below are relative to the repo root at that commit.
 
@@ -192,8 +200,9 @@ active (repo pushed 2026-08-02; 82k+ GitHub stars).
 
 ## 5. Practical integration notes (facts)
 
-- **Node**: `engines.node >= 22.19.0` on every published package. balade's
-  `package.json` currently declares `engines.node >= 20`.
+- **Node**: Pi declares `engines.node >= 22.19.0`. Its installed dependency
+  `ini@7` is stricter, so balade advertises the effective supported ranges:
+  Node `^22.22.2 || ^24.15.0 || >=26.0.0`.
 - **Module format**: ESM-only (`"type": "module"`, `exports` maps expose only
   `import`/`types` conditions — no CJS). Bun is also supported (dedicated
   `bun-oauth` entry, `src/bun/`).

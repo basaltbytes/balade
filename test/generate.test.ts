@@ -1,0 +1,545 @@
+/** Pi-backed generation through Pi's faux provider and real fixture repositories. */
+
+import * as ai from "@earendil-works/pi-ai";
+import * as coding from "@earendil-works/pi-coding-agent";
+import { Effect, Fiber, Layer, Redacted, Schema, Terminal } from "effect";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "@effect/vitest";
+import {
+  AuthorModel as AuthorModelSchema,
+  WalkthroughAuthor,
+  type AuthorModel,
+  type AuthorProgress,
+} from "../src/generate/author.js";
+import { sanitizeTerminalText } from "../src/generate/command.js";
+import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
+import {
+  renderDraft,
+  prepareGeneration,
+  runGeneration,
+  slugifyTitle,
+  type PreparedGeneration,
+} from "../src/generate/run.js";
+import { matchingModels, requireScriptedModel } from "../src/generate/select.js";
+import { shellLayer } from "../src/live.js";
+import { PrLocator } from "../src/pr/locate.js";
+import { cloneOnMain, createFixtureRepo } from "./support/repo.js";
+
+const PINNED_LINE = "from odoo import api, fields, models";
+const CHANGED_FILE = {
+  path: "models/planning_pool_item.py",
+  status: "M" as const,
+  additions: 6,
+  deletions: 1,
+};
+
+async function piHarness(registerFaux = true) {
+  const credentials = new ai.InMemoryCredentialStore();
+  const modelRuntime = await coding.ModelRuntime.create({
+    credentials,
+    modelsPath: null,
+    allowModelNetwork: false,
+  });
+  const faux = ai.fauxProvider();
+  if (registerFaux) {
+    modelRuntime.registerNativeProvider(faux.provider);
+    await modelRuntime.refresh({ allowNetwork: false });
+  }
+  const layer = piWalkthroughAuthorLayer({
+    load: async () => ({ coding, ai, modelRuntime }),
+  }).pipe(Layer.provideMerge(shellLayer));
+  return { credentials, faux, layer, modelRuntime };
+}
+
+const fixture = Effect.acquireRelease(Effect.sync(createFixtureRepo), (repo) =>
+  Effect.sync(() => repo.cleanup()),
+);
+
+function authorRequest(
+  root: string,
+  pin: string,
+  model: AuthorModel,
+  progress: (event: AuthorProgress) => void = () => {},
+) {
+  return {
+    root,
+    pin,
+    base: `${pin}^`,
+    pull: {
+      number: 42,
+      url: "https://github.com/acme/planning/pull/42",
+      author: "reviewer",
+      base: "main",
+      head: "feature/pool",
+      commits: 1,
+    },
+    files: [CHANGED_FILE],
+    model,
+    progress,
+  };
+}
+
+function prepared(root: string, pin: string): PreparedGeneration {
+  return {
+    root,
+    pin,
+    base: `${pin}^`,
+    pull: {
+      number: 42,
+      url: "https://github.com/acme/planning/pull/42",
+      author: "reviewer",
+      base: "main",
+      head: "feature/pool",
+      commits: 1,
+    },
+    files: [CHANGED_FILE],
+    notices: [],
+  };
+}
+
+function submitted(body: string, title = "Live planning pool") {
+  return ai.fauxAssistantMessage(
+    ai.fauxToolCall("submit_walkthrough", {
+      title,
+      meta: { lang: "en", module: "acme_planning" },
+      body,
+    }),
+    { stopReason: "toolUse" },
+  );
+}
+
+const validBody = `{% section id="pool-model" title="Pool model" %}
+
+The pool model computes live placement from slots.
+
+{% code file="models/planning_pool_item.py" from=1 to=8 expect="${PINNED_LINE}" /%}
+
+{% /section %}`;
+
+const invalidBody = `{% section id="pool-model" title="Pool model" %}
+
+{% code file="models/planning_pool_item.py" from=999 to=1000 expect="not there" /%}
+
+{% /section %}`;
+
+const fauxModel = Effect.fn("test.fauxModel")(function* () {
+  const author = yield* WalkthroughAuthor;
+  const model = (yield* author.availableModels).find(
+    (candidate) => candidate.providerId === "faux",
+  );
+  if (model === undefined) return yield* Effect.die("Faux model was not available");
+  return model;
+});
+
+describe("the Pi adapter", () => {
+  it.effect("reads source at the pin and receives a structured submission", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      repo.write("models/planning_pool_item.py", "working tree content only\n");
+      let secondRequest = "";
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          ai.fauxToolCall("read_source", {
+            path: "models/planning_pool_item.py",
+            from: 1,
+            to: 3,
+          }),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          secondRequest = JSON.stringify({ messages: context.messages, tools: context.tools });
+          return submitted(validBody);
+        },
+      ]);
+
+      const turn = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        const session = yield* author.start(authorRequest(repo.dir, repo.pin, model));
+        return session.initial;
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(turn.draft.title).toBe("Live planning pool");
+      expect(turn.usage.total).toBeGreaterThan(0);
+      expect(secondRequest).toContain(PINNED_LINE);
+      expect(secondRequest).not.toContain("working tree content only");
+      expect(secondRequest).toContain("submit_walkthrough");
+      expect(secondRequest).not.toContain('"bash"');
+      expect(secondRequest).not.toContain('"write_file"');
+    }),
+  );
+
+  it.effect("exposes missing authentication without reading the user's Pi store", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => piHarness(false));
+      const { methods, models } = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        return {
+          models: yield* author.availableModels,
+          methods: yield* author.loginMethods,
+        };
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(models).toEqual([]);
+      expect(methods).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ providerId: "anthropic", method: "oauth" }),
+          expect.objectContaining({ providerId: "anthropic", method: "api_key" }),
+          expect.objectContaining({ providerId: "openai-codex", method: "oauth" }),
+          expect.objectContaining({ providerId: "openai", method: "api_key" }),
+        ]),
+      );
+      const missing = yield* Effect.flip(requireScriptedModel(models, "anthropic", "missing"));
+      expect(missing._tag).toBe("NoProviderAuthenticated");
+    }),
+  );
+
+  it.effect("keeps API-key login redacted and translates terminal cancellation", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => piHarness());
+      harness.modelRuntime.registerNativeProvider({
+        ...harness.faux.provider,
+        id: "login-test",
+        name: "Login Test",
+        auth: {
+          apiKey: {
+            name: "Test API key",
+            login: async (interaction) => ({
+              type: "api_key" as const,
+              key: await interaction.prompt({ type: "secret", message: "API key" }),
+            }),
+            check: async ({ credential }) =>
+              credential?.key === undefined ? undefined : { type: "api_key" as const },
+            resolve: async ({ credential }) =>
+              credential?.key === undefined
+                ? undefined
+                : { auth: { apiKey: credential.key }, source: "stored" },
+          },
+        },
+      });
+
+      const result = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const method = (yield* author.loginMethods).find(
+          (candidate) => candidate.providerId === "login-test",
+        );
+        if (method === undefined) return yield* Effect.die("Login method was not available");
+        yield* author.login(method, {
+          prompt: async () => {
+            throw new Error("Secret prompt crossed the redaction boundary");
+          },
+          secret: async () => Redacted.make("never-print-this-key"),
+          notify: () => {},
+        });
+        const stored = yield* Effect.promise(() => harness.credentials.list());
+        const cancelled = yield* Effect.flip(
+          author.login(method, {
+            prompt: async () => {
+              throw new Error("Secret prompt crossed the redaction boundary");
+            },
+            secret: async () => Promise.reject(new Terminal.QuitError()),
+            notify: () => {},
+          }),
+        );
+        return { cancelled, stored };
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(result.stored).toContainEqual({ providerId: "login-test", type: "api_key" });
+      expect(result.cancelled._tag).toBe("LoginCancelled");
+      expect(JSON.stringify(result)).not.toContain("never-print-this-key");
+    }),
+  );
+
+  it.effect("translates a terminal provider error", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage("", {
+          stopReason: "error",
+          errorMessage: "provider exploded",
+        }),
+      ]);
+      const progress: AuthorProgress[] = [];
+      const error = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        return yield* Effect.flip(
+          author.start(authorRequest(repo.dir, repo.pin, model, (event) => progress.push(event))),
+        );
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+      expect(error).toMatchObject({
+        _tag: "ProviderRequestFailed",
+        detail: "provider exploded",
+      });
+      expect(progress.filter((event) => event._tag === "AuthorUsageUpdated")).toHaveLength(1);
+    }),
+  );
+
+  it.effect("rejects an assistant response that never submits the draft", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      harness.faux.setResponses([ai.fauxAssistantMessage("Here is some unstructured prose.")]);
+      const error = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        return yield* Effect.flip(author.start(authorRequest(repo.dir, repo.pin, model)));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+      expect(error._tag).toBe("DraftMalformed");
+    }),
+  );
+
+  it.live("bounds Pi cleanup when an in-flight model turn is interrupted", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      harness.faux.setResponses([() => new Promise(() => {})]);
+      const elapsed = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        const fiber = yield* Effect.forkChild(
+          author.start(authorRequest(repo.dir, repo.pin, model)).pipe(Effect.scoped),
+        );
+        while (harness.faux.state.callCount === 0) yield* Effect.sleep("10 millis");
+        const started = Date.now();
+        yield* Fiber.interrupt(fiber);
+        return Date.now() - started;
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(elapsed).toBeLessThan(2_000);
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("generation", () => {
+  it.effect("prepares the exact advertised PR head without checking out its branch", () =>
+    Effect.gen(function* () {
+      const origin = yield* fixture;
+      const clone = yield* Effect.acquireRelease(
+        Effect.sync(() => cloneOnMain(origin, 42)),
+        (value) => Effect.sync(() => value.cleanup()),
+      );
+      execFileSync("git", ["remote", "set-head", "origin", "main"], { cwd: clone.dir });
+      execFileSync("git", ["fetch", "origin", "main"], { cwd: clone.dir });
+      const fetchHead = readFileSync(join(clone.dir, ".git", "FETCH_HEAD"), "utf8");
+      const source = yield* prepareGeneration({
+        cwd: clone.dir,
+        target: { number: 42, slug: null },
+        useGh: false,
+      }).pipe(Effect.provide(PrLocator.layer.pipe(Layer.provideMerge(shellLayer))));
+
+      expect(source.pin).toBe(origin.pin);
+      expect(source.files.map((file) => file.path)).toContain("models/planning_pool_item.py");
+      expect(readFileSync(join(clone.dir, ".git", "FETCH_HEAD"), "utf8")).toBe(fetchHead);
+      expect(readFileSync(`${clone.dir}/models/planning_pool_item.py`, "utf8")).not.toContain(
+        "_auto = False",
+      );
+    }),
+  );
+
+  it.effect("writes stamped frontmatter and repairs a draft through check", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      let repairContext = "";
+      harness.faux.setResponses([
+        submitted(invalidBody),
+        (context) => {
+          repairContext = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+      const usageTurns: number[] = [];
+      const result = yield* Effect.gen(function* () {
+        const model = yield* fauxModel();
+        return yield* runGeneration({
+          source: prepared(repo.dir, repo.pin),
+          model,
+          directory: "walkthroughs",
+          progress: (event) => {
+            if (event._tag === "AuthorUsageUpdated") usageTurns.push(event.usage.total);
+          },
+          useGh: false,
+        });
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(result._tag).toBe("Generated");
+      expect(result.repairs).toBe(1);
+      expect(usageTurns).toHaveLength(2);
+      expect(usageTurns[1]).toBeGreaterThan(usageTurns[0] ?? 0);
+      expect(repairContext).toContain("range-");
+      expect(readFileSync(result.file, "utf8")).toBe(
+        renderDraft(prepared(repo.dir, repo.pin), {
+          title: "Live planning pool",
+          meta: { lang: "en", module: "acme_planning" },
+          body: validBody,
+        }),
+      );
+      expect(readFileSync(result.file, "utf8")).toContain(`commit: ${repo.pin}`);
+      expect(
+        execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo.dir, encoding: "utf8" }).trim(),
+      ).toBe(repo.pin);
+      expect(
+        execFileSync("git", ["diff", "--cached", "--name-only"], {
+          cwd: repo.dir,
+          encoding: "utf8",
+        }),
+      ).toBe("");
+    }),
+  );
+
+  it.effect("keeps a still-invalid draft after the bounded repair loop", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      harness.faux.setResponses([
+        submitted(invalidBody, "Needs manual repair"),
+        submitted(invalidBody, "Needs manual repair"),
+        submitted(invalidBody, "Needs manual repair"),
+      ]);
+      const result = yield* Effect.gen(function* () {
+        const model = yield* fauxModel();
+        return yield* runGeneration({
+          source: prepared(repo.dir, repo.pin),
+          model,
+          directory: "drafts",
+          progress: () => {},
+          useGh: false,
+        });
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(result._tag).toBe("GeneratedWithDiagnostics");
+      expect(result.repairs).toBe(2);
+      expect(existsSync(result.file)).toBe(true);
+      expect(result.report.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(
+        true,
+      );
+    }),
+  );
+
+  it.effect("rejects output through symlinks and inside Git metadata", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const outside = yield* Effect.acquireRelease(
+        Effect.sync(() => mkdtempSync(join(tmpdir(), "balade-output-"))),
+        (directory) => Effect.sync(() => rmSync(directory, { recursive: true, force: true })),
+      );
+      symlinkSync(outside, join(repo.dir, "linked"));
+      const harness = yield* Effect.promise(() => piHarness());
+      const errors = yield* Effect.gen(function* () {
+        const model = yield* fauxModel();
+        const linked = yield* Effect.flip(
+          runGeneration({
+            source: prepared(repo.dir, repo.pin),
+            model,
+            directory: "linked/walkthroughs",
+            progress: () => {},
+            useGh: false,
+          }),
+        );
+        const metadata = yield* Effect.flip(
+          runGeneration({
+            source: prepared(repo.dir, repo.pin),
+            model,
+            directory: ".git/walkthroughs",
+            progress: () => {},
+            useGh: false,
+          }),
+        );
+        return { linked, metadata };
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(errors.linked._tag).toBe("OutputOutsideRepository");
+      expect(errors.metadata._tag).toBe("OutputOutsideRepository");
+      expect(existsSync(join(outside, "walkthroughs"))).toBe(false);
+    }),
+  );
+
+  it.effect("never overwrites an existing generated filename", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      const existing = "walkthroughs/pr-42-live-planning-pool.md";
+      repo.write(existing, "keep me\n");
+      harness.faux.setResponses([submitted(validBody)]);
+      const error = yield* Effect.gen(function* () {
+        const model = yield* fauxModel();
+        return yield* Effect.flip(
+          runGeneration({
+            source: prepared(repo.dir, repo.pin),
+            model,
+            directory: "walkthroughs",
+            progress: () => {},
+            useGh: false,
+          }),
+        );
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(error._tag).toBe("OutputAlreadyExists");
+      expect(readFileSync(join(repo.dir, existing), "utf8")).toBe("keep me\n");
+    }),
+  );
+
+  it.effect("retains the invalid file and diagnostics when a repair turn fails", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      harness.faux.setResponses([
+        submitted(invalidBody, "Repair interrupted"),
+        ai.fauxAssistantMessage("", {
+          stopReason: "error",
+          errorMessage: "repair provider stopped",
+        }),
+      ]);
+      const usage: number[] = [];
+      const error = yield* Effect.gen(function* () {
+        const model = yield* fauxModel();
+        return yield* Effect.flip(
+          runGeneration({
+            source: prepared(repo.dir, repo.pin),
+            model,
+            directory: "drafts",
+            progress: (event) => {
+              if (event._tag === "AuthorUsageUpdated") usage.push(event.usage.total);
+            },
+            useGh: false,
+          }),
+        );
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(error._tag).toBe("RepairFailed");
+      if (error._tag !== "RepairFailed") return;
+      expect(existsSync(error.file)).toBe(true);
+      expect(error.report.ok).toBe(false);
+      expect(error.report.diagnostics).not.toEqual([]);
+      expect(usage).toHaveLength(2);
+    }),
+  );
+
+  it("derives stable, filesystem-safe draft names", () => {
+    expect(slugifyTitle("  Déjà vu: API / v2!  ")).toBe("deja-vu-api-v2");
+    expect(slugifyTitle("🎉")).toBe("walkthrough");
+    expect(
+      matchingModels(
+        [
+          Schema.decodeUnknownSync(AuthorModelSchema)({
+            providerId: "faux",
+            providerName: "Faux",
+            modelId: "one",
+            modelName: "One",
+          }),
+        ],
+        "other",
+        undefined,
+      ),
+    ).toEqual([]);
+    expect(
+      sanitizeTerminalText("safe\u001b]8;;https://evil.invalid\u0007link\u001b]8;;\u0007\u0000"),
+    ).toBe("safelink");
+  });
+});

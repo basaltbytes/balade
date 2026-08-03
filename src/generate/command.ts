@@ -1,0 +1,341 @@
+/** Interactive command boundary for provider login, model choice and draft reporting. */
+
+import { Context, Effect, Option, Terminal } from "effect";
+import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
+import { stripVTControlCharacters } from "node:util";
+import { formatText } from "../check/report.js";
+import { parsePrTarget } from "../pr/target.js";
+import {
+  AuthorDiscoveryFailed,
+  LoginCancelled,
+  LoginFailed,
+  WalkthroughAuthor,
+  type AuthorModel,
+  type AuthorProgress,
+  type LoginInteraction,
+  type LoginNotification,
+  type LoginPrompt,
+  type LoginSecretPrompt,
+} from "./author.js";
+import {
+  generateErrorMessage,
+  prepareGeneration,
+  runGeneration,
+  type GenerateError,
+} from "./run.js";
+import {
+  matchingModels,
+  NoProviderAuthenticated,
+  noProviderMessage,
+  orderedLoginMethods,
+  requireScriptedModel,
+} from "./select.js";
+
+const target = Argument.string("pr").pipe(
+  Argument.withDescription("Pull request URL, #number, or bare number"),
+);
+
+const provider = Flag.string("provider").pipe(
+  Flag.withDescription("Pi provider id; use with --model to skip the interactive picker"),
+  Flag.optional,
+);
+
+const model = Flag.string("model").pipe(
+  Flag.withDescription("Pi model id; use with --provider to skip the interactive picker"),
+  Flag.optional,
+);
+
+const directory = Flag.string("dir").pipe(
+  Flag.withDescription("Repository-relative directory for the generated walkthrough"),
+  Flag.withDefault("walkthroughs"),
+);
+
+export const generateCommand = Command.make(
+  "generate",
+  { pr: target, provider, model, directory },
+  (config) =>
+    Effect.gen(function* () {
+      const pull = parsePrTarget(config.pr);
+      if (pull === null) {
+        stopMessage("Name one GitHub pull request: `balade generate <pr-url|#n>`.");
+        return;
+      }
+      const providerId = Option.getOrUndefined(config.provider);
+      const modelId = Option.getOrUndefined(config.model);
+      const prepared = yield* prepareGeneration({ cwd: process.cwd(), target: pull });
+      for (const notice of prepared.notices) {
+        writeStdout(`warning ${notice.code}\n  ${notice.message}\n  fix ${notice.hint}\n`);
+      }
+
+      const selected = yield* selectAuthorModel(providerId, modelId);
+      if (Option.isNone(selected)) {
+        writeStdout("Generation cancelled.\n");
+        return;
+      }
+
+      const progress = generationProgress();
+      const result = yield* runGeneration({
+        source: prepared,
+        model: selected.value,
+        directory: config.directory,
+        progress: progress.event,
+      });
+      writeStdout(formatText({ reports: [result.report] }));
+      if (result._tag === "Generated") {
+        writeStdout(
+          `balade wrote ${result.file} and check passed${repairSummary(result.repairs)}.\n`,
+        );
+      } else {
+        writeStderr(
+          `balade kept ${result.file} after check still found diagnostics${repairSummary(result.repairs)}. Edit it and run balade check ${result.file}.\n`,
+        );
+        process.exitCode = 1;
+      }
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          if (error._tag === "RepairFailed") {
+            writeStdout(formatText({ reports: [error.report] }));
+          }
+          stopMessage(generationCliErrorMessage(error));
+        }),
+      ),
+    ),
+).pipe(Command.withDescription("Draft and validate a walkthrough for a pull request"));
+
+const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
+  providerId: string | undefined,
+  modelId: string | undefined,
+) {
+  const author = yield* WalkthroughAuthor;
+  let available = yield* author.availableModels;
+  if (providerId !== undefined && modelId !== undefined) {
+    const selected = yield* requireScriptedModel(available, providerId, modelId);
+    announceModel(selected);
+    return Option.some(selected);
+  }
+
+  let matching = matchingModels(available, providerId, modelId);
+  if (matching.length === 0) {
+    const methods = orderedLoginMethods(yield* author.loginMethods, providerId);
+    if (methods.length === 0) {
+      return yield* new NoProviderAuthenticated({
+        requested: requestedModel(providerId, modelId),
+      });
+    }
+    const method = yield* Prompt.run(
+      Prompt.select({
+        message: "Log in to a Pi provider",
+        choices: methods.map((candidate) => ({
+          title: `${candidate.providerName} — ${candidate.label}`,
+          value: candidate,
+          description:
+            candidate.billing === "anthropic-extra-usage"
+              ? anthropicBillingCaveat()
+              : `${candidate.method === "oauth" ? "Subscription" : "API key"} authentication`,
+        })),
+      }),
+    );
+    if (method.billing === "anthropic-extra-usage") {
+      writeStdout(`${anthropicBillingCaveat()}\n`);
+    }
+    const promptContext = yield* Effect.context<Prompt.Environment>();
+    yield* author.login(method, loginInteraction(promptContext));
+    available = yield* author.availableModels;
+    matching = matchingModels(available, providerId, modelId);
+  }
+  if (matching.length === 0) {
+    return yield* new NoProviderAuthenticated({ requested: requestedModel(providerId, modelId) });
+  }
+
+  const selected = yield* Prompt.run(
+    Prompt.select({
+      message: "Choose the provider and model",
+      choices: matching.map((candidate) => ({
+        title: `${candidate.providerName} — ${candidate.modelName}`,
+        value: candidate,
+        description:
+          candidate.providerId === "anthropic"
+            ? anthropicBillingCaveat()
+            : `${candidate.providerId}/${candidate.modelId}`,
+      })),
+    }),
+  );
+  announceModel(selected);
+  const confirmed = yield* Prompt.run(
+    Prompt.confirm({
+      message: `Generate with ${selected.providerId}/${selected.modelId}?`,
+      initial: true,
+    }),
+  );
+  return confirmed ? Option.some(selected) : Option.none<AuthorModel>();
+});
+
+function loginInteraction(context: Context.Context<Prompt.Environment>): LoginInteraction {
+  const runPrompt = Effect.runPromiseWith(context);
+  return {
+    prompt: (prompt) =>
+      runPrompt(loginPrompt(prompt), prompt.signal === undefined ? {} : { signal: prompt.signal }),
+    secret: (prompt) =>
+      runPrompt(
+        loginSecretPrompt(prompt),
+        prompt.signal === undefined ? {} : { signal: prompt.signal },
+      ),
+    notify: printLoginNotification,
+  };
+}
+
+function loginPrompt(prompt: LoginPrompt) {
+  if (prompt.type === "select" && prompt.options.length > 0) {
+    return Prompt.run(
+      Prompt.select({
+        message: prompt.message,
+        choices: prompt.options.map((option) => ({
+          title: option.label,
+          value: option.id,
+          ...(option.description === undefined ? {} : { description: option.description }),
+        })),
+      }),
+    );
+  }
+  if (prompt.type === "select") return Prompt.run(Prompt.text({ message: prompt.message }));
+  const message =
+    prompt.placeholder === undefined ? prompt.message : `${prompt.message} (${prompt.placeholder})`;
+  return Prompt.run(Prompt.text({ message }));
+}
+
+function loginSecretPrompt(prompt: LoginSecretPrompt) {
+  const message =
+    prompt.placeholder === undefined ? prompt.message : `${prompt.message} (${prompt.placeholder})`;
+  return Prompt.run(Prompt.password({ message }));
+}
+
+function printLoginNotification(event: LoginNotification): void {
+  switch (event.type) {
+    case "info":
+      writeStdout(`${event.message}\n`);
+      for (const link of event.links) {
+        writeStdout(`${link.label === undefined ? "Open" : link.label}: ${link.url}\n`);
+      }
+      break;
+    case "auth_url":
+      writeStdout(`${event.instructions ?? "Open this URL to authenticate:"}\n${event.url}\n`);
+      break;
+    case "device_code":
+      writeStdout(`Open ${event.verificationUri} and enter code ${event.userCode}.\n`);
+      break;
+    case "progress":
+      writeStdout(`${event.message}\n`);
+      break;
+  }
+}
+
+function generationProgress(): { readonly event: (event: AuthorProgress) => void } {
+  let turn = 0;
+  return {
+    event: (event) => {
+      if (event._tag === "AuthorToolStarted") {
+        writeStdout(`[${event.name}]\n`);
+      } else if (event._tag === "AuthorUsageUpdated") {
+        turn++;
+        const usage = event.usage;
+        writeStdout(
+          `after turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
+            `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
+            `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
+            `cost $${usage.cost.toFixed(4)}\n`,
+        );
+      }
+    },
+  };
+}
+
+function announceModel(model: AuthorModel): void {
+  writeStdout(
+    `Provider/model: ${model.providerName} — ${model.modelName} (${model.providerId}/${model.modelId})\n`,
+  );
+  if (model.providerId === "anthropic") writeStdout(`${anthropicBillingCaveat()}\n`);
+}
+
+function anthropicBillingCaveat(): string {
+  return (
+    "Anthropic subscription login in third-party tools is billed per token as extra usage; " +
+    "it does not draw on Claude plan limits."
+  );
+}
+
+function requestedModel(providerId: string | undefined, modelId: string | undefined): string {
+  return `${providerId ?? "any provider"}/${modelId ?? "any model"}`;
+}
+
+function repairSummary(repairs: number): string {
+  return repairs === 0 ? "" : ` after ${repairs} repair ${repairs === 1 ? "turn" : "turns"}`;
+}
+
+type GenerationCliError =
+  | GenerateError
+  | AuthorDiscoveryFailed
+  | LoginFailed
+  | LoginCancelled
+  | NoProviderAuthenticated
+  | Terminal.QuitError;
+
+function generationCliErrorMessage(error: GenerationCliError): string {
+  switch (error._tag) {
+    case "LoginFailed":
+      return loginErrorMessage(error);
+    case "AuthorDiscoveryFailed":
+      return "Pi providers and models could not be loaded. Check the local Pi installation and try again.";
+    case "LoginCancelled":
+      return "Generation cancelled.";
+    case "NoProviderAuthenticated":
+      return noProviderMessage(error);
+    case "QuitError":
+      return "Generation cancelled.";
+    default:
+      return generateErrorMessage(error);
+  }
+}
+
+function loginErrorMessage(error: LoginFailed): string {
+  switch (error.reason) {
+    case "oauth":
+      return `Pi could not complete ${error.provider} subscription login. Retry interactively, or run the pi CLI login first.`;
+    case "auth":
+      return `Pi rejected the ${error.provider} credential. Check the account or API key and log in again.`;
+    case "provider":
+      return `Pi could not initialize ${error.provider}. Check the provider configuration and try again.`;
+    case "unknown":
+      return `Pi could not authenticate ${error.provider}. Run the pi CLI login, then retry balade generate.`;
+  }
+}
+
+const stopMessage = (message: string): void => {
+  writeStderr(`${message}\n`);
+  process.exitCode = 1;
+};
+
+export function sanitizeTerminalText(value: string): string {
+  let safe = "";
+  for (const character of stripVTControlCharacters(value)) {
+    const point = character.codePointAt(0);
+    if (
+      point === undefined ||
+      point === 9 ||
+      point === 10 ||
+      point === 13 ||
+      (point >= 32 && (point < 127 || point > 159))
+    ) {
+      safe += character;
+    }
+  }
+  return safe;
+}
+
+const writeStdout = (value: string): void => {
+  process.stdout.write(sanitizeTerminalText(value));
+};
+
+const writeStderr = (value: string): void => {
+  process.stderr.write(sanitizeTerminalText(value));
+};
