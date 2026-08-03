@@ -273,14 +273,88 @@ the first command a new user runs must work from a bare `npx balade`. The
 install cost — roughly 13 MB unpacked plus the official provider SDKs on a
 cold `npx` — is machine seconds and cacheable in CI. The live layer imports
 Pi lazily (its root barrel loads TUI modules at import time), so `check`,
-`open` and `build` never pay its startup cost. Engines move to Node >= 22.19.0
-in the same release: Pi requires it, and Node 20 passed end of life on
-2026-04-30.
+`open` and `build` never pay its startup cost. The effective Node range is
+`^22.22.2 || ^24.15.0 || >=26.0.0`, covering Pi and its locked production tree;
+Node 20 passed end of life on 2026-04-30.
 
 Every Pi surface sits behind the one `WalkthroughAuthor` service, the
 anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
 Codex-SDK-plus-API-key pair of adapters instead.
+
+The adapter itself is split at the session boundary: `pi.ts` owns account,
+authentication and global settings, while `pi-session.ts` owns the scoped
+authoring session, its read-only tool policy and provider-event forwarding.
+This keeps preference durability independent from the security-sensitive tool
+sandbox and session lifecycle.
+
+Provider/model defaults use Pi's global `SettingsManager` rather than a second
+balade preference file. Project settings are not trusted or loaded for this
+choice. A confirmed interactive selection updates Pi's default; a matching
+default is reused without another picker. Every explicit or confirmed selection
+updates that default. An exact `--provider` and `--model` pair skips the picker;
+partial, empty, or unavailable values open it, narrowed to matching models when
+possible. Preference read and write failures are typed warnings and do not
+prevent a generation run.
+
+The session runs in memory with a resource loader that exposes no Pi extensions,
+skills, prompts, themes or repository context files. Its allowlist contains only
+five balade-owned tools: list PR changes, list pinned paths, read a pinned diff,
+read numbered lines from a pinned blob, and submit the structured draft. The
+agent never receives Pi's shell or mutation tools. `submit_walkthrough` ends the
+agent loop; the adapter stamps the schema version, PR and commit after the model
+returns.
+
+The baseline authoring turn is deliberately bounded to eight diff reads and
+twelve source reads. The prompt asks for the behavioral spine in two to five
+sections and normally three to eight focused ranges, with ten as a hard maximum.
+These limits keep provider context and cost proportional to a review story
+instead of rewarding an inventory of every changed file; richer curation remains
+a separate quality layer. The read allowance resets for a repair turn so the
+agent can verify a corrected range. The submit tool rejects drafts above the
+range ceiling and asks the agent to focus the complete draft before accepting it.
+
+A failed check gets at most two repair turns. Repairs use a new
+`AgentSession.prompt()` in the same in-memory session, rather than Pi's queued
+`followUp()`: a terminating tool leaves a tool-result message last, and
+`agent.continue()` resumes that tool turn before it can drain the queued
+follow-up. A fresh prompt puts the diagnostics and range echoes in the next
+request without paying for an unprompted continuation. The first file write is
+exclusive, so generation never overwrites an existing walkthrough; later
+repairs replace only the draft created by that run. The last invalid draft stays
+on disk after the repair budget is exhausted.
+
+Generation consumes the resolver's canonical lightweight `PullSnapshot`; it
+does not map that value into a second generation-only DTO. A remote pull head is
+resolved with `ls-remote`, then the advertised object id is fetched with
+`--no-write-fetch-head`; this pins the model and checker to one object without
+racing other Git activity through `FETCH_HEAD`. Repair checks rehydrate their
+context from that written pin with Git alone and never probe GitHub a second
+time. Changed-file summaries stay lightweight until compilation asks for blob
+content.
+
+Output paths are repository-relative, exclude `.git`, and are checked through
+their nearest existing canonical ancestor before any directory is created.
+The first draft uses an exclusive create. Each repair is written to a temporary
+file beside the draft and atomically renamed, so a failed write cannot truncate
+the retained version. If a model or write fails during repair, the typed error
+keeps both the file path and its last check report for manual recovery.
+
+One semaphore owns each Pi session's turns, and the initial turn runs while the
+scoped session is acquired instead of being exposed as a replayable effect.
+Usage is decoded and reported after every completed provider turn, including
+turns that end in provider or submission errors. Cancellation is distinct from
+authentication failure. Cleanup skips abort for an idle session; an active
+session abort is bounded and failures are logged without provider or credential
+details. Model prose is not streamed in the default output, and every dynamic
+terminal string has control sequences removed. By default, tool events collapse
+to one message per inspection phase, and detailed tool results are not
+materialized across the adapter boundary. `--verbose` opts into assistant-visible
+text, every allowlisted tool input and result, and the successful range report;
+provider-hidden reasoning remains hidden. A normal successful check prints only
+the verified range count, generated path, and the next `balade open` command;
+full diagnostics remain visible when the generated draft still needs manual
+repair.
 
 ## Parser properties follow schema and grammar edges
 

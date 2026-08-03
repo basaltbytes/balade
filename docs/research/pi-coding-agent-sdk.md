@@ -3,7 +3,7 @@
 Verification of the factual claims in the issue proposing draft-walkthrough
 generation via the Pi coding-agent SDK.
 
-Sources checked on 2026-08-02, against primary material only:
+Sources first checked on 2026-08-02, against primary material only:
 
 - Source: `github.com/earendil-works/pi` at commit `4c01c709380621c5ff2719162cd7a7973dcb2799`
   (default branch `main`). The issue's link `github.com/badlogic/pi-mono` is a
@@ -11,6 +11,14 @@ Sources checked on 2026-08-02, against primary material only:
 - npm: `@earendil-works/pi-*` packages, all at 0.83.0 (published 2026-07-29).
   The former `@mariozechner/pi-coding-agent` is deprecated at 0.73.1 with the
   message "please use @earendil-works/pi-coding-agent instead going forward".
+
+Rechecked on 2026-08-03 against current `main` at
+`c6eb6281a806a9c5d7ec41d2850692f7f7ebcb59`. The package manifests still say
+0.83.0 and Node >=22.19.0, and the SDK/auth/tool contracts used below remain the
+same. Current source adds a 15-second bound to the catalog refresh that follows
+`ModelRuntime.login()`; the published 0.83.0 package refreshes after login
+without that new timeout. Balade stays on the exact published package and calls
+`getAvailable()` again after login, so the picker sees the refreshed model set.
 
 File paths below are relative to the repo root at that commit.
 
@@ -138,6 +146,12 @@ keychain. `packages/coding-agent/src/config.ts` (`getAgentDir()` →
   (`getAll()`, `getAvailable()`, `find(provider, id)`,
   `hasConfiguredAuth(model)`). Model helpers: `calculateCost()`, `hasApi()`
   type guard, thinking-level utilities (`models.ts`).
+- Global model preference: `SettingsManager.create(cwd)` reads
+  `~/.pi/agent/settings.json`; `getDefaultProvider()` / `getDefaultModel()`
+  retrieve the pair and `setDefaultModelAndProvider()` persists it through a
+  cross-process file lock. `flush()` awaits queued writes and `drainErrors()`
+  exposes load/write failures. `SettingsManager.inMemory()` provides the same
+  API for an isolated test seam (`core/settings-manager.ts`).
 
 ## 4. Embeddable as a library
 
@@ -152,8 +166,10 @@ RPC, and "an SDK for embedding in your own apps".
 
 - `createAgentSession()` → `AgentSession`: `prompt(text)`, `steer()`,
   `followUp()`, `subscribe(listener)` for streaming events
-  (`message_update` with `text_delta` etc.), `setModel()`, `compact()`,
-  `abort()`, `dispose()`. `AgentSessionRuntime` adds new/resume/fork/import.
+  (`message_update` with text/thinking/tool-call updates, plus
+  `tool_execution_start` / `tool_execution_end` carrying tool inputs and
+  results), `setModel()`, `compact()`, `abort()`, `dispose()`.
+  `AgentSessionRuntime` adds new/resume/fork/import.
 - System-prompt injection: `DefaultResourceLoader` with
   `systemPromptOverride` / `appendSystemPromptOverride`
   (`examples/sdk/03-custom-prompt.ts`).
@@ -192,8 +208,9 @@ active (repo pushed 2026-08-02; 82k+ GitHub stars).
 
 ## 5. Practical integration notes (facts)
 
-- **Node**: `engines.node >= 22.19.0` on every published package. balade's
-  `package.json` currently declares `engines.node >= 20`.
+- **Node**: Pi declares `engines.node >= 22.19.0`. Its installed dependency
+  `ini@7` is stricter, so balade advertises the effective supported ranges:
+  Node `^22.22.2 || ^24.15.0 || >=26.0.0`.
 - **Module format**: ESM-only (`"type": "module"`, `exports` maps expose only
   `import`/`types` conditions — no CJS). Bun is also supported (dedicated
   `bun-oauth` entry, `src/bun/`).
