@@ -1,0 +1,7 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "balade-landing",
+  "compatibility_date": "2026-08-03",
+  // Assets-only: no Worker script. The Vite plugin supplies the directory.
+  "assets": {},
+}
