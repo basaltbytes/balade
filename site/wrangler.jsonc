@@ -4,4 +4,8 @@
   "compatibility_date": "2026-08-03",
   // Assets-only: no Worker script. The Vite plugin supplies the directory.
   "assets": {},
+  // balade.dev is a zone on this account: deploying provisions the DNS record
+  // and certificate. The workers.dev preview URL is off — one canonical home.
+  "routes": [{ "pattern": "balade.dev", "custom_domain": true }],
+  "workers_dev": false,
 }
