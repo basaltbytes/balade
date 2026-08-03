@@ -29,8 +29,16 @@ interface Badge {
   readonly dyingBeats: number;
 }
 
-const COLS = 13;
-const ROWS = 8;
+/**
+ * One layout question, asked once at load: a phone gets a sparser storm —
+ * fewer cells, shorter numbers, a wider clearing — or the noise wins.
+ */
+const COMPACT = window.matchMedia("(max-width: 640px)").matches;
+
+const COLS = COMPACT ? 4 : 13;
+const ROWS = COMPACT ? 9 : 8;
+const CLEARING_RX = COMPACT ? 46 : 33;
+const CLEARING_RY = COMPACT ? 30 : 27;
 const CHURN_MS = 375;
 /** A fading badge survives this many beats, so the 700ms evaporation fits. */
 const FADE_BEATS = 2;
@@ -47,8 +55,8 @@ const mulberry32 = (seed: number) => (): number => {
 
 /** The calm ellipse at the center where no badge may land. */
 const inClearing = (x: number, y: number): boolean => {
-  const dx = (x - 50) / 33;
-  const dy = (y - 50) / 27;
+  const dx = (x - 50) / CLEARING_RX;
+  const dy = (y - 50) / CLEARING_RY;
   return dx * dx + dy * dy < 1;
 };
 
@@ -67,9 +75,12 @@ const placeInCell = (rng: () => number, cell: number): { x: number; y: number } 
 const makeBadge = (rng: () => number, id: number, cell: number): Badge | null => {
   const spot = placeInCell(rng, cell);
   if (spot === null) return null;
-  /* Everything is agent-sized: four digits as the norm, five now and then. */
+  /* Agent-sized: four digits as the norm, five now and then — desktop only,
+     where a wide badge has room. */
   const additions =
-    rng() < 0.14 ? 5_000 + Math.floor(rng() * 18_000) : 500 + Math.floor(rng() * 4_500);
+    rng() < (COMPACT ? 0 : 0.14)
+      ? 5_000 + Math.floor(rng() * 18_000)
+      : 500 + Math.floor(rng() * 4_500);
   const deletions = Math.floor(additions * (0.15 + rng() * 0.7));
   return {
     id,
@@ -108,8 +119,8 @@ const Squares = ({ additions, deletions }: Pick<Badge, "additions" | "deletions"
 
 const TIER_STYLE = [
   "text-[10px] opacity-25 max-sm:hidden",
-  "text-[12px] opacity-45",
-  "text-[14px] opacity-75",
+  "text-[12px] max-sm:text-[10px] opacity-45",
+  "text-[14px] max-sm:text-[11px] opacity-75",
 ] as const;
 
 const DiffBadge = ({ badge }: { badge: Badge }) => (
@@ -250,8 +261,9 @@ export const Landing = () => {
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
-          background:
-            "radial-gradient(ellipse 62% 52% at 50% 50%, #0d1117 0%, #0d1117d9 34%, transparent 72%)",
+          background: `radial-gradient(ellipse ${
+            COMPACT ? "88% 46%" : "62% 52%"
+          } at 50% 50%, #0d1117 0%, #0d1117d9 34%, transparent 72%)`,
         }}
       />
 
