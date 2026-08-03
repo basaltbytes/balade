@@ -1,10 +1,11 @@
 # balade
 
 `balade` renders a thin, committed walkthrough file into an interactive
-pull-request review app. The file is prose plus references — sections, code
-ranges, fields, tests, a file browser — and the CLI resolves those references
-against git at the commit the file is stamped with, so the narration and the
-code cannot drift apart unnoticed. Nothing is duplicated into the walkthrough:
+pull-request review app — a guided reading of a change, at reading altitude,
+for diffs too large to scan line by line. The file is prose plus references —
+sections, code ranges, diagrams, fields, tests, a file browser — and the CLI
+resolves those references against git at the commit the file is stamped with,
+so the narration and the code cannot drift apart unnoticed. Nothing is duplicated into the walkthrough:
 diffs, blobs and PR metadata are read from the repository at run time.
 
 ## Usage
