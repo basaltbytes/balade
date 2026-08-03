@@ -25,13 +25,15 @@ interface Badge {
   /** Bob phase, seconds; the delay is negative so phases start scattered. */
   readonly bobDuration: number;
   readonly bobDelay: number;
-  /** A dying badge fades for one beat before its cell is refilled. */
-  readonly dying: boolean;
+  /** 0 while alive; a dying badge counts beats until its cell is refilled. */
+  readonly dyingBeats: number;
 }
 
 const COLS = 13;
 const ROWS = 8;
-const CHURN_MS = 750;
+const CHURN_MS = 375;
+/** A fading badge survives this many beats, so the 700ms evaporation fits. */
+const FADE_BEATS = 2;
 /** Pointer parallax reach per tier, px: near layers answer the most. */
 const PARALLAX_PX = [3, 7, 12] as const;
 
@@ -78,7 +80,7 @@ const makeBadge = (rng: () => number, id: number, cell: number): Badge | null =>
     deletions,
     bobDuration: 7 + rng() * 5,
     bobDelay: -rng() * 12,
-    dying: false,
+    dyingBeats: 0,
   };
 };
 
@@ -113,7 +115,7 @@ const TIER_STYLE = [
 const DiffBadge = ({ badge }: { badge: Badge }) => (
   <span
     className={`absolute whitespace-nowrap font-machine ${
-      badge.dying
+      badge.dyingBeats > 0
         ? "animate-[fade_700ms_ease-in_forwards]"
         : "animate-[land_900ms_ease-out_backwards]"
     } ${TIER_STYLE[badge.tier]}`}
@@ -147,13 +149,15 @@ const useChurn = (): readonly Badge[] => {
     let nextId = COLS * ROWS;
     const timer = setInterval(() => {
       setField((badges) => {
-        const swapped = badges.map((badge) =>
-          badge.dying ? (makeBadge(rng, nextId++, badge.cell) ?? badge) : badge,
-        );
-        const slot = Math.floor(rng() * swapped.length);
-        const chosen = swapped[slot];
-        if (chosen === undefined || chosen.dying) return swapped;
-        return swapped.map((badge, i) => (i === slot ? { ...badge, dying: true } : badge));
+        const aged = badges.map((badge) => {
+          if (badge.dyingBeats === 0) return badge;
+          if (badge.dyingBeats >= FADE_BEATS) return makeBadge(rng, nextId++, badge.cell) ?? badge;
+          return { ...badge, dyingBeats: badge.dyingBeats + 1 };
+        });
+        const slot = Math.floor(rng() * aged.length);
+        const chosen = aged[slot];
+        if (chosen === undefined || chosen.dyingBeats > 0) return aged;
+        return aged.map((badge, i) => (i === slot ? { ...badge, dyingBeats: 1 } : badge));
       });
     }, CHURN_MS);
     return () => clearInterval(timer);
