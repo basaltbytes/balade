@@ -97,6 +97,8 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
       );
       const runCommand = Effect.runPromiseWith(commandContext);
       let loaded: Promise<PiAdapterDependencies> | undefined;
+      /* Pi drains reported settings errors, but a load failure still makes its
+         manager silently reject later saves. Retain that failure for this layer. */
       let settingsFailure: Error | undefined;
       const load = options.load ?? loadLiveDependencies;
       const dependencies = () => (loaded ??= load());
@@ -292,7 +294,7 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
                 }),
               );
 
-              const usage = yield* readUsage(acquired.session);
+              const usage = yield* readUsage(acquired.session, request.model);
               request.progress({ _tag: "AuthorUsageUpdated", usage });
 
               if (Result.isFailure(invocation)) return yield* invocation.failure;
@@ -414,7 +416,10 @@ function hasEnvelopeOrFence(body: string): boolean {
   return trimmed.startsWith("---") || trimmed.startsWith("```");
 }
 
-const readUsage = Effect.fn("PiAuthoringSession.readUsage")(function* (session: AgentSession) {
+const readUsage = Effect.fn("PiAuthoringSession.readUsage")(function* (
+  session: AgentSession,
+  model: AuthorModel,
+) {
   const stats = session.getSessionStats();
   return yield* decodeUsage({
     input: stats.tokens.input,
@@ -424,7 +429,14 @@ const readUsage = Effect.fn("PiAuthoringSession.readUsage")(function* (session: 
     total: stats.tokens.total,
     cost: stats.cost,
   }).pipe(
-    Effect.mapError(() => new DraftMalformed({ detail: "Pi returned malformed usage totals." })),
+    Effect.mapError(
+      () =>
+        new ProviderRequestFailed({
+          provider: model.providerId,
+          model: model.modelId,
+          detail: "Pi returned malformed usage totals.",
+        }),
+    ),
   );
 });
 

@@ -5,11 +5,13 @@ import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { stripVTControlCharacters } from "node:util";
 import { formatText } from "../check/report.js";
 import { parsePrTarget } from "../pr/target.js";
+import { resolvePullHead } from "../resolve/git.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
   LoginFailed,
   WalkthroughAuthor,
+  type AuthorLoginMethod,
   type AuthorModel,
   type AuthorProgress,
   type AuthorProgressMode,
@@ -18,12 +20,7 @@ import {
   type LoginPrompt,
   type LoginSecretPrompt,
 } from "./author.js";
-import {
-  generateErrorMessage,
-  prepareGeneration,
-  runGeneration,
-  type GenerateError,
-} from "./run.js";
+import { generateErrorMessage, runGeneration, type GenerateError } from "./run.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -70,8 +67,8 @@ export const generateCommand = Command.make(
         return;
       }
       const selection = modelSelectionFromFlags(config.provider, config.model);
-      const prepared = yield* prepareGeneration({ cwd: process.cwd(), target: pull });
-      for (const notice of prepared.notices) {
+      const source = yield* resolvePullHead({ cwd: process.cwd(), target: pull });
+      for (const notice of source.notices) {
         writeStdout(`warning ${notice.code}\n  ${notice.message}\n  fix ${notice.hint}\n`);
       }
 
@@ -84,7 +81,7 @@ export const generateCommand = Command.make(
       const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
       const progress = makeGenerationProgress(writeStdout, progressMode);
       const result = yield* runGeneration({
-        source: prepared,
+        source,
         model: selected.value,
         directory: config.directory,
         progressMode,
@@ -157,23 +154,20 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
     }
   }
 
-  const allMethods = yield* author.loginMethods;
   const providerModels =
     filter.providerId === undefined
       ? []
       : matchingModels(available, { providerId: filter.providerId });
-  const providerMethods = orderedLoginMethods(allMethods, filter.providerId);
-  const shouldLogin =
-    available.length === 0 ||
-    (filter.providerId !== undefined && providerModels.length === 0 && providerMethods.length > 0);
-  if (shouldLogin) {
-    const methods =
-      providerMethods.length > 0 ? providerMethods : orderedLoginMethods(allMethods, undefined);
-    if (methods.length === 0) {
-      return yield* new NoProviderAuthenticated({
-        requested: requestedModel(filter),
-      });
-    }
+  let methods: readonly AuthorLoginMethod[] = [];
+  if (available.length === 0) {
+    const allMethods = yield* author.loginMethods;
+    const requestedMethods = orderedLoginMethods(allMethods, filter.providerId);
+    methods =
+      requestedMethods.length > 0 ? requestedMethods : orderedLoginMethods(allMethods, undefined);
+  } else if (filter.providerId !== undefined && providerModels.length === 0) {
+    methods = orderedLoginMethods(yield* author.loginMethods, filter.providerId);
+  }
+  if (methods.length > 0) {
     const method = yield* Prompt.run(
       Prompt.select({
         message: "Log in to a Pi provider",
@@ -193,6 +187,8 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
     const promptContext = yield* Effect.context<Prompt.Environment>();
     yield* author.login(method, loginInteraction(promptContext));
     available = yield* author.availableModels;
+  } else if (available.length === 0) {
+    return yield* new NoProviderAuthenticated({ requested: requestedModel(filter) });
   }
 
   const picker = modelsForPicker(available, filter);
@@ -296,28 +292,38 @@ export function makeGenerationProgress(
   let turn = 0;
   const announced = new Set<string>();
   return (event) => {
-    if (event._tag === "AuthorUsageUpdated") {
-      turn++;
-      const usage = event.usage;
-      write(
-        `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
-          `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
-          `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
-          `cost $${usage.cost.toFixed(4)}\n`,
-      );
-    } else if (mode === "verbose" && event._tag === "AuthorAssistantText") {
-      write(`[assistant]\n${withTrailingNewline(event.text)}`);
-    } else if (mode === "verbose" && event._tag === "AuthorToolStarted") {
-      write(`[${event.name}]${event.input === "" ? "" : ` ${event.input}`}\n`);
-    } else if (mode === "verbose" && event._tag === "AuthorToolFinished") {
-      if (event.output !== "") write(withTrailingNewline(event.output));
-      write(`[/${event.name}${event.failed ? " error" : ""}]\n`);
-    } else if (mode === "compact" && event._tag === "AuthorToolStarted") {
-      const message = progressMessage(event.name);
-      if (!announced.has(message)) {
-        announced.add(message);
-        write(`${message}\n`);
+    switch (event._tag) {
+      case "AuthorUsageUpdated": {
+        turn++;
+        const usage = event.usage;
+        write(
+          `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
+            `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
+            `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
+            `cost $${usage.cost.toFixed(4)}\n`,
+        );
+        break;
       }
+      case "AuthorAssistantText":
+        if (mode === "verbose") write(`[assistant]\n${withTrailingNewline(event.text)}`);
+        break;
+      case "AuthorToolStarted":
+        if (mode === "verbose") {
+          write(`[${event.name}]${event.input === "" ? "" : ` ${event.input}`}\n`);
+        } else {
+          const message = progressMessage(event.name);
+          if (!announced.has(message)) {
+            announced.add(message);
+            write(`${message}\n`);
+          }
+        }
+        break;
+      case "AuthorToolFinished":
+        if (mode === "verbose") {
+          if (event.output !== "") write(withTrailingNewline(event.output));
+          write(`[/${event.name}${event.failed ? " error" : ""}]\n`);
+        }
+        break;
     }
   };
 }

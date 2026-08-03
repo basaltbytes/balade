@@ -324,12 +324,14 @@ exclusive, so generation never overwrites an existing walkthrough; later
 repairs replace only the draft created by that run. The last invalid draft stays
 on disk after the repair budget is exhausted.
 
-Generation and compilation share one lightweight PR snapshot rather than
-probing GitHub twice. A remote pull head is resolved with `ls-remote`, then the
-advertised object id is fetched with `--no-write-fetch-head`; this pins the
-model and checker to one object without racing other Git activity through
-`FETCH_HEAD`. Changed-file summaries stay lightweight until compilation asks
-for blob content.
+Generation consumes the resolver's canonical lightweight `PullSnapshot`; it
+does not map that value into a second generation-only DTO. A remote pull head is
+resolved with `ls-remote`, then the advertised object id is fetched with
+`--no-write-fetch-head`; this pins the model and checker to one object without
+racing other Git activity through `FETCH_HEAD`. Repair checks rehydrate their
+context from that written pin with Git alone and never probe GitHub a second
+time. Changed-file summaries stay lightweight until compilation asks for blob
+content.
 
 Output paths are repository-relative, exclude `.git`, and are checked through
 their nearest existing canonical ancestor before any directory is created.

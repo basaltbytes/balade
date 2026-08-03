@@ -38,12 +38,15 @@ export async function createPiSession(
   let draft: unknown;
   let diffReads = 0;
   let sourceReads = 0;
-  const sourcePaths = memoize(async () => {
-    const out = await runCommand(
-      gitOut(["ls-tree", "-r", "--name-only", "-z", request.pin], request.root),
-    );
-    return out.split("\0").filter((path) => path !== "");
-  });
+  let sourcePathLoad: Promise<readonly string[]> | undefined;
+  const sourcePaths = (): Promise<readonly string[]> => {
+    if (sourcePathLoad === undefined) {
+      sourcePathLoad = runCommand(
+        gitOut(["ls-tree", "-r", "--name-only", "-z", request.pin], request.root),
+      ).then((out) => out.split("\0").filter((path) => path !== ""));
+    }
+    return sourcePathLoad;
+  };
   const changed = new Set(request.files.map((file) => file.path));
 
   const listChanges = pi.coding.defineTool({
@@ -389,9 +392,4 @@ function limitCharacters(value: string): string {
   return value.length <= MAX_TOOL_CHARACTERS
     ? value
     : `${value.slice(0, MAX_TOOL_CHARACTERS)}\n… output capped at ${MAX_TOOL_CHARACTERS} characters.`;
-}
-
-function memoize<A>(load: () => Promise<A>): () => Promise<A> {
-  let value: Promise<A> | undefined;
-  return () => (value ??= load());
 }

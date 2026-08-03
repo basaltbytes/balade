@@ -21,13 +21,7 @@ import {
 } from "../src/generate/command.js";
 import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
 import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/prompt.js";
-import {
-  renderDraft,
-  prepareGeneration,
-  runGeneration,
-  slugifyTitle,
-  type PreparedGeneration,
-} from "../src/generate/run.js";
+import { renderDraft, runGeneration, slugifyTitle } from "../src/generate/run.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -35,7 +29,7 @@ import {
   preferredModel,
 } from "../src/generate/select.js";
 import { shellLayer } from "../src/live.js";
-import { PrLocator } from "../src/pr/locate.js";
+import { resolvePullHead, type PullSnapshot } from "../src/resolve/git.js";
 import { cloneOnMain, createFixtureRepo } from "./support/repo.js";
 
 const PINNED_LINE = "from odoo import api, fields, models";
@@ -94,20 +88,24 @@ function authorRequest(
   };
 }
 
-function prepared(root: string, pin: string): PreparedGeneration {
+function prepared(root: string, pin: string): PullSnapshot {
   return {
     root,
+    repoSlug: "acme/planning",
     pin,
     base: `${pin}^`,
+    head: pin,
     pull: {
       number: 42,
       url: "https://github.com/acme/planning/pull/42",
       author: "reviewer",
+      state: "open",
       base: "main",
       head: "feature/pool",
       commits: 1,
+      stats: { files: 1, additions: 6, deletions: 1 },
     },
-    files: [CHANGED_FILE],
+    files: [{ ...CHANGED_FILE, binary: false }],
     notices: [],
   };
 }
@@ -460,7 +458,7 @@ describe("the Pi adapter", () => {
 });
 
 describe("generation", () => {
-  it.effect("prepares the exact advertised PR head without checking out its branch", () =>
+  it.effect("resolves the exact advertised PR head without checking out its branch", () =>
     Effect.gen(function* () {
       const origin = yield* fixture;
       const clone = yield* Effect.acquireRelease(
@@ -470,11 +468,11 @@ describe("generation", () => {
       execFileSync("git", ["remote", "set-head", "origin", "main"], { cwd: clone.dir });
       execFileSync("git", ["fetch", "origin", "main"], { cwd: clone.dir });
       const fetchHead = readFileSync(join(clone.dir, ".git", "FETCH_HEAD"), "utf8");
-      const source = yield* prepareGeneration({
+      const source = yield* resolvePullHead({
         cwd: clone.dir,
         target: { number: 42, slug: null },
         useGh: false,
-      }).pipe(Effect.provide(PrLocator.layer.pipe(Layer.provideMerge(shellLayer))));
+      }).pipe(Effect.provide(shellLayer));
 
       expect(source.pin).toBe(origin.pin);
       expect(source.files.map((file) => file.path)).toContain("models/planning_pool_item.py");
@@ -508,7 +506,6 @@ describe("generation", () => {
           progress: (event) => {
             if (event._tag === "AuthorUsageUpdated") usageTurns.push(event.usage.total);
           },
-          useGh: false,
         });
       }).pipe(Effect.provide(harness.layer));
 
@@ -554,7 +551,6 @@ describe("generation", () => {
           directory: "drafts",
           progressMode: "compact",
           progress: () => {},
-          useGh: false,
         });
       }).pipe(Effect.provide(harness.layer));
 
@@ -585,7 +581,6 @@ describe("generation", () => {
             directory: "linked/walkthroughs",
             progressMode: "compact",
             progress: () => {},
-            useGh: false,
           }),
         );
         const metadata = yield* Effect.flip(
@@ -595,7 +590,6 @@ describe("generation", () => {
             directory: ".git/walkthroughs",
             progressMode: "compact",
             progress: () => {},
-            useGh: false,
           }),
         );
         return { linked, metadata };
@@ -623,7 +617,6 @@ describe("generation", () => {
             directory: "walkthroughs",
             progressMode: "compact",
             progress: () => {},
-            useGh: false,
           }),
         );
       }).pipe(Effect.provide(harness.layer));
@@ -656,7 +649,6 @@ describe("generation", () => {
             progress: (event) => {
               if (event._tag === "AuthorUsageUpdated") usage.push(event.usage.total);
             },
-            useGh: false,
           }),
         );
       }).pipe(Effect.provide(harness.layer));

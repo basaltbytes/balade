@@ -7,8 +7,7 @@ import { runCheck } from "../check/run.js";
 import { discoveryErrorMessage } from "../check/discover.js";
 import { CheckReport as CheckReportSchema } from "../payload/schema.js";
 import type { CheckReport } from "../payload/types.js";
-import type { PrTarget } from "../pr/target.js";
-import { resolvePullHead, type PullHeadError, type PullNotice } from "../resolve/git.js";
+import type { PullHeadError, PullSnapshot } from "../resolve/git.js";
 import {
   AuthorSessionStartFailed,
   DraftMalformed,
@@ -22,65 +21,6 @@ import {
 } from "./author.js";
 
 const MAX_REPAIR_ATTEMPTS = 2;
-
-export interface PreparedGeneration {
-  readonly root: string;
-  readonly pin: string;
-  readonly base: string;
-  readonly pull: {
-    readonly number: number;
-    readonly url: string;
-    readonly author: string;
-    readonly base: string;
-    readonly head: string;
-    readonly commits: number;
-  };
-  readonly files: readonly {
-    readonly path: string;
-    readonly status: "A" | "M" | "D" | "R";
-    readonly additions: number;
-    readonly deletions: number;
-    readonly oldPath?: string;
-  }[];
-  readonly notices: readonly PullNotice[];
-}
-
-export interface PrepareGenerationOptions {
-  readonly cwd: string;
-  readonly target: PrTarget;
-  readonly useGh?: boolean;
-}
-
-export const prepareGeneration = Effect.fn("prepareGeneration")(function* (
-  options: PrepareGenerationOptions,
-) {
-  const snapshot = yield* resolvePullHead({
-    cwd: options.cwd,
-    target: options.target,
-    ...(options.useGh === undefined ? {} : { useGh: options.useGh }),
-  });
-  return {
-    root: snapshot.root,
-    pin: snapshot.pin,
-    base: snapshot.base,
-    pull: {
-      number: snapshot.pull.number,
-      url: snapshot.pull.url,
-      author: snapshot.pull.author,
-      base: snapshot.pull.base,
-      head: snapshot.pull.head,
-      commits: snapshot.pull.commits,
-    },
-    files: snapshot.files.map((file) => ({
-      path: file.path,
-      status: file.status,
-      additions: file.additions,
-      deletions: file.deletions,
-      ...(file.oldPath === undefined ? {} : { oldPath: file.oldPath }),
-    })),
-    notices: snapshot.notices,
-  } satisfies PreparedGeneration;
-});
 
 export class OutputOutsideRepository extends Schema.TaggedErrorClass<OutputOutsideRepository>()(
   "OutputOutsideRepository",
@@ -107,12 +47,11 @@ export class RepairFailed extends Schema.TaggedErrorClass<RepairFailed>()("Repai
 }) {}
 
 export interface RunGenerationOptions {
-  readonly source: PreparedGeneration;
+  readonly source: PullSnapshot;
   readonly model: AuthorModel;
   readonly directory: string;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
-  readonly useGh?: boolean;
 }
 
 interface GenerationSummary {
@@ -189,7 +128,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
 
     let turn = initial;
     let repairs = 0;
-    let report = yield* checkGeneratedDraft(options, file);
+    let report = yield* checkGeneratedDraft(options.source.root, file);
     while (!report.ok && repairs < MAX_REPAIR_ATTEMPTS) {
       repairs++;
       turn = yield* session
@@ -198,7 +137,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       yield* replaceDraft(fs, path, file, renderDraft(options.source, turn.draft)).pipe(
         Effect.mapError((cause) => new RepairFailed({ file, report, cause })),
       );
-      report = yield* checkGeneratedDraft(options, file);
+      report = yield* checkGeneratedDraft(options.source.root, file);
     }
 
     const summary: GenerationSummary = { file, report, usage: turn.usage, repairs };
@@ -209,13 +148,13 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
 );
 
 const checkGeneratedDraft = Effect.fn("checkGeneratedDraft")(function* (
-  options: RunGenerationOptions,
+  root: string,
   file: string,
 ) {
   const outcome = yield* runCheck({
-    cwd: options.source.root,
+    cwd: root,
     paths: [file],
-    ...(options.useGh === undefined ? {} : { useGh: options.useGh }),
+    useGh: false,
   });
   const report = outcome.reports[0];
   return report === undefined
@@ -307,7 +246,7 @@ const escapesRoot = (path: Path.Path, relative: string): boolean =>
 const isGitMetadata = (path: Path.Path, relative: string): boolean =>
   relative.toLowerCase() === ".git" || relative.toLowerCase().startsWith(`.git${path.sep}`);
 
-export function renderDraft(source: PreparedGeneration, draft: AuthorDraft): string {
+export function renderDraft(source: PullSnapshot, draft: AuthorDraft): string {
   const frontmatter = stringifyYaml({
     walkthrough: 1,
     title: draft.title,
