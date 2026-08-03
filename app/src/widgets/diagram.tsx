@@ -1,11 +1,52 @@
 /* {% diagram %}: manual grid placement (col/row), click-to-section, hover lights
    a node's edges. Edges are straight center-to-center SVG lines; their labels
-   ride the midpoint as HTML chips, so no routing engine is needed. */
+   ride as HTML chips, so no routing engine is needed. A label sits at the
+   midpoint of its edge's visible run — the stretch between the two node
+   borders, measured after layout — because the raw center-to-center midpoint
+   lands under a node box whenever the two boxes sit close. */
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DiagramEdge, DiagramNode, Inline } from "../contract";
 import { jumpTo } from "../ui/nav";
 import { Rich } from "../ui/rich";
+
+interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Parameter t at which the segment a→b leaves the axis-aligned rect around a. */
+function exitParameter(a: Point, b: Point, rect: DOMRect): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const tx = dx === 0 ? Infinity : ((dx > 0 ? rect.right : rect.left) - a.x) / dx;
+  const ty = dy === 0 ? Infinity : ((dy > 0 ? rect.bottom : rect.top) - a.y) / dy;
+  return Math.min(tx, ty);
+}
+
+interface LabelSpot extends Point {
+  /** True when the visible run is too short for the chip, which then renders
+      above the node boxes instead of being sliced by them. */
+  readonly lifted: boolean;
+}
+
+/** Midpoint of the edge's visible run, in percent of the container. */
+function labelSpot(container: DOMRect, from: DOMRect, to: DOMRect, chipWidth: number): LabelSpot {
+  const a = { x: (from.left + from.right) / 2, y: (from.top + from.bottom) / 2 };
+  const b = { x: (to.left + to.right) / 2, y: (to.top + to.bottom) / 2 };
+  const exit = exitParameter(a, b, from);
+  const enter = 1 - exitParameter(b, a, to);
+  /* Overlapping boxes leave no visible run; fall back to the raw midpoint. */
+  const t = exit < enter ? (exit + enter) / 2 : 0.5;
+  const x = a.x + t * (b.x - a.x);
+  const y = a.y + t * (b.y - a.y);
+  const run = exit < enter ? (enter - exit) * Math.hypot(b.x - a.x, b.y - a.y) : 0;
+  return {
+    x: ((x - container.left) / container.width) * 100,
+    y: ((y - container.top) / container.height) * 100,
+    lifted: run < chipWidth + 6,
+  };
+}
 
 const EDGE_COLOR: Record<DiagramEdge["kind"], string> = {
   ctx: "var(--color-context)",
@@ -38,8 +79,35 @@ export function Diagram({
   edges: ReadonlyArray<DiagramEdge>;
 }) {
   const [hover, setHover] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef(new Map<string, HTMLElement>());
+  const labelRefs = useRef(new Map<number, HTMLElement>());
+  const [spots, setSpots] = useState<ReadonlyMap<number, LabelSpot>>(new Map());
   const cols = Math.max(1, ...nodes.map((node) => node.col));
   const rows = Math.max(1, ...nodes.map((node) => node.row));
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (container === null) return;
+    const measure = (): void => {
+      const box = container.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) return;
+      const next = new Map<number, LabelSpot>();
+      edges.forEach((edge, index) => {
+        if (edge.label === undefined) return;
+        const from = nodeRefs.current.get(edge.from)?.getBoundingClientRect();
+        const to = nodeRefs.current.get(edge.to)?.getBoundingClientRect();
+        const chip = labelRefs.current.get(index)?.offsetWidth ?? 0;
+        if (from !== undefined && to !== undefined) next.set(index, labelSpot(box, from, to, chip));
+      });
+      setSpots(next);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [edges]);
   /* Every hover change re-renders the grid; the lookups hold still. */
   const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const byCell = useMemo(
@@ -72,7 +140,7 @@ export function Diagram({
           <Rich v={intro} />
         </p>
       )}
-      <div className="relative border border-border rounded-md bg-card p-4">
+      <div ref={containerRef} className="relative border border-border rounded-md bg-card p-4">
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
           preserveAspectRatio="none"
@@ -107,13 +175,24 @@ export function Diagram({
           if (!from || !to || edge.label === undefined) return null;
           const a = center(from);
           const b = center(to);
+          const spot = spots.get(index) ?? {
+            x: (a.x + b.x) / 2,
+            y: (a.y + b.y) / 2,
+            lifted: false,
+          };
           return (
             <span
               key={`label-${index}`}
-              className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none font-mono text-[10px] px-[5px] py-[1px] rounded-md border border-border bg-background text-muted-foreground whitespace-nowrap transition-opacity"
+              ref={(el) => {
+                if (el === null) labelRefs.current.delete(index);
+                else labelRefs.current.set(index, el);
+              }}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none font-mono text-[10px] px-[5px] py-[1px] rounded-md border border-border bg-background text-muted-foreground whitespace-nowrap transition-opacity ${
+                spot.lifted ? "z-10" : ""
+              }`}
               style={{
-                left: `${(a.x + b.x) / 2}%`,
-                top: `${(a.y + b.y) / 2}%`,
+                left: `${spot.x}%`,
+                top: `${spot.y}%`,
                 opacity: lit(edge) ? 1 : 0.2,
                 color: lit(edge) ? EDGE_COLOR[edge.kind] : undefined,
               }}
@@ -135,6 +214,10 @@ export function Diagram({
               return (
                 <a
                   key={node.id}
+                  ref={(el) => {
+                    if (el === null) nodeRefs.current.delete(node.id);
+                    else nodeRefs.current.set(node.id, el);
+                  }}
                   href={node.ref === undefined ? undefined : `#${node.ref}`}
                   onClick={(event) => {
                     if (node.ref === undefined) return;

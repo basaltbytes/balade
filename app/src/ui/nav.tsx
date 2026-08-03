@@ -33,6 +33,17 @@ export function jumpTo(id: string): void {
   if (!target) return;
   target.scrollIntoView({ behavior: "smooth", block: "start" });
   window.history.replaceState(null, "", `#${id}`);
+  /* Browsers with smooth scrolling disabled (flag or accessibility setting)
+     drop the animated scroll outright instead of degrading it; when nothing
+     has moved after a frame pair, jump without the animation. */
+  const from = window.scrollY;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      if (window.scrollY === from && Math.abs(target.getBoundingClientRect().top) > 1) {
+        target.scrollIntoView({ block: "start" });
+      }
+    }),
+  );
 }
 
 /** An in-page anchor that scrolls instead of navigating. */

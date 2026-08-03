@@ -207,6 +207,19 @@ export function WalkthroughRoute({
     document.documentElement.lang = payload.lang;
   }, [payload]);
 
+  /* The sections exist only after React renders, so on a hard load the
+     browser's native anchor jump found nothing; honour the hash here. Shiki
+     hydration then reflows the content above the target, so one corrective
+     jump after the settle keeps the heading on screen. */
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (id === "") return;
+    const jump = (): void => document.getElementById(id)?.scrollIntoView({ block: "start" });
+    jump();
+    const settle = window.setTimeout(jump, 500);
+    return () => window.clearTimeout(settle);
+  }, []);
+
   return (
     <PayloadProvider value={payload}>
       <ReviewProvider value={review}>
