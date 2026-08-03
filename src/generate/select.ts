@@ -1,7 +1,7 @@
 /** Pure provider/model filtering; the terminal picker stays at the CLI boundary. */
 
-import { Effect, Schema } from "effect";
-import type { AuthorLoginMethod, AuthorModel } from "./author.js";
+import { Effect, Option, Schema } from "effect";
+import type { AuthorLoginMethod, AuthorModel, AuthorModelPreference } from "./author.js";
 
 export class NoProviderAuthenticated extends Schema.TaggedErrorClass<NoProviderAuthenticated>()(
   "NoProviderAuthenticated",
@@ -29,6 +29,32 @@ export function requireScriptedModel(
   return found === undefined
     ? Effect.fail(new NoProviderAuthenticated({ requested: `${provider}/${model}` }))
     : Effect.succeed(found);
+}
+
+export function preferredModelForRun(
+  models: readonly AuthorModel[],
+  preference: Option.Option<AuthorModelPreference>,
+  flags: {
+    readonly chooseModel: boolean;
+    readonly providerId: string | undefined;
+    readonly modelId: string | undefined;
+  },
+): Option.Option<AuthorModel> {
+  if (
+    flags.chooseModel ||
+    flags.providerId !== undefined ||
+    flags.modelId !== undefined ||
+    Option.isNone(preference)
+  ) {
+    return Option.none();
+  }
+  return Option.fromNullishOr(
+    models.find(
+      (candidate) =>
+        candidate.providerId === preference.value.providerId &&
+        candidate.modelId === preference.value.modelId,
+    ),
+  );
 }
 
 /** Product-preferred first-run paths; everything else remains available after them. */

@@ -1,6 +1,11 @@
 /** Pi 0.83 adapter. The package is loaded only when a generation method runs. */
 
-import type { AgentSession, ModelRuntime, ResourceLoader } from "@earendil-works/pi-coding-agent";
+import type {
+  AgentSession,
+  ModelRuntime,
+  ResourceLoader,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import type { AuthEvent, AuthPrompt, Model } from "@earendil-works/pi-ai";
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
@@ -22,6 +27,9 @@ import {
   AuthorDraft,
   AuthorLoginMethod,
   AuthorModel,
+  AuthorModelPreference,
+  AuthorPreferenceReadFailed,
+  AuthorPreferenceWriteFailed,
   AuthorSessionStartFailed,
   AuthorUsage,
   DraftMalformed,
@@ -50,6 +58,7 @@ export interface PiAdapterDependencies {
   readonly coding: CodingAgentSdk;
   readonly ai: AiSdk;
   readonly modelRuntime: ModelRuntime;
+  readonly settingsManager: SettingsManager;
 }
 
 export interface PiWalkthroughAuthorOptions {
@@ -63,6 +72,9 @@ const decodeModels = Schema.decodeUnknownEffect(Schema.Array(AuthorModel), {
   onExcessProperty: "error",
 });
 const decodeLoginMethods = Schema.decodeUnknownEffect(Schema.Array(AuthorLoginMethod), {
+  onExcessProperty: "error",
+});
+const decodeModelPreference = Schema.decodeUnknownEffect(AuthorModelPreference, {
   onExcessProperty: "error",
 });
 const decodeDraft = Schema.decodeUnknownEffect(AuthorDraft, { onExcessProperty: "error" });
@@ -90,7 +102,14 @@ async function loadLiveDependencies(): Promise<PiAdapterDependencies> {
     import("@earendil-works/pi-coding-agent"),
     import("@earendil-works/pi-ai"),
   ]);
-  return { coding, ai, modelRuntime: await coding.ModelRuntime.create() };
+  return {
+    coding,
+    ai,
+    modelRuntime: await coding.ModelRuntime.create(),
+    settingsManager: coding.SettingsManager.create(process.cwd(), undefined, {
+      projectTrusted: false,
+    }),
+  };
 }
 
 /** Inert until a method calls `dependencies`; check/open/build never import Pi. */
@@ -103,6 +122,7 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
       );
       const runCommand = Effect.runPromiseWith(commandContext);
       let loaded: Promise<PiAdapterDependencies> | undefined;
+      let settingsFailure: Error | undefined;
       const load = options.load ?? loadLiveDependencies;
       const dependencies = () => (loaded ??= load());
 
@@ -133,6 +153,53 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
           Effect.mapError((cause) => new AuthorDiscoveryFailed({ cause })),
         );
       }).pipe(Effect.withSpan("WalkthroughAuthor.availableModels"));
+
+      const modelPreference = Effect.tryPromise({
+        try: async () => {
+          const { settingsManager } = await dependencies();
+          await settingsManager.flush();
+          const failure = firstSettingsError(settingsManager);
+          if (failure !== undefined) {
+            settingsFailure = failure;
+            throw failure;
+          }
+          const providerId = settingsManager.getDefaultProvider();
+          const modelId = settingsManager.getDefaultModel();
+          return providerId === undefined || modelId === undefined
+            ? Option.none()
+            : Option.some({ providerId, modelId });
+        },
+        catch: (cause) => new AuthorPreferenceReadFailed({ cause }),
+      }).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.succeed(Option.none()),
+            onSome: (preference) =>
+              decodeModelPreference(preference).pipe(
+                Effect.map(Option.some),
+                Effect.mapError((cause) => new AuthorPreferenceReadFailed({ cause })),
+              ),
+          }),
+        ),
+        Effect.withSpan("WalkthroughAuthor.modelPreference"),
+      );
+
+      const rememberModel = Effect.fn("WalkthroughAuthor.rememberModel")((model: AuthorModel) =>
+        Effect.tryPromise({
+          try: async () => {
+            const { settingsManager } = await dependencies();
+            if (settingsFailure !== undefined) throw settingsFailure;
+            settingsManager.setDefaultModelAndProvider(model.providerId, model.modelId);
+            await settingsManager.flush();
+            const failure = firstSettingsError(settingsManager);
+            if (failure !== undefined) {
+              settingsFailure = failure;
+              throw failure;
+            }
+          },
+          catch: (cause) => new AuthorPreferenceWriteFailed({ cause }),
+        }),
+      );
 
       const loginMethods = Effect.gen(function* () {
         const raw = yield* Effect.tryPromise({
@@ -298,7 +365,7 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
         } satisfies AuthoringSession;
       });
 
-      return { availableModels, loginMethods, login, start };
+      return { availableModels, modelPreference, rememberModel, loginMethods, login, start };
     }),
   );
 }
@@ -526,8 +593,29 @@ async function createPiSession(
     }),
   });
   const unsubscribe = session.subscribe((event) => {
-    if (event.type === "tool_execution_start") {
-      request.progress({ _tag: "AuthorToolStarted", name: event.toolName });
+    if (
+      request.verbose &&
+      event.type === "message_update" &&
+      event.assistantMessageEvent.type === "text_end" &&
+      event.assistantMessageEvent.content !== ""
+    ) {
+      request.progress({
+        _tag: "AuthorAssistantText",
+        text: event.assistantMessageEvent.content,
+      });
+    } else if (event.type === "tool_execution_start") {
+      request.progress({
+        _tag: "AuthorToolStarted",
+        name: event.toolName,
+        input: request.verbose ? verboseValue(event.args) : "",
+      });
+    } else if (request.verbose && event.type === "tool_execution_end") {
+      request.progress({
+        _tag: "AuthorToolFinished",
+        name: event.toolName,
+        output: verboseToolOutput(event.result),
+        failed: event.isError,
+      });
     }
   });
 
@@ -543,6 +631,38 @@ async function createPiSession(
     },
     getDraft: () => draft,
   };
+}
+
+function firstSettingsError(settingsManager: SettingsManager): Error | undefined {
+  return settingsManager.drainErrors()[0]?.error;
+}
+
+function verboseValue(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function verboseToolOutput(result: unknown): string {
+  if (typeof result !== "object" || result === null || !("content" in result)) {
+    return verboseValue(result);
+  }
+  const content = result.content;
+  if (!Array.isArray(content)) return verboseValue(result);
+  return content
+    .map((block) =>
+      typeof block === "object" &&
+      block !== null &&
+      "type" in block &&
+      block.type === "text" &&
+      "text" in block &&
+      typeof block.text === "string"
+        ? block.text
+        : verboseValue(block),
+    )
+    .join("\n");
 }
 
 function codeRangeCount(body: string): number {

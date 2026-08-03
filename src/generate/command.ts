@@ -28,6 +28,7 @@ import {
   NoProviderAuthenticated,
   noProviderMessage,
   orderedLoginMethods,
+  preferredModelForRun,
   requireScriptedModel,
 } from "./select.js";
 
@@ -50,9 +51,17 @@ const directory = Flag.string("dir").pipe(
   Flag.withDefault("walkthroughs"),
 );
 
+const verbose = Flag.boolean("verbose").pipe(
+  Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
+);
+
+const chooseModel = Flag.boolean("choose-model").pipe(
+  Flag.withDescription("Ignore Pi's saved default and choose a provider/model interactively"),
+);
+
 export const generateCommand = Command.make(
   "generate",
-  { pr: target, provider, model, directory },
+  { pr: target, provider, model, directory, verbose, chooseModel },
   (config) =>
     Effect.gen(function* () {
       const pull = parsePrTarget(config.pr);
@@ -62,25 +71,31 @@ export const generateCommand = Command.make(
       }
       const providerId = Option.getOrUndefined(config.provider);
       const modelId = Option.getOrUndefined(config.model);
+      if (config.chooseModel && (providerId !== undefined || modelId !== undefined)) {
+        stopMessage("Use either --choose-model or --provider/--model, not both.");
+        return;
+      }
       const prepared = yield* prepareGeneration({ cwd: process.cwd(), target: pull });
       for (const notice of prepared.notices) {
         writeStdout(`warning ${notice.code}\n  ${notice.message}\n  fix ${notice.hint}\n`);
       }
 
-      const selected = yield* selectAuthorModel(providerId, modelId);
+      const selected = yield* selectAuthorModel(providerId, modelId, config.chooseModel);
       if (Option.isNone(selected)) {
         writeStdout("Generation cancelled.\n");
         return;
       }
 
-      const progress = makeGenerationProgress(writeStdout);
+      const progress = makeGenerationProgress(writeStdout, { verbose: config.verbose });
       const result = yield* runGeneration({
         source: prepared,
         model: selected.value,
         directory: config.directory,
+        verbose: config.verbose,
         progress,
       });
       if (result._tag === "Generated") {
+        if (config.verbose) writeStdout(formatText({ reports: [result.report] }));
         writeStdout(
           generationSuccessText({
             file: result.report.file,
@@ -110,6 +125,7 @@ export const generateCommand = Command.make(
 const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
   providerId: string | undefined,
   modelId: string | undefined,
+  chooseModel: boolean,
 ) {
   const author = yield* WalkthroughAuthor;
   let available = yield* author.availableModels;
@@ -117,6 +133,29 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
     const selected = yield* requireScriptedModel(available, providerId, modelId);
     announceModel(selected);
     return Option.some(selected);
+  }
+
+  const preference =
+    chooseModel || providerId !== undefined || modelId !== undefined
+      ? Option.none()
+      : yield* author.modelPreference.pipe(
+          Effect.catchTag("AuthorPreferenceReadFailed", () =>
+            Effect.sync(() => {
+              writeStderr(
+                "warning Pi's saved model preference could not be read; choose a model.\n",
+              );
+              return Option.none();
+            }),
+          ),
+        );
+  const preferred = preferredModelForRun(available, preference, {
+    chooseModel,
+    providerId,
+    modelId,
+  });
+  if (Option.isSome(preferred)) {
+    announceModel(preferred.value, "saved preference");
+    return preferred;
   }
 
   let matching = matchingModels(available, providerId, modelId);
@@ -172,7 +211,15 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
       initial: true,
     }),
   );
-  return confirmed ? Option.some(selected) : Option.none<AuthorModel>();
+  if (!confirmed) return Option.none<AuthorModel>();
+  yield* author.rememberModel(selected).pipe(
+    Effect.catchTag("AuthorPreferenceWriteFailed", () =>
+      Effect.sync(() => {
+        writeStderr("warning Pi's model preference could not be saved; this run will continue.\n");
+      }),
+    ),
+  );
+  return Option.some(selected);
 });
 
 function loginInteraction(context: Context.Context<Prompt.Environment>): LoginInteraction {
@@ -236,17 +283,12 @@ function printLoginNotification(event: LoginNotification): void {
 
 export function makeGenerationProgress(
   write: (value: string) => void,
+  options: { readonly verbose?: boolean } = {},
 ): (event: AuthorProgress) => void {
   let turn = 0;
   const announced = new Set<string>();
   return (event) => {
-    if (event._tag === "AuthorToolStarted") {
-      const message = progressMessage(event.name);
-      if (!announced.has(message)) {
-        announced.add(message);
-        write(`${message}\n`);
-      }
-    } else if (event._tag === "AuthorUsageUpdated") {
+    if (event._tag === "AuthorUsageUpdated") {
       turn++;
       const usage = event.usage;
       write(
@@ -255,8 +297,25 @@ export function makeGenerationProgress(
           `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
           `cost $${usage.cost.toFixed(4)}\n`,
       );
+    } else if (options.verbose && event._tag === "AuthorAssistantText") {
+      write(`[assistant]\n${withTrailingNewline(event.text)}`);
+    } else if (options.verbose && event._tag === "AuthorToolStarted") {
+      write(`[${event.name}]${event.input === "" ? "" : ` ${event.input}`}\n`);
+    } else if (options.verbose && event._tag === "AuthorToolFinished") {
+      if (event.output !== "") write(withTrailingNewline(event.output));
+      write(`[/${event.name}${event.failed ? " error" : ""}]\n`);
+    } else if (!options.verbose && event._tag === "AuthorToolStarted") {
+      const message = progressMessage(event.name);
+      if (!announced.has(message)) {
+        announced.add(message);
+        write(`${message}\n`);
+      }
     }
   };
+}
+
+function withTrailingNewline(value: string): string {
+  return value.endsWith("\n") ? value : `${value}\n`;
 }
 
 function progressMessage(tool: string): string {
@@ -275,9 +334,9 @@ function progressMessage(tool: string): string {
   }
 }
 
-function announceModel(model: AuthorModel): void {
+function announceModel(model: AuthorModel, source?: string): void {
   writeStdout(
-    `Provider/model: ${model.providerName} — ${model.modelName} (${model.providerId}/${model.modelId})\n`,
+    `Provider/model: ${model.providerName} — ${model.modelName} (${model.providerId}/${model.modelId})${source === undefined ? "" : ` — ${source}`}\n`,
   );
   if (model.providerId === "anthropic") writeStdout(`${anthropicBillingCaveat()}\n`);
 }

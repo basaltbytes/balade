@@ -4,7 +4,7 @@
  * `pi.ts`.
  */
 
-import { Context, Effect, Redacted, Schema, Scope } from "effect";
+import { Context, Effect, Option, Redacted, Schema, Scope } from "effect";
 
 export const AuthorProviderId = Schema.NonEmptyString.pipe(
   Schema.brand("@balade/AuthorProviderId"),
@@ -21,6 +21,12 @@ export const AuthorModel = Schema.Struct({
   modelName: Schema.NonEmptyString,
 });
 export type AuthorModel = typeof AuthorModel.Type;
+
+export const AuthorModelPreference = Schema.Struct({
+  providerId: AuthorProviderId,
+  modelId: AuthorModelId,
+});
+export type AuthorModelPreference = typeof AuthorModelPreference.Type;
 
 export const AuthorLoginMethod = Schema.Struct({
   providerId: AuthorProviderId,
@@ -79,7 +85,14 @@ export interface LoginInteraction {
 }
 
 export type AuthorProgress =
-  | { readonly _tag: "AuthorToolStarted"; readonly name: string }
+  | { readonly _tag: "AuthorAssistantText"; readonly text: string }
+  | { readonly _tag: "AuthorToolStarted"; readonly name: string; readonly input: string }
+  | {
+      readonly _tag: "AuthorToolFinished";
+      readonly name: string;
+      readonly output: string;
+      readonly failed: boolean;
+    }
   | { readonly _tag: "AuthorUsageUpdated"; readonly usage: AuthorUsage };
 
 export interface AuthorChangedFile {
@@ -104,6 +117,7 @@ export interface AuthoringRequest {
   };
   readonly files: readonly AuthorChangedFile[];
   readonly model: AuthorModel;
+  readonly verbose: boolean;
   readonly progress: (event: AuthorProgress) => void;
 }
 
@@ -133,6 +147,16 @@ export interface AuthorTurn {
 
 export class AuthorDiscoveryFailed extends Schema.TaggedErrorClass<AuthorDiscoveryFailed>()(
   "AuthorDiscoveryFailed",
+  { cause: Schema.Defect() },
+) {}
+
+export class AuthorPreferenceReadFailed extends Schema.TaggedErrorClass<AuthorPreferenceReadFailed>()(
+  "AuthorPreferenceReadFailed",
+  { cause: Schema.Defect() },
+) {}
+
+export class AuthorPreferenceWriteFailed extends Schema.TaggedErrorClass<AuthorPreferenceWriteFailed>()(
+  "AuthorPreferenceWriteFailed",
   { cause: Schema.Defect() },
 ) {}
 
@@ -178,6 +202,11 @@ export interface AuthoringSession {
 
 export interface WalkthroughAuthorShape {
   readonly availableModels: Effect.Effect<readonly AuthorModel[], AuthorDiscoveryFailed>;
+  readonly modelPreference: Effect.Effect<
+    Option.Option<AuthorModelPreference>,
+    AuthorPreferenceReadFailed
+  >;
+  readonly rememberModel: (model: AuthorModel) => Effect.Effect<void, AuthorPreferenceWriteFailed>;
   readonly loginMethods: Effect.Effect<readonly AuthorLoginMethod[], AuthorDiscoveryFailed>;
   readonly login: (
     method: AuthorLoginMethod,

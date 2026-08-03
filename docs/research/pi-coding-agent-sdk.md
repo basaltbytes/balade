@@ -146,6 +146,12 @@ keychain. `packages/coding-agent/src/config.ts` (`getAgentDir()` →
   (`getAll()`, `getAvailable()`, `find(provider, id)`,
   `hasConfiguredAuth(model)`). Model helpers: `calculateCost()`, `hasApi()`
   type guard, thinking-level utilities (`models.ts`).
+- Global model preference: `SettingsManager.create(cwd)` reads
+  `~/.pi/agent/settings.json`; `getDefaultProvider()` / `getDefaultModel()`
+  retrieve the pair and `setDefaultModelAndProvider()` persists it through a
+  cross-process file lock. `flush()` awaits queued writes and `drainErrors()`
+  exposes load/write failures. `SettingsManager.inMemory()` provides the same
+  API for an isolated test seam (`core/settings-manager.ts`).
 
 ## 4. Embeddable as a library
 
@@ -160,8 +166,10 @@ RPC, and "an SDK for embedding in your own apps".
 
 - `createAgentSession()` → `AgentSession`: `prompt(text)`, `steer()`,
   `followUp()`, `subscribe(listener)` for streaming events
-  (`message_update` with `text_delta` etc.), `setModel()`, `compact()`,
-  `abort()`, `dispose()`. `AgentSessionRuntime` adds new/resume/fork/import.
+  (`message_update` with text/thinking/tool-call updates, plus
+  `tool_execution_start` / `tool_execution_end` carrying tool inputs and
+  results), `setModel()`, `compact()`, `abort()`, `dispose()`.
+  `AgentSessionRuntime` adds new/resume/fork/import.
 - System-prompt injection: `DefaultResourceLoader` with
   `systemPromptOverride` / `appendSystemPromptOverride`
   (`examples/sdk/03-custom-prompt.ts`).

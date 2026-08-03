@@ -107,6 +107,7 @@ export interface RunGenerationOptions {
   readonly model: AuthorModel;
   readonly directory: string;
   readonly progress: (event: AuthorProgress) => void;
+  readonly verbose?: boolean;
   readonly useGh?: boolean;
 }
 
@@ -156,6 +157,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       pull: options.source.pull,
       files: options.source.files,
       model: options.model,
+      verbose: options.verbose ?? false,
       progress: options.progress,
     });
     const initial = session.initial;

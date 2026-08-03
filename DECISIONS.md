@@ -273,14 +273,22 @@ the first command a new user runs must work from a bare `npx balade`. The
 install cost — roughly 13 MB unpacked plus the official provider SDKs on a
 cold `npx` — is machine seconds and cacheable in CI. The live layer imports
 Pi lazily (its root barrel loads TUI modules at import time), so `check`,
-`open` and `build` never pay its startup cost. Engines move to Node >= 22.19.0
-in the same release: Pi requires it, and Node 20 passed end of life on
-2026-04-30.
+`open` and `build` never pay its startup cost. The effective Node range is
+`^22.22.2 || ^24.15.0 || >=26.0.0`, covering Pi and its locked production tree;
+Node 20 passed end of life on 2026-04-30.
 
 Every Pi surface sits behind the one `WalkthroughAuthor` service, the
 anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
 Codex-SDK-plus-API-key pair of adapters instead.
+
+Provider/model defaults use Pi's global `SettingsManager` rather than a second
+balade preference file. Project settings are not trusted or loaded for this
+choice. A confirmed interactive selection updates Pi's default; a matching
+default is reused without another picker. Explicit `--provider` and `--model`
+flags override it without mutating it, while `--choose-model` deliberately opens
+the picker and saves the newly confirmed choice. Preference read and write
+failures are typed warnings and do not prevent a generation run.
 
 The session runs in memory with a resource loader that exposes no Pi extensions,
 skills, prompts, themes or repository context files. Its allowlist contains only
@@ -329,11 +337,15 @@ Usage is decoded and reported after every completed provider turn, including
 turns that end in provider or submission errors. Cancellation is distinct from
 authentication failure. Cleanup skips abort for an idle session; an active
 session abort is bounded and failures are logged without provider or credential
-details. Model prose is not streamed to the terminal, and every remaining
-dynamic terminal string has control sequences removed. Tool events collapse to
-one message per inspection phase. A successful check prints only the verified
-range count, generated path, and the next `balade open` command; full diagnostics
-remain visible when the generated draft still needs manual repair.
+details. Model prose is not streamed in the default output, and every dynamic
+terminal string has control sequences removed. By default, tool events collapse
+to one message per inspection phase, and detailed tool results are not
+materialized across the adapter boundary. `--verbose` opts into assistant-visible
+text, every allowlisted tool input and result, and the successful range report;
+provider-hidden reasoning remains hidden. A normal successful check prints only
+the verified range count, generated path, and the next `balade open` command;
+full diagnostics remain visible when the generated draft still needs manual
+repair.
 
 ## Parser properties follow schema and grammar edges
 

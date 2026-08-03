@@ -67,8 +67,14 @@ ids and skip the prompts:
 
 ```sh
 npx balade generate 96 --provider openai-codex --model gpt-5.4
+npx balade generate 96 --choose-model
 npx balade generate 96 --dir docs/walkthroughs
 ```
+
+An interactively confirmed choice becomes Pi's global default and is reused on
+the next run when it is available. `--choose-model` ignores that default and
+opens the picker again. Supplying both `--provider` and `--model` overrides the
+default for one run without changing it.
 
 The default output is `walkthroughs/pr-96-<title>.md`. Balade stamps the PR
 number and commit itself, reports each inspection phase once, reports cumulative
@@ -81,6 +87,10 @@ outside the repository and paths inside `.git` are rejected.
 After a successful check, balade prints the generated path and the exact
 `balade open …` command to start reviewing it. Generation itself doesn't start
 the review server.
+
+Use `--verbose` to show assistant-visible text, every allowlisted Pi tool input
+and result, and the successful code-range report. Provider-hidden reasoning and
+terminal control sequences are never printed.
 
 Generation never stages, commits, pushes, or opens a pull request. If the draft
 still fails validation, balade keeps the file and exits with status 1; edit the

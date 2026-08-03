@@ -2,7 +2,7 @@
 
 import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
-import { Effect, Fiber, Layer, Redacted, Schema, Terminal } from "effect";
+import { Effect, Fiber, Layer, Option, Redacted, Schema, Terminal } from "effect";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,7 +28,11 @@ import {
   slugifyTitle,
   type PreparedGeneration,
 } from "../src/generate/run.js";
-import { matchingModels, requireScriptedModel } from "../src/generate/select.js";
+import {
+  matchingModels,
+  preferredModelForRun,
+  requireScriptedModel,
+} from "../src/generate/select.js";
 import { shellLayer } from "../src/live.js";
 import { PrLocator } from "../src/pr/locate.js";
 import { cloneOnMain, createFixtureRepo } from "./support/repo.js";
@@ -41,7 +45,7 @@ const CHANGED_FILE = {
   deletions: 1,
 };
 
-async function piHarness(registerFaux = true) {
+async function piHarness(registerFaux = true, settingsManager = coding.SettingsManager.inMemory()) {
   const credentials = new ai.InMemoryCredentialStore();
   const modelRuntime = await coding.ModelRuntime.create({
     credentials,
@@ -54,9 +58,9 @@ async function piHarness(registerFaux = true) {
     await modelRuntime.refresh({ allowNetwork: false });
   }
   const layer = piWalkthroughAuthorLayer({
-    load: async () => ({ coding, ai, modelRuntime }),
+    load: async () => ({ coding, ai, modelRuntime, settingsManager }),
   }).pipe(Layer.provideMerge(shellLayer));
-  return { credentials, faux, layer, modelRuntime };
+  return { credentials, faux, layer, modelRuntime, settingsManager };
 }
 
 const fixture = Effect.acquireRelease(Effect.sync(createFixtureRepo), (repo) =>
@@ -68,6 +72,7 @@ function authorRequest(
   pin: string,
   model: AuthorModel,
   progress: (event: AuthorProgress) => void = () => {},
+  verbose = false,
 ) {
   return {
     root,
@@ -83,6 +88,7 @@ function authorRequest(
     },
     files: [CHANGED_FILE],
     model,
+    verbose,
     progress,
   };
 }
@@ -146,13 +152,17 @@ describe("the Pi adapter", () => {
       const harness = yield* Effect.promise(() => piHarness());
       repo.write("models/planning_pool_item.py", "working tree content only\n");
       let secondRequest = "";
+      const progress: AuthorProgress[] = [];
       harness.faux.setResponses([
         ai.fauxAssistantMessage(
-          ai.fauxToolCall("read_source", {
-            path: "models/planning_pool_item.py",
-            from: 1,
-            to: 3,
-          }),
+          [
+            ai.fauxText("Inspecting the pinned source."),
+            ai.fauxToolCall("read_source", {
+              path: "models/planning_pool_item.py",
+              from: 1,
+              to: 3,
+            }),
+          ],
           { stopReason: "toolUse" },
         ),
         (context) => {
@@ -164,7 +174,9 @@ describe("the Pi adapter", () => {
       const turn = yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         const model = yield* fauxModel();
-        const session = yield* author.start(authorRequest(repo.dir, repo.pin, model));
+        const session = yield* author.start(
+          authorRequest(repo.dir, repo.pin, model, (event) => progress.push(event), true),
+        );
         return session.initial;
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
 
@@ -177,6 +189,64 @@ describe("the Pi adapter", () => {
       expect(secondRequest).not.toContain('"write_file"');
       expect(AUTHORING_SYSTEM_PROMPT).toContain("no more than 8 diff reads");
       expect(AUTHORING_SYSTEM_PROMPT).toContain("hard maximum of 10 code ranges");
+      expect(progress).toContainEqual({
+        _tag: "AuthorAssistantText",
+        text: "Inspecting the pinned source.",
+      });
+      expect(progress).toContainEqual({
+        _tag: "AuthorToolStarted",
+        name: "read_source",
+        input: '{"path":"models/planning_pool_item.py","from":1,"to":3}',
+      });
+      expect(progress).toContainEqual(
+        expect.objectContaining({
+          _tag: "AuthorToolFinished",
+          name: "read_source",
+          output: expect.stringContaining(PINNED_LINE),
+          failed: false,
+        }),
+      );
+    }),
+  );
+
+  it.effect("reads and updates Pi's global model preference", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => piHarness());
+      const stored = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        expect(Option.isNone(yield* author.modelPreference)).toBe(true);
+        const model = yield* fauxModel();
+        yield* author.rememberModel(model);
+        return yield* author.modelPreference;
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(Option.getOrUndefined(stored)).toEqual({
+        providerId: "faux",
+        modelId: "faux-1",
+      });
+      expect(harness.settingsManager.getDefaultProvider()).toBe("faux");
+      expect(harness.settingsManager.getDefaultModel()).toBe("faux-1");
+    }),
+  );
+
+  it.effect("keeps Pi preference I/O failures typed", () =>
+    Effect.gen(function* () {
+      const brokenSettings = coding.SettingsManager.fromStorage({
+        withLock: () => {
+          throw new Error("settings unavailable");
+        },
+      });
+      const harness = yield* Effect.promise(() => piHarness(true, brokenSettings));
+      const failures = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const read = yield* Effect.flip(author.modelPreference);
+        const model = yield* fauxModel();
+        const write = yield* Effect.flip(author.rememberModel(model));
+        return { read, write };
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(failures.read._tag).toBe("AuthorPreferenceReadFailed");
+      expect(failures.write._tag).toBe("AuthorPreferenceWriteFailed");
     }),
   );
 
@@ -185,6 +255,7 @@ describe("the Pi adapter", () => {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
       let finalRequest = "";
+      const progress: AuthorProgress[] = [];
       harness.faux.setResponses([
         ...Array.from({ length: 9 }, () =>
           ai.fauxAssistantMessage(ai.fauxToolCall("read_pr_diff", { path: CHANGED_FILE.path }), {
@@ -200,10 +271,19 @@ describe("the Pi adapter", () => {
       yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         const model = yield* fauxModel();
-        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+        yield* author.start(
+          authorRequest(repo.dir, repo.pin, model, (event) => progress.push(event)),
+        );
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
 
       expect(finalRequest).toContain("Diff inspection budget reached after 8 reads");
+      expect(progress.some((event) => event._tag === "AuthorAssistantText")).toBe(false);
+      expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(false);
+      expect(
+        progress
+          .filter((event) => event._tag === "AuthorToolStarted")
+          .every((event) => event.input === ""),
+      ).toBe(true);
     }),
   );
 
@@ -605,6 +685,46 @@ describe("generation", () => {
     expect(
       sanitizeTerminalText("safe\u001b]8;;https://evil.invalid\u0007link\u001b]8;;\u0007\u0000"),
     ).toBe("safelink");
+
+    const models = [
+      Schema.decodeUnknownSync(AuthorModelSchema)({
+        providerId: "faux",
+        providerName: "Faux",
+        modelId: "one",
+        modelName: "One",
+      }),
+    ];
+    const preference = Option.some({
+      providerId: models[0]!.providerId,
+      modelId: models[0]!.modelId,
+    });
+    expect(
+      Option.getOrUndefined(
+        preferredModelForRun(models, preference, {
+          chooseModel: false,
+          providerId: undefined,
+          modelId: undefined,
+        }),
+      ),
+    ).toEqual(models[0]);
+    expect(
+      Option.isNone(
+        preferredModelForRun(models, preference, {
+          chooseModel: true,
+          providerId: undefined,
+          modelId: undefined,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      Option.isNone(
+        preferredModelForRun(models, preference, {
+          chooseModel: false,
+          providerId: "faux",
+          modelId: "one",
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("summarizes generation progress and gives the reviewer a next step", () => {
@@ -619,12 +739,12 @@ describe("generation", () => {
       cost: 0.0123,
     };
 
-    progress({ _tag: "AuthorToolStarted", name: "list_pr_changes" });
-    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff" });
-    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff" });
-    progress({ _tag: "AuthorToolStarted", name: "read_source" });
-    progress({ _tag: "AuthorToolStarted", name: "read_source" });
-    progress({ _tag: "AuthorToolStarted", name: "submit_walkthrough" });
+    progress({ _tag: "AuthorToolStarted", name: "list_pr_changes", input: "{}" });
+    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff", input: "{}" });
+    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff", input: "{}" });
+    progress({ _tag: "AuthorToolStarted", name: "read_source", input: "{}" });
+    progress({ _tag: "AuthorToolStarted", name: "read_source", input: "{}" });
+    progress({ _tag: "AuthorToolStarted", name: "submit_walkthrough", input: "{}" });
     progress({ _tag: "AuthorUsageUpdated", usage });
 
     expect(output).toEqual([
@@ -645,5 +765,28 @@ describe("generation", () => {
         "Generated walkthroughs/pr-20-generate-with-pi.md.\n" +
         "Review it with:\n  balade open walkthroughs/pr-20-generate-with-pi.md\n",
     );
+
+    const verboseOutput: string[] = [];
+    const verbose = makeGenerationProgress((value) => verboseOutput.push(value), {
+      verbose: true,
+    });
+    verbose({ _tag: "AuthorAssistantText", text: "I found the behavioral spine." });
+    verbose({
+      _tag: "AuthorToolStarted",
+      name: "read_source",
+      input: '{"path":"src/example.ts","from":1,"to":2}',
+    });
+    verbose({
+      _tag: "AuthorToolFinished",
+      name: "read_source",
+      output: "1 | export const value = 1;",
+      failed: false,
+    });
+    expect(verboseOutput).toEqual([
+      "[assistant]\nI found the behavioral spine.\n",
+      '[read_source] {"path":"src/example.ts","from":1,"to":2}\n',
+      "1 | export const value = 1;\n",
+      "[/read_source]\n",
+    ]);
   });
 });
