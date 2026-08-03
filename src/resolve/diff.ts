@@ -57,10 +57,12 @@ export function splitDiff(raw: string): DiffRecord[] {
     }
     const path = newPath ?? oldPath;
     if (path !== null) {
+      const body =
+        bodyStart === -1 ? "" : `${chunk.slice(bodyStart).join("\n").replace(/\n+$/, "")}\n`;
       records.push({
         path,
         oldPath: oldPath !== null && oldPath !== path ? oldPath : null,
-        body: bodyStart === -1 ? "" : chunk.slice(bodyStart).join("\n").replace(/\n+$/, "\n"),
+        body,
         binary,
       });
     }

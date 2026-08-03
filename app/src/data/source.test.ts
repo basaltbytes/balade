@@ -1,7 +1,11 @@
 /* The payload parse, on its own: the app never types a body it has not read. */
 
-import { Effect, Option } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import {
+  IndexPayload as IndexPayloadSchema,
+  Payload as PayloadSchema,
+} from "../../../src/payload/schema";
 import { fetchLayer, type BrowserFetch, type FetchLike } from "./browser";
 import { fetchHeadDistance, loadPayload, type RouteLocation } from "./source";
 
@@ -33,11 +37,27 @@ const walkthrough = {
 const index = { kind: "index", repo: "acme/repo", entries: [] };
 
 const location: RouteLocation = { search: "", hash: "", pathname: "/" };
+const loadablePayload = Schema.Union([PayloadSchema, IndexPayloadSchema]);
 
 const withFetch = <A, E>(effect: Effect.Effect<A, E, BrowserFetch>, fetch: FetchLike) =>
   effect.pipe(Effect.provide(fetchLayer(fetch)));
 
 describe("loadPayload", () => {
+  it.effect.prop(
+    "round-trips schema-generated baked payloads",
+    { expected: loadablePayload },
+    ({ expected }) =>
+      withFetch(
+        Effect.gen(function* () {
+          const serialized: unknown = JSON.parse(JSON.stringify(expected));
+          const loaded = yield* loadPayload(location, serialized);
+          expect(loaded.payload).toEqual(expected);
+        }),
+        () => Promise.reject(new Error("fetch should not be used")),
+      ),
+    { fastCheck: { numRuns: 25 } },
+  );
+
   it.effect("loads and decodes a baked walkthrough", () =>
     withFetch(
       Effect.gen(function* () {

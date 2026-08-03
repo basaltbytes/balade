@@ -1,7 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Schema } from "effect";
+import { stringify as stringifyYaml } from "yaml";
+import { Frontmatter as FrontmatterSchema } from "../src/payload/schema.js";
 import { parseFrontmatter } from "../src/schema/frontmatter.js";
 
 describe("frontmatter schema diagnostics", () => {
+  it.prop(
+    "round-trips schema-shaped values through YAML",
+    { expected: Schema.toArbitrary(FrontmatterSchema) },
+    ({ expected }) => {
+      expect(parseFrontmatter(stringifyYaml(expected), "walkthroughs/property.md")).toEqual({
+        frontmatter: expected,
+        diagnostics: [],
+      });
+    },
+  );
+
   it("keeps optional-field errors non-blocking and normalizes valid metadata scalars", () => {
     const result = parseFrontmatter(
       [
@@ -52,6 +66,19 @@ describe("frontmatter schema diagnostics", () => {
         hint: "Meta values render as header chips; keep them short strings.",
       },
     ]);
+  });
+
+  it("preserves prototype-named metadata keys as own data", () => {
+    const result = parseFrontmatter(
+      ["walkthrough: 1", "title: T", "pr: 7", "commit: abc1234", "meta:", "  __proto__: kept"].join(
+        "\n",
+      ),
+      "walkthroughs/one.md",
+    );
+
+    expect(result.frontmatter?.meta["__proto__"]).toBe("kept");
+    expect(Object.hasOwn(result.frontmatter?.meta ?? {}, "__proto__")).toBe(true);
+    expect(result.diagnostics).toEqual([]);
   });
 
   it("maps required-field schema issues to the established messages and lines", () => {

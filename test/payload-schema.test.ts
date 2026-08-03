@@ -40,7 +40,7 @@ describe("the payload schemas", () => {
     expect(Schema.encodeSync(PayloadSchema)(decoded)).toEqual(payload);
   });
 
-  it("preserves the open data of a namespaced preset block", () => {
+  it("preserves the JSON data of a namespaced preset block", () => {
     const block = {
       b: "odoo/security",
       rows: [{ group: "base.group_user", read: true }],
@@ -48,6 +48,12 @@ describe("the payload schemas", () => {
     };
     const decoded = Schema.decodeUnknownSync(Block, strict)(block);
     expect(Schema.encodeSync(Block)(decoded)).toEqual(block);
+  });
+
+  it("refuses preset data that cannot cross a JSON edge", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(Block, strict)({ b: "odoo/security", config: undefined }),
+    ).toThrow();
   });
 
   it("round-trips persisted review state", () => {

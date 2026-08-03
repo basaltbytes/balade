@@ -204,12 +204,13 @@ export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
   const required = decodeRequired(map);
   if (Result.isFailure(required)) return { frontmatter: null, diagnostics };
 
-  const meta: Record<string, string> = {};
+  const metaEntries: Array<[string, string]> = [];
   if (metaMap !== undefined && Result.isSuccess(metaMap)) {
     for (const [key, value] of Object.entries(metaMap.success)) {
-      if (!invalid.has(pathKey("meta", key))) meta[key] = String(value);
+      if (!invalid.has(pathKey("meta", key))) metaEntries.push([key, String(value)]);
     }
   }
+  const meta = Object.fromEntries(metaEntries);
 
   const preset = map["preset"];
   return {

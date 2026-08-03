@@ -3,7 +3,8 @@
 
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { parseReviewState } from "../src/payload/parse-review.js";
+import { parseReviewJson, parseReviewState } from "../src/payload/parse-review.js";
+import { ReviewState as ReviewStateSchema } from "../src/payload/schema.js";
 import type { ReviewState } from "../src/payload/types.js";
 
 const state: ReviewState = {
@@ -16,6 +17,15 @@ const state: ReviewState = {
 };
 
 describe("parseReviewState", () => {
+  it.effect.prop(
+    "round-trips schema-generated state through JSON",
+    { expected: ReviewStateSchema },
+    ({ expected }) =>
+      Effect.gen(function* () {
+        expect(yield* parseReviewJson(JSON.stringify(expected))).toEqual(expected);
+      }),
+  );
+
   it.effect("reads a well-formed state back", () =>
     Effect.gen(function* () {
       expect(yield* parseReviewState(JSON.parse(JSON.stringify(state)))).toEqual(state);

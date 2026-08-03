@@ -9,8 +9,10 @@ Supersedes "the payload contract stays plain interfaces" (2026-08-02). The
 source of truth is `src/payload/schema.ts`, with `src/payload/types.ts` derived
 from it (`typeof X.Type`) — still the type-only entry the SPA imports through
 `app/src/contract.ts`. Every JSON edge decodes deeply and rejects excess
-properties; the deliberate exception is a namespaced preset block, whose
-unknown data must survive for a renderer that understands it. A malformed
+properties; the deliberate exception is a namespaced preset block, whose open
+JSON data must survive for a renderer that understands it. The preset rest
+schema is `Schema.Json`, not `Schema.Unknown`, because values that cannot cross
+the served or baked JSON edges are not part of the payload contract. A malformed
 review mark invalidates its state file as one value rather than silently
 salvaging part of it. Schema-derived collections and fields are readonly; code
 that enriches a payload replaces values instead of mutating decoded contract
@@ -261,12 +263,24 @@ pin and computing the rows is not done. `o-diagram` passes its attributes to the
 core diagram transform; expanding `rel="m2o|o2m|m2m"` on edges into the standard
 label, arrow kind and colour is not done either.
 
-## No property tests yet
+## Parser properties follow schema and grammar edges
 
-The parsers — `parseFrontmatter`, `parseReviewState`, `loadPayload`, `splitDiff`,
-`parsePo` — are what properties would pay for: roundtrips, idempotence, "junk in
-never yields a half-built value". `fast-check` is not a dependency, so the suite
-is example-based. The gap is named, not hidden.
+The parser suite now exercises the five edges that warranted properties:
+`parseFrontmatter`, review-state parsing, `loadPayload`, `splitDiff` and
+`parsePo`. Review state, payload and frontmatter values come from Effect
+Schema-derived arbitraries; the persisted values cross their JSON edges.
+Unified diffs and gettext catalogs use focused grammar-aware generators and
+serialize before parsing, including Git's adjacent file records and PO escape
+sequences. The representative `app/src/fixtures/pr96.ts` payload also passes the
+strict runtime schema in a test, so its compile-time annotation cannot hide
+nested drift.
+
+Property execution goes through `@effect/vitest`, which uses the `fast-check`
+version re-exported by the pinned Effect beta; the project does not take a
+second direct dependency. Effect-facing suites use `it.effect`, and converted
+ports are exercised through layers: real fixture repositories for filesystem
+state, and explicit in-memory layers for the server repository, payload cache,
+browser fetch and storage seams.
 
 ## DOM tests cover the renderer's IO lifecycle
 
