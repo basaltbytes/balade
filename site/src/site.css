@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@source "./";
+
+/* The app's approved Primer-dark token map, reused verbatim so the landing
+   and the review app are one brand. */
+@theme {
+  --color-background: #0d1117;
+  --color-foreground: #e6edf3;
+  --color-card: #161b22;
+  --color-muted-foreground: #7d8590;
+  --color-border: #30363d;
+  --color-primary: #2f81f7;
+  --color-added: #3fb950;
+  --color-deleted: #f85149;
+
+  --font-human: "Charter", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-machine: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+}
+
+/* A badge lands: the churn animation for newly merged diffstats. */
+@keyframes land {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* A badge leaves: merged, it evaporates upward. */
+@keyframes fade {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Each badge bobs on its own slow phase; negative delays desynchronize them. */
+@keyframes bob {
+  from {
+    transform: translateY(-0.22em);
+  }
+  to {
+    transform: translateY(0.22em);
+  }
+}
+
+/* Each depth tier drifts on its own slow loop; the field never quite rests. */
+@keyframes drift-a {
+  from {
+    transform: translate3d(-0.6%, 0, 0);
+  }
+  to {
+    transform: translate3d(0.6%, 0.4%, 0);
+  }
+}
+
+@keyframes drift-b {
+  from {
+    transform: translate3d(0.5%, 0.3%, 0);
+  }
+  to {
+    transform: translate3d(-0.5%, -0.3%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
