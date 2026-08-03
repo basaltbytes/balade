@@ -1,8 +1,10 @@
 /* The zero-argument route: one row per discovered walkthrough, with the
    staleness badge arriving after the page is already on screen. */
 
+import { Option } from "effect";
 import { useEffect, useState } from "react";
 import type { IndexEntry, IndexPayload } from "../contract";
+import { runAppEffect } from "../data/runtime";
 import { fetchHeadDistance, hrefFor } from "../data/source";
 import { Chip, ProgressBar } from "../ui/bits";
 import { Octicon } from "../ui/octicon";
@@ -11,13 +13,9 @@ import { useStrings } from "../ui/strings";
 function useHeadDistance(path: string): number | null {
   const [distance, setDistance] = useState<number | null>(null);
   useEffect(() => {
-    let alive = true;
-    void fetchHeadDistance(path).then((value) => {
-      if (alive) setDistance(value);
+    return runAppEffect(fetchHeadDistance(path), (value) => {
+      setDistance(Option.getOrNull(value));
     });
-    return () => {
-      alive = false;
-    };
   }, [path]);
   return distance;
 }

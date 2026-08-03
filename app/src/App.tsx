@@ -1,6 +1,8 @@
+import { Effect, Match } from "effect";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { loadPayload, type Loaded } from "./data/source";
-import { stringsFor, type Lang } from "./i18n";
+import { runAppEffect } from "./data/runtime";
+import { loadAppPayload, type Loaded, type PayloadLoadError } from "./data/source";
+import type { Lang } from "./i18n";
 import { IndexRoute } from "./routes/index-route";
 import { WalkthroughRoute } from "./routes/walkthrough";
 import { Octicon } from "./ui/octicon";
@@ -8,7 +10,7 @@ import { StringsProvider, useStrings } from "./ui/strings";
 
 type State =
   | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "error"; error: PayloadLoadError }
   | { status: "ready"; loaded: Loaded };
 
 const browserLang = (): Lang =>
@@ -18,6 +20,14 @@ const browserLang = (): Lang =>
 
 function Splash({ state, onRetry }: { state: State; onRetry: () => void }) {
   const strings = useStrings();
+  const message =
+    state.status === "error"
+      ? Match.valueTags(state.error, {
+          PayloadUnreadable: () => strings.payloadUnreadable,
+          PayloadFetchFailed: () => strings.payloadFetchFailed,
+          PayloadLocationInvalid: () => strings.payloadLocationInvalid,
+        })
+      : "";
   return (
     <div className="mx-auto max-w-[640px] px-6 py-24 text-center">
       {state.status === "loading" ? (
@@ -28,8 +38,8 @@ function Splash({ state, onRetry }: { state: State; onRetry: () => void }) {
             <Octicon name="alert" size={16} className="text-destructive" />
             {strings.loadFailed}
           </p>
-          {state.status === "error" && state.message.length > 0 && (
-            <p className="mt-2 font-mono text-[12px] text-muted-foreground">{state.message}</p>
+          {message.length > 0 && (
+            <p className="mt-2 text-[13px] text-muted-foreground">{message}</p>
           )}
           <button
             type="button"
@@ -70,22 +80,16 @@ export default function App() {
   const lang = browserLang();
 
   useEffect(() => {
-    let alive = true;
     setState({ status: "loading" });
-    loadPayload(window.location, stringsFor(lang).payloadUnreadable)
-      .then((loaded) => {
-        if (alive) setState({ status: "ready", loaded });
-      })
-      .catch((error: unknown) => {
-        if (alive)
-          setState({
-            status: "error",
-            message: error instanceof Error ? error.message : String(error),
-          });
-      });
-    return () => {
-      alive = false;
-    };
+    return runAppEffect(
+      loadAppPayload(window.location, window.__BALADE__).pipe(
+        Effect.match({
+          onFailure: (error): State => ({ status: "error", error }),
+          onSuccess: (loaded): State => ({ status: "ready", loaded }),
+        }),
+      ),
+      setState,
+    );
   }, [attempt, lang]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);

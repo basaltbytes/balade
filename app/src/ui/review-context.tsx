@@ -1,6 +1,7 @@
 /* The React face of the review state: one hook that owns it, one context so a
    files browser deep in a section can flip its own "Viewed" box. */
 
+import { Option } from "effect";
 import {
   createContext,
   useCallback,
@@ -26,9 +27,12 @@ import {
   type Progress,
   type ResetReport,
 } from "../data/review";
-import type { ReviewStore, SaveOutcome } from "../data/store";
+import { runAppEffect } from "../data/runtime";
+import { loadReview, saveReview, type ReviewStoreTarget, type SaveOutcome } from "../data/store";
 
 export interface ReviewApi {
+  /** Marks stay read-only until stored state has been reconciled. */
+  ready: boolean;
   state: ReviewState;
   progress: Progress;
   complete: boolean;
@@ -46,52 +50,80 @@ export interface ReviewApi {
   next: (afterId?: string) => string | null;
 }
 
-export function useReviewApi(payload: Payload, store: ReviewStore): ReviewApi {
+export function useReviewApi(payload: Payload, target: ReviewStoreTarget): ReviewApi {
   const [state, setState] = useState<ReviewState>(() => emptyState(payload));
   const [reset, setReset] = useState<ResetReport | null>(null);
   const [persist, setPersist] = useState<SaveOutcome>("saved");
   const [hideReviewed, setHideReviewed] = useState(false);
-  const dirty = useRef(false);
+  const current = useRef(state);
+  const hydratedPayload = useRef<Payload | null>(null);
+  const hydratedTarget = useRef<ReviewStoreTarget | null>(null);
+  const saveScope = useRef<AbortController | null>(null);
+  const ready = hydratedPayload.current === payload && hydratedTarget.current === target;
+
+  const persistState = useCallback(
+    (next: ReviewState) => {
+      const scope = saveScope.current;
+      if (scope === null) return;
+      runAppEffect(
+        saveReview(target, next),
+        (outcome) => {
+          if (!scope.signal.aborted) setPersist(outcome);
+        },
+        { signal: scope.signal },
+      );
+    },
+    [target],
+  );
 
   useEffect(() => {
-    let alive = true;
-    void store.load().then((stored) => {
-      if (!alive) return;
+    hydratedPayload.current = null;
+    hydratedTarget.current = null;
+    const initial = emptyState(payload);
+    current.current = initial;
+    setState(initial);
+    setReset(null);
+    setPersist("saved");
+
+    const scope = new AbortController();
+    saveScope.current = scope;
+    const cancelLoad = runAppEffect(loadReview(target), (storedOption) => {
+      const stored = Option.getOrNull(storedOption);
       const outcome = reconcile(payload, stored);
-      setState(outcome.state);
+      hydratedPayload.current = payload;
+      hydratedTarget.current = target;
+      const next = outcome.state;
+      current.current = next;
+      setState(next);
       if (outcome.reset.sections.length > 0 || outcome.reset.files.length > 0) {
         setReset(outcome.reset);
       }
-      if (outcome.changed) {
-        void store.save(outcome.state).then((saved) => {
-          if (alive) setPersist(saved);
-        });
-      }
+      if (outcome.changed) persistState(next);
     });
     return () => {
-      alive = false;
+      if (hydratedPayload.current === payload) hydratedPayload.current = null;
+      if (hydratedTarget.current === target) hydratedTarget.current = null;
+      cancelLoad();
+      scope.abort();
+      if (saveScope.current === scope) saveScope.current = null;
     };
-  }, [payload, store]);
+  }, [payload, persistState, target]);
 
-  useEffect(() => {
-    if (!dirty.current) return;
-    dirty.current = false;
-    let alive = true;
-    void store.save(state).then((saved) => {
-      if (alive) setPersist(saved);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [state, store]);
-
-  const update = useCallback((next: (previous: ReviewState) => ReviewState) => {
-    dirty.current = true;
-    setState(next);
-  }, []);
+  const update = useCallback(
+    (next: (previous: ReviewState) => ReviewState) => {
+      if (hydratedPayload.current !== payload || hydratedTarget.current !== target) return;
+      const updated = next(current.current);
+      if (updated === current.current) return;
+      current.current = updated;
+      setState(updated);
+      persistState(updated);
+    },
+    [payload, persistState, target],
+  );
 
   return useMemo<ReviewApi>(
     () => ({
+      ready,
       state,
       progress: sectionProgress(payload, state),
       complete: isComplete(payload, state),
@@ -111,7 +143,7 @@ export function useReviewApi(payload: Payload, store: ReviewStore): ReviewApi {
       filesOf: (section) => fileProgress(payload, state, section),
       next: (afterId) => nextUnreviewed(payload, state, afterId),
     }),
-    [payload, state, reset, persist, hideReviewed, update],
+    [payload, ready, state, reset, persist, hideReviewed, update],
   );
 }
 

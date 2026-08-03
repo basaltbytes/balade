@@ -7,6 +7,8 @@ export interface Strings {
   loading: string;
   loadFailed: string;
   payloadUnreadable: string;
+  payloadFetchFailed: string;
+  payloadLocationInvalid: string;
   retry: string;
 
   /* header */
@@ -84,6 +86,8 @@ const en: Strings = {
   loading: "Loading the walkthrough…",
   loadFailed: "The walkthrough could not be loaded.",
   payloadUnreadable: "The walkthrough data does not match the format this app reads.",
+  payloadFetchFailed: "The walkthrough could not be fetched from the CLI.",
+  payloadLocationInvalid: "The walkthrough link contains an invalid path.",
   retry: "Try again",
 
   prState: { open: "Open", closed: "Closed", merged: "Merged" },
@@ -159,6 +163,8 @@ const fr: Strings = {
   loadFailed: "La balade n’a pas pu être chargée.",
   payloadUnreadable:
     "Les données de la balade ne correspondent pas au format attendu par l’application.",
+  payloadFetchFailed: "La balade n’a pas pu être récupérée auprès du CLI.",
+  payloadLocationInvalid: "Le lien de la balade contient un chemin invalide.",
   retry: "Réessayer",
 
   prState: { open: "Ouverte", closed: "Fermée", merged: "Fusionnée" },
