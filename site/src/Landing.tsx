@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * The landing page is one argument: agent-scale pull requests are a storm of
  * diffstats, and balade is the clearing in it. A seeded field of badges churns
  * forever — a new one lands every beat — while the center stays calm.
+ *
+ * The field is a jittered grid: one badge per cell, so density stays even and
+ * never clumps, and a churned replacement inherits its predecessor's cell.
+ * Depth is three layers that drift, bob and answer the pointer at different
+ * magnitudes — all composited transforms, no per-frame React work.
  */
 
 interface Badge {
   readonly id: number;
+  /** Grid cell, stable across churn so the field stays uniform. */
+  readonly cell: number;
   /** Position, in percent of the field. */
   readonly x: number;
   readonly y: number;
@@ -15,10 +22,16 @@ interface Badge {
   readonly tier: 0 | 1 | 2;
   readonly additions: number;
   readonly deletions: number;
+  /** Bob phase, seconds; the delay is negative so phases start scattered. */
+  readonly bobDuration: number;
+  readonly bobDelay: number;
 }
 
-const FIELD_SIZE = 84;
+const COLS = 13;
+const ROWS = 8;
 const CHURN_MS = 750;
+/** Pointer parallax reach per tier, px: near layers answer the most. */
+const PARALLAX_PX = [7, 14, 24] as const;
 
 /** Deterministic layout: the same storm on every load and every screenshot. */
 const mulberry32 = (seed: number) => (): number => {
@@ -35,23 +48,42 @@ const inClearing = (x: number, y: number): boolean => {
   return dx * dx + dy * dy < 1;
 };
 
-const makeBadge = (rng: () => number, id: number): Badge => {
-  let x = 50;
-  let y = 50;
-  do {
-    x = 2 + rng() * 94;
-    y = 3 + rng() * 92;
-  } while (inClearing(x, y));
+/** A jittered spot inside the cell, or `null` when the cell is all clearing. */
+const placeInCell = (rng: () => number, cell: number): { x: number; y: number } | null => {
+  const col = cell % COLS;
+  const row = Math.floor(cell / COLS);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const x = ((col + 0.12 + rng() * 0.76) / COLS) * 100;
+    const y = ((row + 0.15 + rng() * 0.7) / ROWS) * 100;
+    if (!inClearing(x, y)) return { x, y };
+  }
+  return null;
+};
+
+const makeBadge = (rng: () => number, id: number, cell: number): Badge | null => {
+  const spot = placeInCell(rng, cell);
+  if (spot === null) return null;
   /* Everything is agent-sized: four digits as the norm, five now and then. */
   const additions =
     rng() < 0.14 ? 5_000 + Math.floor(rng() * 18_000) : 500 + Math.floor(rng() * 4_500);
   const deletions = Math.floor(additions * (0.15 + rng() * 0.7));
-  return { id, x, y, tier: (id % 3) as 0 | 1 | 2, additions, deletions };
+  return {
+    id,
+    cell,
+    ...spot,
+    tier: Math.floor(rng() * 3) as 0 | 1 | 2,
+    additions,
+    deletions,
+    bobDuration: 7 + rng() * 5,
+    bobDelay: -rng() * 12,
+  };
 };
 
 const initialField = (): readonly Badge[] => {
   const rng = mulberry32(96);
-  return Array.from({ length: FIELD_SIZE }, (_, i) => makeBadge(rng, i));
+  return Array.from({ length: COLS * ROWS }, (_, cell) => makeBadge(rng, cell, cell)).filter(
+    (badge): badge is Badge => badge !== null,
+  );
 };
 
 /** GitHub's five-square meter, split by the add/delete ratio. */
@@ -77,26 +109,39 @@ const TIER_STYLE = [
 
 const DiffBadge = ({ badge }: { badge: Badge }) => (
   <span
-    className={`absolute animate-[land_900ms_ease-out] whitespace-nowrap font-machine ${TIER_STYLE[badge.tier]}`}
+    className={`absolute animate-[land_900ms_ease-out_backwards] whitespace-nowrap font-machine ${TIER_STYLE[badge.tier]}`}
     style={{ left: `${badge.x}%`, top: `${badge.y}%`, translate: "-50% -50%" }}
   >
-    <span className="text-added">+{badge.additions.toLocaleString("en-US")}</span>{" "}
-    <span className="text-deleted">−{badge.deletions.toLocaleString("en-US")}</span>
-    <Squares additions={badge.additions} deletions={badge.deletions} />
+    {/* The bob lives on an inner span so it never fights the landing rise. */}
+    <span
+      className="inline-block"
+      style={{
+        animation: `bob ${badge.bobDuration}s ease-in-out ${badge.bobDelay}s infinite alternate`,
+      }}
+    >
+      <span className="text-added">+{badge.additions.toLocaleString("en-US")}</span>{" "}
+      <span className="text-deleted">−{badge.deletions.toLocaleString("en-US")}</span>
+      <Squares additions={badge.additions} deletions={badge.deletions} />
+    </span>
   </span>
 );
+
+const reducedMotion = (): boolean => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** The churn: every beat, one badge is replaced — agents merge non-stop. */
 const useChurn = (): readonly Badge[] => {
   const [field, setField] = useState(initialField);
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (reducedMotion()) return;
     const rng = mulberry32(Date.now() >>> 0);
-    let nextId = FIELD_SIZE;
+    let nextId = COLS * ROWS;
     const timer = setInterval(() => {
       setField((badges) => {
         const slot = Math.floor(rng() * badges.length);
-        return badges.map((badge, i) => (i === slot ? makeBadge(rng, nextId++) : badge));
+        const dying = badges[slot];
+        if (dying === undefined) return badges;
+        const born = makeBadge(rng, nextId++, dying.cell);
+        return born === null ? badges : badges.map((badge, i) => (i === slot ? born : badge));
       });
     }, CHURN_MS);
     return () => clearInterval(timer);
@@ -104,26 +149,83 @@ const useChurn = (): readonly Badge[] => {
   return field;
 };
 
+/**
+ * Pointer parallax: three direct style writes per frame through refs, eased
+ * toward the pointer, and the loop stops once the layers settle.
+ */
+const useParallax = () => {
+  const layers = useRef<(HTMLDivElement | null)[]>([]);
+  useEffect(() => {
+    if (reducedMotion()) return;
+    let targetX = 0;
+    let targetY = 0;
+    let x = 0;
+    let y = 0;
+    let frame = 0;
+    let running = false;
+
+    const step = (): void => {
+      x += (targetX - x) * 0.06;
+      y += (targetY - y) * 0.06;
+      for (const [tier, reach] of PARALLAX_PX.entries()) {
+        const layer = layers.current[tier];
+        if (layer !== null && layer !== undefined) {
+          layer.style.transform = `translate3d(${-x * reach}px, ${-y * reach * 0.7}px, 0)`;
+        }
+      }
+      if (Math.abs(targetX - x) + Math.abs(targetY - y) < 0.001) {
+        running = false;
+        return;
+      }
+      frame = requestAnimationFrame(step);
+    };
+
+    const onMove = (event: PointerEvent): void => {
+      targetX = (event.clientX / window.innerWidth) * 2 - 1;
+      targetY = (event.clientY / window.innerHeight) * 2 - 1;
+      if (!running) {
+        running = true;
+        frame = requestAnimationFrame(step);
+      }
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  return layers;
+};
+
 export const Landing = () => {
   const field = useChurn();
+  const layers = useParallax();
   return (
     <main className="relative min-h-dvh overflow-hidden bg-background text-foreground">
-      {/* The storm: three depth layers, each drifting on its own slow loop. */}
-      {[0, 1, 2].map((tier) => (
+      {/* The storm: three depth layers that drift, bob and answer the pointer. */}
+      {([0, 1, 2] as const).map((tier) => (
         <div
           key={tier}
           aria-hidden
-          className={`absolute inset-0 ${
-            tier === 1
-              ? "animate-[drift-a_90s_ease-in-out_infinite_alternate]"
-              : "animate-[drift-b_120s_ease-in-out_infinite_alternate]"
-          }`}
+          ref={(el) => {
+            layers.current[tier] = el;
+          }}
+          className="pointer-events-none absolute inset-0 will-change-transform"
         >
-          {field
-            .filter((badge) => badge.tier === tier)
-            .map((badge) => (
-              <DiffBadge key={badge.id} badge={badge} />
-            ))}
+          <div
+            className={`absolute inset-0 ${
+              tier === 1
+                ? "animate-[drift-a_90s_ease-in-out_infinite_alternate]"
+                : "animate-[drift-b_120s_ease-in-out_infinite_alternate]"
+            }`}
+          >
+            {field
+              .filter((badge) => badge.tier === tier)
+              .map((badge) => (
+                <DiffBadge key={badge.id} badge={badge} />
+              ))}
+          </div>
         </div>
       ))}
 

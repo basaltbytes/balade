@@ -26,6 +26,16 @@
   }
 }
 
+/* Each badge bobs on its own slow phase; negative delays desynchronize them. */
+@keyframes bob {
+  from {
+    transform: translateY(-0.22em);
+  }
+  to {
+    transform: translateY(0.22em);
+  }
+}
+
 /* Each depth tier drifts on its own slow loop; the field never quite rests. */
 @keyframes drift-a {
   from {
