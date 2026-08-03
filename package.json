@@ -40,6 +40,8 @@
     "dev:site": "vite site",
     "build:site": "vite build site",
     "deploy:site": "pnpm build:site && cd site && wrangler deploy",
+    "eval:authoring": "vitest run test/authoring.test.ts test/authoring-eval.test.ts --reporter=verbose",
+    "eval:authoring:paid": "vitest run --config vitest.paid.config.ts --reporter=verbose",
     "lint": "oxlint .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",

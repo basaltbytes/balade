@@ -298,12 +298,20 @@ possible. Preference read and write failures are typed warnings and do not
 prevent a generation run.
 
 The session runs in memory with a resource loader that exposes no Pi extensions,
-skills, prompts, themes or repository context files. Its allowlist contains only
-five balade-owned tools: list PR changes, list pinned paths, read a pinned diff,
-read numbered lines from a pinned blob, and submit the structured draft. The
-agent never receives Pi's shell or mutation tools. `submit_walkthrough` ends the
-agent loop; the adapter stamps the schema version, PR and commit after the model
-returns.
+skills, prompts, themes, global context, or working-tree context. It does expose
+repository instructions from the pinned PR commit before the first turn. For
+each changed path, the loader selects Pi's first matching `AGENTS.md` or
+`CLAUDE.md` spelling at the root and each ancestor directory. This preserves
+nested scope without putting unrelated monorepo instructions into the prompt,
+and it cannot leak a different checked-out branch into analysis. Instruction
+loading is outside the source-read budget; documents that an instruction names
+are read through the normal pinned source tool and count toward that budget.
+
+The allowlist contains only five balade-owned tools: list PR changes, list
+pinned paths, read a pinned diff, read numbered lines from a pinned blob, and
+submit the structured draft. The agent never receives Pi's shell or mutation
+tools. `submit_walkthrough` ends the agent loop; the adapter stamps the schema
+version, PR and commit after the model returns.
 
 The baseline authoring turn is deliberately bounded to eight diff reads and
 twelve source reads. The prompt asks for the behavioral spine in two to five
@@ -355,6 +363,33 @@ provider-hidden reasoning remains hidden. A normal successful check prints only
 the verified range count, generated path, and the next `balade open` command;
 full diagnostics remain visible when the generated draft still needs manual
 repair.
+
+## Balade owns the versioned authoring package
+
+The programmatic system prompt, section templates, rubric and inspection limits
+ship in `src/generate/authoring.ts`. Balade is their single source because
+`generate` must work from a bare npm install. The `code-walkthrough` skill is an
+interactive wrapper: it points to the package contract and adds its human-agent
+workflow, writing-skill review and visual diagram pass. It does not vendor a
+second authoritative prompt or rubric.
+
+The package uses semantic versions whose major equals the walkthrough schema.
+Major bumps teach a new input contract, minor bumps can change authoring
+decisions, and patches clarify wording without changing fixture expectations.
+Generated files record the full version in the existing scalar metadata map as
+`meta.balade-authoring`; the payload contract does not grow a provenance field,
+and the CLI overwrites any model-supplied value for that reserved key.
+
+Offline evaluation runs five change shapes through fixture Git repositories,
+Pi's `fauxProvider`, the production adapter and `balade check`. This stays in
+`pnpm test`. Live-provider comparison uses a separate paid Vitest config and
+cannot run through the normal test command. The stable fixture decisions are
+the comparison baseline for prompt revisions.
+
+Walkthrough v1 Markdoc accepts double-quoted attributes only. Quote-heavy
+values therefore use backslash escapes, such as
+`decorator="@api.constrains(\"allocation_id\")"`; the older single-quote
+prototype spelling is not part of the shipped grammar.
 
 ## Parser properties follow schema and grammar edges
 

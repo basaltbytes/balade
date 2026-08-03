@@ -7,7 +7,7 @@ import type { Node } from "@markdoc/markdoc";
 import { Effect, Option, Result } from "effect";
 import { CommandExecutor, gitOut } from "../resolve/exec.js";
 import type { AuthoringRequest } from "./author.js";
-import { AUTHORING_SYSTEM_PROMPT } from "./prompt.js";
+import { AUTHORING_LIMITS, AUTHORING_SYSTEM_PROMPT } from "./authoring.js";
 
 export type CodingAgentSdk = typeof import("@earendil-works/pi-coding-agent");
 export type AiSdk = typeof import("@earendil-works/pi-ai");
@@ -24,10 +24,13 @@ const MAX_TREE_FILES = 2_000;
 const MAX_SOURCE_LINES = 400;
 const MAX_DIFF_LINES = 800;
 const MAX_TOOL_CHARACTERS = 80_000;
-const MAX_DIFF_READS = 8;
-const MAX_SOURCE_READS = 12;
-const MAX_CODE_RANGES = 10;
 const SESSION_ABORT_TIMEOUT = "1 second";
+const PROJECT_CONTEXT_FILE_NAMES = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
+
+interface ProjectContextFile {
+  readonly path: string;
+  readonly content: string;
+}
 
 export async function createPiSession(
   pi: PiSessionDependencies,
@@ -48,6 +51,7 @@ export async function createPiSession(
     return sourcePathLoad;
   };
   const changed = new Set(request.files.map((file) => file.path));
+  const projectContextFiles = await loadPinnedProjectContext(request, sourcePaths, runCommand);
 
   const listChanges = pi.coding.defineTool({
     name: "list_pr_changes",
@@ -111,9 +115,9 @@ export async function createPiSession(
     }),
     execute: async (_id, params) => {
       if (!changed.has(params.path)) throw new Error(`${params.path} is not a changed file.`);
-      if (diffReads >= MAX_DIFF_READS) {
+      if (diffReads >= AUTHORING_LIMITS.diffReads) {
         return toolText(
-          `Diff inspection budget reached after ${MAX_DIFF_READS} reads. Use the evidence already collected, confirm only the source needed for selected ranges, then submit the walkthrough.`,
+          `Diff inspection budget reached after ${AUTHORING_LIMITS.diffReads} reads. Use the evidence already collected, confirm only the source needed for selected ranges, then submit the walkthrough.`,
         );
       }
       diffReads++;
@@ -149,9 +153,9 @@ export async function createPiSession(
       if (!(await sourcePaths()).includes(params.path)) {
         throw new Error(`${params.path} does not exist at ${request.pin}.`);
       }
-      if (sourceReads >= MAX_SOURCE_READS) {
+      if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
         return toolText(
-          `Source inspection budget reached after ${MAX_SOURCE_READS} reads. Submit using the verified ranges already collected; do not invent more.`,
+          `Source inspection budget reached after ${AUTHORING_LIMITS.sourceReads} reads. Submit using the verified ranges already collected; do not invent more.`,
         );
       }
       sourceReads++;
@@ -175,9 +179,9 @@ export async function createPiSession(
     }),
     execute: async (_id, params) => {
       const rangeCount = codeRangeCount(params.body);
-      if (rangeCount > MAX_CODE_RANGES) {
+      if (rangeCount > AUTHORING_LIMITS.codeRanges) {
         return toolText(
-          `The draft has ${rangeCount} code ranges; the hard maximum is ${MAX_CODE_RANGES}. Keep only the ranges needed for the review story, then submit the complete draft again.`,
+          `The draft has ${rangeCount} code ranges; the hard maximum is ${AUTHORING_LIMITS.codeRanges}. Keep only the ranges needed for the review story, then submit the complete draft again.`,
         );
       }
       draft = {
@@ -197,7 +201,7 @@ export async function createPiSession(
     cwd: request.root,
     model,
     modelRuntime: pi.modelRuntime,
-    resourceLoader: minimalResourceLoader(pi.coding, AUTHORING_SYSTEM_PROMPT),
+    resourceLoader: minimalResourceLoader(pi.coding, AUTHORING_SYSTEM_PROMPT, projectContextFiles),
     tools: [
       "list_pr_changes",
       "list_source_files",
@@ -368,7 +372,11 @@ function toolText(text: string) {
   };
 }
 
-function minimalResourceLoader(coding: CodingAgentSdk, systemPrompt: string): ResourceLoader {
+function minimalResourceLoader(
+  coding: CodingAgentSdk,
+  systemPrompt: string,
+  projectContextFiles: readonly ProjectContextFile[],
+): ResourceLoader {
   return {
     getExtensions: () => ({
       extensions: [],
@@ -378,7 +386,7 @@ function minimalResourceLoader(coding: CodingAgentSdk, systemPrompt: string): Re
     getSkills: () => ({ skills: [], diagnostics: [] }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
-    getAgentsFiles: () => ({ agentsFiles: [] }),
+    getAgentsFiles: () => ({ agentsFiles: [...projectContextFiles] }),
     getSystemPrompt: () => systemPrompt,
     getSystemPromptSource: () => undefined,
     getAppendSystemPrompt: () => [],
@@ -386,6 +394,43 @@ function minimalResourceLoader(coding: CodingAgentSdk, systemPrompt: string): Re
     extendResources: () => {},
     reload: async () => {},
   };
+}
+
+async function loadPinnedProjectContext(
+  request: AuthoringRequest,
+  sourcePaths: () => Promise<readonly string[]>,
+  runCommand: RunCommand,
+): Promise<readonly ProjectContextFile[]> {
+  const available = new Set(await sourcePaths());
+  const directories = new Set([""]);
+  for (const file of request.files) {
+    const parts = file.path.split("/");
+    parts.pop();
+    let directory = "";
+    for (const part of parts) {
+      directory = directory === "" ? part : `${directory}/${part}`;
+      directories.add(directory);
+    }
+  }
+  const orderedDirectories = [...directories].sort((left, right) => {
+    const depth = pathDepth(left) - pathDepth(right);
+    return depth === 0 ? left.localeCompare(right) : depth;
+  });
+  const paths = orderedDirectories.flatMap((directory) => {
+    const prefix = directory === "" ? "" : `${directory}/`;
+    const selected = PROJECT_CONTEXT_FILE_NAMES.find((name) => available.has(`${prefix}${name}`));
+    return selected === undefined ? [] : [`${prefix}${selected}`];
+  });
+  return Promise.all(
+    paths.map(async (path) => ({
+      path: `${request.pin}:${path}`,
+      content: await runCommand(gitOut(["show", `${request.pin}:${path}`], request.root)),
+    })),
+  );
+}
+
+function pathDepth(path: string): number {
+  return path === "" ? 0 : path.split("/").length;
 }
 
 function limitCharacters(value: string): string {

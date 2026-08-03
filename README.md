@@ -51,7 +51,10 @@ npx balade generate '#96'
 If the PR branch is checked out, balade uses its current head. Otherwise it
 fetches the exact object advertised by `pull/96/head` without changing your
 checkout or `FETCH_HEAD`. The model can inspect the diff and read numbered
-source lines at that exact commit; it can't run shell commands or write files.
+source lines at that exact commit. Before analysis, balade also loads the
+`AGENTS.md` or `CLAUDE.md` instructions that apply to the changed paths from the
+same commit. It never substitutes files from another checked-out branch. The
+model can't run shell commands or write files.
 
 On the first run, the provider picker offers Anthropic subscription login,
 OpenAI Codex subscription login, and API-key methods through Pi. Existing Pi
@@ -85,6 +88,10 @@ the baseline draft stays focused. A failed check goes back to the model for at
 most two repair turns. `--dir` is repository-relative; paths through symlinks
 outside the repository and paths inside `.git` are rejected.
 
+Generated frontmatter records the prompt, template, and rubric version under
+`meta.balade-authoring`. See the [authoring package](docs/authoring-package.md)
+for its contract, version policy, writing rubric, and offline comparison suite.
+
 After a successful check, balade prints the generated path and the exact
 `balade open …` command to start reviewing it. Generation itself doesn't start
 the review server.
@@ -111,8 +118,9 @@ walkthrough: 1                # input schema version
 title: Loan wizard refactor
 pr: 96                        # the pull request this narrates
 commit: 9f3c2ad…              # the stamped commit every reference resolves at
-meta:                         # free domain keys, shown as header chips
+meta:                         # scalar header chips
   module: acme_loan
+  balade-authoring: 1.1.0     # generated drafts record their authoring package
 ---
 ```
 

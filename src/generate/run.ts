@@ -19,6 +19,7 @@ import {
   type AuthorProgressMode,
   type AuthorUsage,
 } from "./author.js";
+import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "./authoring.js";
 
 const MAX_REPAIR_ATTEMPTS = 2;
 
@@ -252,7 +253,7 @@ export function renderDraft(source: PullSnapshot, draft: AuthorDraft): string {
     title: draft.title,
     pr: source.pull.number,
     commit: source.pin,
-    meta: draft.meta,
+    meta: { ...draft.meta, [AUTHORING_META_KEY]: AUTHORING_PACKAGE_VERSION },
     ...(draft.preset === undefined ? {} : { preset: draft.preset }),
   }).trimEnd();
   return `---\n${frontmatter}\n---\n\n${draft.body.trim()}\n`;
