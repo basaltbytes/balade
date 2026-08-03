@@ -38,7 +38,7 @@ import {
   type LoginPrompt,
   type LoginSecretPrompt,
 } from "./author.js";
-import { initialAuthoringPrompt, repairAuthoringPrompt } from "./prompt.js";
+import { initialAuthoringPrompt, repairAuthoringPrompt } from "./authoring.js";
 import { createPiSession, releasePiSession, type PiSessionDependencies } from "./pi-session.js";
 
 export interface PiAdapterDependencies extends PiSessionDependencies {

@@ -37,6 +37,8 @@
     "build:cli": "tsc -p tsconfig.build.json",
     "build:app": "vite build app && vite build app --mode export",
     "dev:app": "vite app",
+    "eval:authoring": "vitest run test/authoring.test.ts test/authoring-eval.test.ts --reporter=verbose",
+    "eval:authoring:paid": "vitest run --config vitest.paid.config.ts --reporter=verbose",
     "lint": "oxlint .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",

@@ -20,7 +20,7 @@ import {
   sanitizeTerminalText,
 } from "../src/generate/command.js";
 import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
-import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/prompt.js";
+import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/authoring.js";
 import { renderDraft, runGeneration, slugifyTitle } from "../src/generate/run.js";
 import {
   matchingModels,
@@ -205,6 +205,38 @@ describe("the Pi adapter", () => {
           failed: false,
         }),
       );
+    }),
+  );
+
+  it.effect("loads applicable repository instructions from the pin before the first turn", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      repo.write("AGENTS.md", "PINNED ROOT INSTRUCTIONS\n");
+      repo.write("models/CLAUDE.md", "PINNED MODEL INSTRUCTIONS\n");
+      repo.write("security/AGENTS.md", "UNRELATED SECURITY INSTRUCTIONS\n");
+      const contextPin = repo.commit("docs: add repository instructions");
+      repo.write("AGENTS.md", "WORKING TREE INSTRUCTIONS\n");
+      repo.write("models/CLAUDE.md", "WORKING TREE MODEL INSTRUCTIONS\n");
+      let systemPrompt = "";
+      harness.faux.setResponses([
+        (context) => {
+          systemPrompt = context.systemPrompt ?? "";
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, contextPin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(systemPrompt).toContain("PINNED ROOT INSTRUCTIONS");
+      expect(systemPrompt).toContain("PINNED MODEL INSTRUCTIONS");
+      expect(systemPrompt).not.toContain("WORKING TREE INSTRUCTIONS");
+      expect(systemPrompt).not.toContain("WORKING TREE MODEL INSTRUCTIONS");
+      expect(systemPrompt).not.toContain("UNRELATED SECURITY INSTRUCTIONS");
     }),
   );
 
