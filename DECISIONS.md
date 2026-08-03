@@ -263,6 +263,25 @@ pin and computing the rows is not done. `o-diagram` passes its attributes to the
 core diagram transform; expanding `rel="m2o|o2m|m2m"` on edges into the standard
 label, arrow kind and colour is not done either.
 
+## Generation rides Pi as a hard dependency
+
+`balade generate` drafts a walkthrough through the Pi coding-agent SDK
+(`@earendil-works/pi-coding-agent`, exact-pinned like effect; verification
+notes in [docs/research/pi-coding-agent-sdk.md](docs/research/pi-coding-agent-sdk.md)).
+Pi is a hard dependency, not an optional peer: generation is the on-ramp, and
+the first command a new user runs must work from a bare `npx balade`. The
+install cost — roughly 13 MB unpacked plus the official provider SDKs on a
+cold `npx` — is machine seconds and cacheable in CI. The live layer imports
+Pi lazily (its root barrel loads TUI modules at import time), so `check`,
+`open` and `build` never pay its startup cost. Engines move to Node >= 22.19.0
+in the same release: Pi requires it, and Node 20 passed end of life on
+2026-04-30.
+
+Every Pi surface sits behind the one `WalkthroughAuthor` service, the
+anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
+Anthropic subscription path closing, in which case the same seam takes a
+Codex-SDK-plus-API-key pair of adapters instead.
+
 ## Parser properties follow schema and grammar edges
 
 The parser suite now exercises the five edges that warranted properties:
