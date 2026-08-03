@@ -25,11 +25,11 @@ import {
 } from "./run.js";
 import {
   matchingModels,
+  modelsForPicker,
   NoProviderAuthenticated,
   noProviderMessage,
   orderedLoginMethods,
   preferredModelForRun,
-  requireScriptedModel,
 } from "./select.js";
 
 const target = Argument.string("pr").pipe(
@@ -37,12 +37,12 @@ const target = Argument.string("pr").pipe(
 );
 
 const provider = Flag.string("provider").pipe(
-  Flag.withDescription("Pi provider id; use with --model to skip the interactive picker"),
+  Flag.withDescription("Pi provider id; partial or unavailable selections open the picker"),
   Flag.optional,
 );
 
 const model = Flag.string("model").pipe(
-  Flag.withDescription("Pi model id; use with --provider to skip the interactive picker"),
+  Flag.withDescription("Pi model id; partial or unavailable selections open the picker"),
   Flag.optional,
 );
 
@@ -55,13 +55,9 @@ const verbose = Flag.boolean("verbose").pipe(
   Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
 );
 
-const chooseModel = Flag.boolean("choose-model").pipe(
-  Flag.withDescription("Ignore Pi's saved default and choose a provider/model interactively"),
-);
-
 export const generateCommand = Command.make(
   "generate",
-  { pr: target, provider, model, directory, verbose, chooseModel },
+  { pr: target, provider, model, directory, verbose },
   (config) =>
     Effect.gen(function* () {
       const pull = parsePrTarget(config.pr);
@@ -69,18 +65,15 @@ export const generateCommand = Command.make(
         stopMessage("Name one GitHub pull request: `balade generate <pr-url|#n>`.");
         return;
       }
-      const providerId = Option.getOrUndefined(config.provider);
-      const modelId = Option.getOrUndefined(config.model);
-      if (config.chooseModel && (providerId !== undefined || modelId !== undefined)) {
-        stopMessage("Use either --choose-model or --provider/--model, not both.");
-        return;
-      }
+      const providerId = selectionFlagValue(config.provider);
+      const modelId = selectionFlagValue(config.model);
+      const hasSelectionFlag = Option.isSome(config.provider) || Option.isSome(config.model);
       const prepared = yield* prepareGeneration({ cwd: process.cwd(), target: pull });
       for (const notice of prepared.notices) {
         writeStdout(`warning ${notice.code}\n  ${notice.message}\n  fix ${notice.hint}\n`);
       }
 
-      const selected = yield* selectAuthorModel(providerId, modelId, config.chooseModel);
+      const selected = yield* selectAuthorModel(providerId, modelId, hasSelectionFlag);
       if (Option.isNone(selected)) {
         writeStdout("Generation cancelled.\n");
         return;
@@ -125,42 +118,55 @@ export const generateCommand = Command.make(
 const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
   providerId: string | undefined,
   modelId: string | undefined,
-  chooseModel: boolean,
+  hasSelectionFlag: boolean,
 ) {
   const author = yield* WalkthroughAuthor;
+  const rememberSelected = (selected: AuthorModel) =>
+    author.rememberModel(selected).pipe(
+      Effect.catchTag("AuthorPreferenceWriteFailed", () =>
+        Effect.sync(() => {
+          writeStderr(
+            "warning Pi's model preference could not be saved; this run will continue.\n",
+          );
+        }),
+      ),
+    );
   let available = yield* author.availableModels;
   if (providerId !== undefined && modelId !== undefined) {
-    const selected = yield* requireScriptedModel(available, providerId, modelId);
-    announceModel(selected);
-    return Option.some(selected);
+    const selected = matchingModels(available, providerId, modelId)[0];
+    if (selected !== undefined) {
+      yield* rememberSelected(selected);
+      announceModel(selected);
+      return Option.some(selected);
+    }
   }
 
-  const preference =
-    chooseModel || providerId !== undefined || modelId !== undefined
-      ? Option.none()
-      : yield* author.modelPreference.pipe(
-          Effect.catchTag("AuthorPreferenceReadFailed", () =>
-            Effect.sync(() => {
-              writeStderr(
-                "warning Pi's saved model preference could not be read; choose a model.\n",
-              );
-              return Option.none();
-            }),
-          ),
-        );
-  const preferred = preferredModelForRun(available, preference, {
-    chooseModel,
-    providerId,
-    modelId,
-  });
+  const preference = hasSelectionFlag
+    ? Option.none()
+    : yield* author.modelPreference.pipe(
+        Effect.catchTag("AuthorPreferenceReadFailed", () =>
+          Effect.sync(() => {
+            writeStderr("warning Pi's saved model preference could not be read; choose a model.\n");
+            return Option.none();
+          }),
+        ),
+      );
+  const preferred = preferredModelForRun(available, preference, hasSelectionFlag);
   if (Option.isSome(preferred)) {
     announceModel(preferred.value, "saved preference");
     return preferred;
   }
 
-  let matching = matchingModels(available, providerId, modelId);
-  if (matching.length === 0) {
-    const methods = orderedLoginMethods(yield* author.loginMethods, providerId);
+  const allMethods = yield* author.loginMethods;
+  const providerModels =
+    providerId === undefined ? [] : matchingModels(available, providerId, undefined);
+  const providerMethods = orderedLoginMethods(allMethods, providerId);
+  const shouldLogin =
+    available.length === 0 ||
+    (providerId !== undefined && providerModels.length === 0 && providerMethods.length > 0);
+  if (shouldLogin) {
+    const methods =
+      providerMethods.length > 0 ? providerMethods : orderedLoginMethods(allMethods, undefined);
     if (methods.length === 0) {
       return yield* new NoProviderAuthenticated({
         requested: requestedModel(providerId, modelId),
@@ -185,16 +191,22 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
     const promptContext = yield* Effect.context<Prompt.Environment>();
     yield* author.login(method, loginInteraction(promptContext));
     available = yield* author.availableModels;
-    matching = matchingModels(available, providerId, modelId);
   }
-  if (matching.length === 0) {
+
+  const picker = modelsForPicker(available, providerId, modelId);
+  if (picker.models.length === 0) {
     return yield* new NoProviderAuthenticated({ requested: requestedModel(providerId, modelId) });
+  }
+  if (picker.usedFallback) {
+    writeStderr(
+      `warning No available Pi model matches ${requestedModel(providerId, modelId)}; choose from the available models.\n`,
+    );
   }
 
   const selected = yield* Prompt.run(
     Prompt.select({
       message: "Choose the provider and model",
-      choices: matching.map((candidate) => ({
+      choices: picker.models.map((candidate) => ({
         title: `${candidate.providerName} — ${candidate.modelName}`,
         value: candidate,
         description:
@@ -212,15 +224,14 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
     }),
   );
   if (!confirmed) return Option.none<AuthorModel>();
-  yield* author.rememberModel(selected).pipe(
-    Effect.catchTag("AuthorPreferenceWriteFailed", () =>
-      Effect.sync(() => {
-        writeStderr("warning Pi's model preference could not be saved; this run will continue.\n");
-      }),
-    ),
-  );
+  yield* rememberSelected(selected);
   return Option.some(selected);
 });
+
+export function selectionFlagValue(value: Option.Option<string>): string | undefined {
+  const trimmed = Option.getOrUndefined(value)?.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
 
 function loginInteraction(context: Context.Context<Prompt.Environment>): LoginInteraction {
   const runPrompt = Effect.runPromiseWith(context);

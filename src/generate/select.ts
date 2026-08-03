@@ -1,6 +1,6 @@
 /** Pure provider/model filtering; the terminal picker stays at the CLI boundary. */
 
-import { Effect, Option, Schema } from "effect";
+import { Option, Schema } from "effect";
 import type { AuthorLoginMethod, AuthorModel, AuthorModelPreference } from "./author.js";
 
 export class NoProviderAuthenticated extends Schema.TaggedErrorClass<NoProviderAuthenticated>()(
@@ -20,32 +20,34 @@ export function matchingModels(
   );
 }
 
-export function requireScriptedModel(
+export function modelsForPicker(
   models: readonly AuthorModel[],
-  provider: string,
-  model: string,
-): Effect.Effect<AuthorModel, NoProviderAuthenticated> {
-  const found = matchingModels(models, provider, model)[0];
-  return found === undefined
-    ? Effect.fail(new NoProviderAuthenticated({ requested: `${provider}/${model}` }))
-    : Effect.succeed(found);
+  provider: string | undefined,
+  model: string | undefined,
+): { readonly models: readonly AuthorModel[]; readonly usedFallback: boolean } {
+  const exact = matchingModels(models, provider, model);
+  if (exact.length > 0) return { models: exact, usedFallback: false };
+
+  if (provider !== undefined) {
+    const sameProvider = matchingModels(models, provider, undefined);
+    if (sameProvider.length > 0) return { models: sameProvider, usedFallback: true };
+  }
+  if (model !== undefined) {
+    const sameModel = matchingModels(models, undefined, model);
+    if (sameModel.length > 0) return { models: sameModel, usedFallback: true };
+  }
+  return {
+    models,
+    usedFallback: provider !== undefined || model !== undefined,
+  };
 }
 
 export function preferredModelForRun(
   models: readonly AuthorModel[],
   preference: Option.Option<AuthorModelPreference>,
-  flags: {
-    readonly chooseModel: boolean;
-    readonly providerId: string | undefined;
-    readonly modelId: string | undefined;
-  },
+  hasSelectionFlag: boolean,
 ): Option.Option<AuthorModel> {
-  if (
-    flags.chooseModel ||
-    flags.providerId !== undefined ||
-    flags.modelId !== undefined ||
-    Option.isNone(preference)
-  ) {
+  if (hasSelectionFlag || Option.isNone(preference)) {
     return Option.none();
   }
   return Option.fromNullishOr(

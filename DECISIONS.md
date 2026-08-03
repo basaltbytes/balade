@@ -285,10 +285,11 @@ Codex-SDK-plus-API-key pair of adapters instead.
 Provider/model defaults use Pi's global `SettingsManager` rather than a second
 balade preference file. Project settings are not trusted or loaded for this
 choice. A confirmed interactive selection updates Pi's default; a matching
-default is reused without another picker. Explicit `--provider` and `--model`
-flags override it without mutating it, while `--choose-model` deliberately opens
-the picker and saves the newly confirmed choice. Preference read and write
-failures are typed warnings and do not prevent a generation run.
+default is reused without another picker. Every explicit or confirmed selection
+updates that default. An exact `--provider` and `--model` pair skips the picker;
+partial, empty, or unavailable values open it, narrowed to matching models when
+possible. Preference read and write failures are typed warnings and do not
+prevent a generation run.
 
 The session runs in memory with a resource loader that exposes no Pi extensions,
 skills, prompts, themes or repository context files. Its allowlist contains only

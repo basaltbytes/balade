@@ -18,6 +18,7 @@ import {
   generationSuccessText,
   makeGenerationProgress,
   sanitizeTerminalText,
+  selectionFlagValue,
 } from "../src/generate/command.js";
 import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
 import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/prompt.js";
@@ -28,11 +29,7 @@ import {
   slugifyTitle,
   type PreparedGeneration,
 } from "../src/generate/run.js";
-import {
-  matchingModels,
-  preferredModelForRun,
-  requireScriptedModel,
-} from "../src/generate/select.js";
+import { matchingModels, modelsForPicker, preferredModelForRun } from "../src/generate/select.js";
 import { shellLayer } from "../src/live.js";
 import { PrLocator } from "../src/pr/locate.js";
 import { cloneOnMain, createFixtureRepo } from "./support/repo.js";
@@ -337,8 +334,6 @@ describe("the Pi adapter", () => {
           expect.objectContaining({ providerId: "openai", method: "api_key" }),
         ]),
       );
-      const missing = yield* Effect.flip(requireScriptedModel(models, "anthropic", "missing"));
-      expect(missing._tag).toBe("NoProviderAuthenticated");
     }),
   );
 
@@ -698,33 +693,32 @@ describe("generation", () => {
       providerId: models[0]!.providerId,
       modelId: models[0]!.modelId,
     });
-    expect(
-      Option.getOrUndefined(
-        preferredModelForRun(models, preference, {
-          chooseModel: false,
-          providerId: undefined,
-          modelId: undefined,
-        }),
-      ),
-    ).toEqual(models[0]);
-    expect(
-      Option.isNone(
-        preferredModelForRun(models, preference, {
-          chooseModel: true,
-          providerId: undefined,
-          modelId: undefined,
-        }),
-      ),
-    ).toBe(true);
-    expect(
-      Option.isNone(
-        preferredModelForRun(models, preference, {
-          chooseModel: false,
-          providerId: "faux",
-          modelId: "one",
-        }),
-      ),
-    ).toBe(true);
+    expect(Option.getOrUndefined(preferredModelForRun(models, preference, false))).toEqual(
+      models[0],
+    );
+    expect(Option.isNone(preferredModelForRun(models, preference, true))).toBe(true);
+    expect(selectionFlagValue(Option.some("  faux  "))).toBe("faux");
+    expect(selectionFlagValue(Option.some(""))).toBeUndefined();
+    expect(selectionFlagValue(Option.none())).toBeUndefined();
+
+    const second = Schema.decodeUnknownSync(AuthorModelSchema)({
+      providerId: "other",
+      providerName: "Other",
+      modelId: "two",
+      modelName: "Two",
+    });
+    expect(modelsForPicker([...models, second], "faux", "missing")).toEqual({
+      models,
+      usedFallback: true,
+    });
+    expect(modelsForPicker([...models, second], "missing", "two")).toEqual({
+      models: [second],
+      usedFallback: true,
+    });
+    expect(modelsForPicker([...models, second], "missing", "absent")).toEqual({
+      models: [...models, second],
+      usedFallback: true,
+    });
   });
 
   it("summarizes generation progress and gives the reviewer a next step", () => {

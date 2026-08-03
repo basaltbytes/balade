@@ -67,14 +67,15 @@ ids and skip the prompts:
 
 ```sh
 npx balade generate 96 --provider openai-codex --model gpt-5.4
-npx balade generate 96 --choose-model
+npx balade generate 96 --provider openai-codex
 npx balade generate 96 --dir docs/walkthroughs
 ```
 
-An interactively confirmed choice becomes Pi's global default and is reused on
-the next run when it is available. `--choose-model` ignores that default and
-opens the picker again. Supplying both `--provider` and `--model` overrides the
-default for one run without changing it.
+Every confirmed choice becomes Pi's global default and is reused on the next
+run when it is available. A valid `--provider` and `--model` pair selects and
+saves that model without prompts. A partial, empty, or unavailable value opens
+the picker, narrowed to matching models when possible; `--model ""` opens the
+full available list.
 
 The default output is `walkthroughs/pr-96-<title>.md`. Balade stamps the PR
 number and commit itself, reports each inspection phase once, reports cumulative

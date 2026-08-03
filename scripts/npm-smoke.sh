@@ -32,7 +32,10 @@ BIN="$PROJECT/node_modules/.bin/balade"
 "$BIN" --help | grep -qi "walkthrough"
 "$BIN" generate --help | grep -qi "provider"
 "$BIN" generate --help | grep -qi "verbose"
-"$BIN" generate --help | grep -qi "choose-model"
+if "$BIN" generate --help | grep -qi "choose-model"; then
+  echo "obsolete --choose-model flag is still exposed" >&2
+  exit 1
+fi
 
 # The tarball must carry both app bundles; open and build depend on them.
 test -f "$PROJECT/node_modules/balade/dist/app/index.html"
