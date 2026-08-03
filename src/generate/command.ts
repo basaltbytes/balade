@@ -73,19 +73,23 @@ export const generateCommand = Command.make(
         return;
       }
 
-      const progress = generationProgress();
+      const progress = makeGenerationProgress(writeStdout);
       const result = yield* runGeneration({
         source: prepared,
         model: selected.value,
         directory: config.directory,
-        progress: progress.event,
+        progress,
       });
-      writeStdout(formatText({ reports: [result.report] }));
       if (result._tag === "Generated") {
         writeStdout(
-          `balade wrote ${result.file} and check passed${repairSummary(result.repairs)}.\n`,
+          generationSuccessText({
+            file: result.report.file,
+            ranges: result.report.ranges.length,
+            repairs: result.repairs,
+          }),
         );
       } else {
+        writeStdout(formatText({ reports: [result.report] }));
         writeStderr(
           `balade kept ${result.file} after check still found diagnostics${repairSummary(result.repairs)}. Edit it and run balade check ${result.file}.\n`,
         );
@@ -230,24 +234,45 @@ function printLoginNotification(event: LoginNotification): void {
   }
 }
 
-function generationProgress(): { readonly event: (event: AuthorProgress) => void } {
+export function makeGenerationProgress(
+  write: (value: string) => void,
+): (event: AuthorProgress) => void {
   let turn = 0;
-  return {
-    event: (event) => {
-      if (event._tag === "AuthorToolStarted") {
-        writeStdout(`[${event.name}]\n`);
-      } else if (event._tag === "AuthorUsageUpdated") {
-        turn++;
-        const usage = event.usage;
-        writeStdout(
-          `after turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
-            `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
-            `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
-            `cost $${usage.cost.toFixed(4)}\n`,
-        );
+  const announced = new Set<string>();
+  return (event) => {
+    if (event._tag === "AuthorToolStarted") {
+      const message = progressMessage(event.name);
+      if (!announced.has(message)) {
+        announced.add(message);
+        write(`${message}\n`);
       }
-    },
+    } else if (event._tag === "AuthorUsageUpdated") {
+      turn++;
+      const usage = event.usage;
+      write(
+        `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
+          `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
+          `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
+          `cost $${usage.cost.toFixed(4)}\n`,
+      );
+    }
   };
+}
+
+function progressMessage(tool: string): string {
+  switch (tool) {
+    case "list_pr_changes":
+    case "list_source_files":
+      return "Inspecting pull-request changes…";
+    case "read_pr_diff":
+      return "Reading relevant diffs…";
+    case "read_source":
+      return "Confirming pinned source ranges…";
+    case "submit_walkthrough":
+      return "Submitting the walkthrough draft…";
+    default:
+      return "Authoring the walkthrough…";
+  }
 }
 
 function announceModel(model: AuthorModel): void {
@@ -270,6 +295,19 @@ function requestedModel(providerId: string | undefined, modelId: string | undefi
 
 function repairSummary(repairs: number): string {
   return repairs === 0 ? "" : ` after ${repairs} repair ${repairs === 1 ? "turn" : "turns"}`;
+}
+
+export function generationSuccessText(result: {
+  readonly file: string;
+  readonly ranges: number;
+  readonly repairs: number;
+}): string {
+  const ranges = `${result.ranges} code ${result.ranges === 1 ? "range" : "ranges"}`;
+  return (
+    `Check passed${repairSummary(result.repairs)}: ${ranges} verified.\n` +
+    `Generated ${result.file}.\n` +
+    `Review it with:\n  balade open ${result.file}\n`
+  );
 }
 
 type GenerationCliError =

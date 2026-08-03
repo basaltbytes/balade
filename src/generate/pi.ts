@@ -2,6 +2,8 @@
 
 import type { AgentSession, ModelRuntime, ResourceLoader } from "@earendil-works/pi-coding-agent";
 import type { AuthEvent, AuthPrompt, Model } from "@earendil-works/pi-ai";
+import Markdoc from "@markdoc/markdoc";
+import type { Node } from "@markdoc/markdoc";
 import {
   Context,
   Effect,
@@ -70,6 +72,9 @@ const MAX_TREE_FILES = 2_000;
 const MAX_SOURCE_LINES = 400;
 const MAX_DIFF_LINES = 800;
 const MAX_TOOL_CHARACTERS = 80_000;
+const MAX_DIFF_READS = 8;
+const MAX_SOURCE_READS = 12;
+const MAX_CODE_RANGES = 10;
 const SESSION_ABORT_TIMEOUT = "1 second";
 
 interface RawLoginMethod {
@@ -232,6 +237,7 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
           semaphore.withPermit(
             Effect.gen(function* () {
               acquired.clearDraft();
+              acquired.resetInspectionBudget();
               const invocation = yield* Effect.result(
                 Effect.tryPromise({
                   try: invoke,
@@ -304,6 +310,8 @@ async function createPiSession(
   runCommand: <A, E>(effect: Effect.Effect<A, E, CommandDependencies>) => Promise<A>,
 ) {
   let draft: unknown;
+  let diffReads = 0;
+  let sourceReads = 0;
   const sourcePaths = memoize(async () => {
     const out = await runCommand(
       gitOut(["ls-tree", "-r", "--name-only", "-z", request.pin], request.root),
@@ -387,6 +395,12 @@ async function createPiSession(
     }),
     execute: async (_id, params) => {
       if (!changed.has(params.path)) throw new Error(`${params.path} is not a changed file.`);
+      if (diffReads >= MAX_DIFF_READS) {
+        return toolText(
+          `Diff inspection budget reached after ${MAX_DIFF_READS} reads. Use the evidence already collected, confirm only the source needed for selected ranges, then submit the walkthrough.`,
+        );
+      }
+      diffReads++;
       const out = await runCommand(
         gitOut(
           [
@@ -427,6 +441,12 @@ async function createPiSession(
       if (!(await sourcePaths()).includes(params.path)) {
         throw new Error(`${params.path} does not exist at ${request.pin}.`);
       }
+      if (sourceReads >= MAX_SOURCE_READS) {
+        return toolText(
+          `Source inspection budget reached after ${MAX_SOURCE_READS} reads. Submit using the verified ranges already collected; do not invent more.`,
+        );
+      }
+      sourceReads++;
       const content = await runCommand(
         gitOut(["show", `${request.pin}:${params.path}`], request.root),
       );
@@ -465,6 +485,12 @@ async function createPiSession(
       body: pi.ai.Type.String({ minLength: 1 }),
     }),
     execute: async (_id, params) => {
+      const rangeCount = codeRangeCount(params.body);
+      if (rangeCount > MAX_CODE_RANGES) {
+        return toolText(
+          `The draft has ${rangeCount} code ranges; the hard maximum is ${MAX_CODE_RANGES}. Keep only the ranges needed for the review story, then submit the complete draft again.`,
+        );
+      }
       draft = {
         title: params.title,
         meta: params.meta,
@@ -502,8 +528,6 @@ async function createPiSession(
   const unsubscribe = session.subscribe((event) => {
     if (event.type === "tool_execution_start") {
       request.progress({ _tag: "AuthorToolStarted", name: event.toolName });
-    } else if (event.type === "tool_execution_end") {
-      request.progress({ _tag: "AuthorToolFinished", name: event.toolName });
     }
   });
 
@@ -513,7 +537,30 @@ async function createPiSession(
     clearDraft: () => {
       draft = undefined;
     },
+    resetInspectionBudget: () => {
+      diffReads = 0;
+      sourceReads = 0;
+    },
     getDraft: () => draft,
+  };
+}
+
+function codeRangeCount(body: string): number {
+  let count = 0;
+  const visit = (nodes: readonly Node[]): void => {
+    for (const node of nodes) {
+      if (node.type === "tag" && node.tag === "code") count++;
+      visit(node.children);
+    }
+  };
+  visit(Markdoc.parse(body).children);
+  return count;
+}
+
+function toolText(text: string) {
+  return {
+    content: [{ type: "text" as const, text }],
+    details: {},
   };
 }
 

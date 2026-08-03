@@ -290,6 +290,15 @@ agent never receives Pi's shell or mutation tools. `submit_walkthrough` ends the
 agent loop; the adapter stamps the schema version, PR and commit after the model
 returns.
 
+The baseline authoring turn is deliberately bounded to eight diff reads and
+twelve source reads. The prompt asks for the behavioral spine in two to five
+sections and normally three to eight focused ranges, with ten as a hard maximum.
+These limits keep provider context and cost proportional to a review story
+instead of rewarding an inventory of every changed file; richer curation remains
+a separate quality layer. The read allowance resets for a repair turn so the
+agent can verify a corrected range. The submit tool rejects drafts above the
+range ceiling and asks the agent to focus the complete draft before accepting it.
+
 A failed check gets at most two repair turns. Repairs use a new
 `AgentSession.prompt()` in the same in-memory session, rather than Pi's queued
 `followUp()`: a terminating tool leaves a tool-result message last, and
@@ -321,7 +330,10 @@ turns that end in provider or submission errors. Cancellation is distinct from
 authentication failure. Cleanup skips abort for an idle session; an active
 session abort is bounded and failures are logged without provider or credential
 details. Model prose is not streamed to the terminal, and every remaining
-dynamic terminal string has control sequences removed.
+dynamic terminal string has control sequences removed. Tool events collapse to
+one message per inspection phase. A successful check prints only the verified
+range count, generated path, and the next `balade open` command; full diagnostics
+remain visible when the generated draft still needs manual repair.
 
 ## Parser properties follow schema and grammar edges
 

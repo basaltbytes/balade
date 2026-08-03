@@ -71,11 +71,16 @@ npx balade generate 96 --dir docs/walkthroughs
 ```
 
 The default output is `walkthroughs/pr-96-<title>.md`. Balade stamps the PR
-number and commit itself, reports cumulative token usage and cost after every
-model turn, and won't overwrite a file with the same name. A failed check goes
-back to the model for at most two repair turns. `--dir` is repository-relative;
-paths through symlinks outside the repository and paths inside `.git` are
-rejected.
+number and commit itself, reports each inspection phase once, reports cumulative
+token usage and cost after every model turn, and won't overwrite a file with the
+same name. The author works within bounded diff and source inspection budgets so
+the baseline draft stays focused. A failed check goes back to the model for at
+most two repair turns. `--dir` is repository-relative; paths through symlinks
+outside the repository and paths inside `.git` are rejected.
+
+After a successful check, balade prints the generated path and the exact
+`balade open …` command to start reviewing it. Generation itself doesn't start
+the review server.
 
 Generation never stages, commits, pushes, or opens a pull request. If the draft
 still fails validation, balade keeps the file and exits with status 1; edit the

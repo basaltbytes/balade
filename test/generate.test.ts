@@ -14,8 +14,13 @@ import {
   type AuthorModel,
   type AuthorProgress,
 } from "../src/generate/author.js";
-import { sanitizeTerminalText } from "../src/generate/command.js";
+import {
+  generationSuccessText,
+  makeGenerationProgress,
+  sanitizeTerminalText,
+} from "../src/generate/command.js";
 import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
+import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/prompt.js";
 import {
   renderDraft,
   prepareGeneration,
@@ -170,6 +175,65 @@ describe("the Pi adapter", () => {
       expect(secondRequest).toContain("submit_walkthrough");
       expect(secondRequest).not.toContain('"bash"');
       expect(secondRequest).not.toContain('"write_file"');
+      expect(AUTHORING_SYSTEM_PROMPT).toContain("no more than 8 diff reads");
+      expect(AUTHORING_SYSTEM_PROMPT).toContain("hard maximum of 10 code ranges");
+    }),
+  );
+
+  it.effect("stops serving diffs after the bounded inspection budget", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      let finalRequest = "";
+      harness.faux.setResponses([
+        ...Array.from({ length: 9 }, () =>
+          ai.fauxAssistantMessage(ai.fauxToolCall("read_pr_diff", { path: CHANGED_FILE.path }), {
+            stopReason: "toolUse",
+          }),
+        ),
+        (context) => {
+          finalRequest = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(finalRequest).toContain("Diff inspection budget reached after 8 reads");
+    }),
+  );
+
+  it.effect("requires an overlong walkthrough to be focused before submission", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      let secondRequest = "";
+      const overlongBody = Array.from(
+        { length: 11 },
+        (_, index) =>
+          `{% code file="models/planning_pool_item.py" from=1 to=1 expect="${PINNED_LINE}" /%}\n${index}`,
+      ).join("\n");
+      harness.faux.setResponses([
+        submitted(overlongBody),
+        (context) => {
+          secondRequest = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      const turn = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        const session = yield* author.start(authorRequest(repo.dir, repo.pin, model));
+        return session.initial;
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(secondRequest).toContain("the hard maximum is 10");
+      expect(turn.draft.body).toBe(validBody);
     }),
   );
 
@@ -541,5 +605,45 @@ describe("generation", () => {
     expect(
       sanitizeTerminalText("safe\u001b]8;;https://evil.invalid\u0007link\u001b]8;;\u0007\u0000"),
     ).toBe("safelink");
+  });
+
+  it("summarizes generation progress and gives the reviewer a next step", () => {
+    const output: string[] = [];
+    const progress = makeGenerationProgress((value) => output.push(value));
+    const usage = {
+      input: 12,
+      output: 3,
+      cacheRead: 20,
+      cacheWrite: 0,
+      total: 35,
+      cost: 0.0123,
+    };
+
+    progress({ _tag: "AuthorToolStarted", name: "list_pr_changes" });
+    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff" });
+    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff" });
+    progress({ _tag: "AuthorToolStarted", name: "read_source" });
+    progress({ _tag: "AuthorToolStarted", name: "read_source" });
+    progress({ _tag: "AuthorToolStarted", name: "submit_walkthrough" });
+    progress({ _tag: "AuthorUsageUpdated", usage });
+
+    expect(output).toEqual([
+      "Inspecting pull-request changes…\n",
+      "Reading relevant diffs…\n",
+      "Confirming pinned source ranges…\n",
+      "Submitting the walkthrough draft…\n",
+      "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cost $0.0123\n",
+    ]);
+    expect(
+      generationSuccessText({
+        file: "walkthroughs/pr-20-generate-with-pi.md",
+        ranges: 7,
+        repairs: 0,
+      }),
+    ).toBe(
+      "Check passed: 7 code ranges verified.\n" +
+        "Generated walkthroughs/pr-20-generate-with-pi.md.\n" +
+        "Review it with:\n  balade open walkthroughs/pr-20-generate-with-pi.md\n",
+    );
   });
 });

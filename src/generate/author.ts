@@ -80,7 +80,6 @@ export interface LoginInteraction {
 
 export type AuthorProgress =
   | { readonly _tag: "AuthorToolStarted"; readonly name: string }
-  | { readonly _tag: "AuthorToolFinished"; readonly name: string }
   | { readonly _tag: "AuthorUsageUpdated"; readonly usage: AuthorUsage };
 
 export interface AuthorChangedFile {
