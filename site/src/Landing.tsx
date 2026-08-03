@@ -272,10 +272,10 @@ export const Landing = () => {
           balade
         </h1>
         <p className="mt-7 font-human text-[clamp(1.125rem,2.4vw,1.5rem)] leading-snug text-balance">
-          The diff is for agents; the&nbsp;walkthrough is for&nbsp;you.
+          walks you through your agents&rsquo;&nbsp;pull&nbsp;requests.
         </p>
         <p className="mt-3 max-w-[44ch] font-human text-[15px] leading-relaxed text-muted-foreground">
-          Narrated, validated walkthroughs for pull requests too large to scan.
+          Narrated, validated walkthroughs for diffs too large to scan.
         </p>
         <code className="mt-10 rounded-md border border-border bg-card px-4 py-2.5 font-machine text-sm">
           <span className="text-muted-foreground select-none">$ </span>
