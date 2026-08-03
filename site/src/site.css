@@ -26,6 +26,14 @@
   }
 }
 
+/* A badge leaves: merged, it evaporates upward. */
+@keyframes fade {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
 /* Each badge bobs on its own slow phase; negative delays desynchronize them. */
 @keyframes bob {
   from {

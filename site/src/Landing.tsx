@@ -25,13 +25,15 @@ interface Badge {
   /** Bob phase, seconds; the delay is negative so phases start scattered. */
   readonly bobDuration: number;
   readonly bobDelay: number;
+  /** A dying badge fades for one beat before its cell is refilled. */
+  readonly dying: boolean;
 }
 
 const COLS = 13;
 const ROWS = 8;
 const CHURN_MS = 750;
 /** Pointer parallax reach per tier, px: near layers answer the most. */
-const PARALLAX_PX = [7, 14, 24] as const;
+const PARALLAX_PX = [3, 7, 12] as const;
 
 /** Deterministic layout: the same storm on every load and every screenshot. */
 const mulberry32 = (seed: number) => (): number => {
@@ -76,6 +78,7 @@ const makeBadge = (rng: () => number, id: number, cell: number): Badge | null =>
     deletions,
     bobDuration: 7 + rng() * 5,
     bobDelay: -rng() * 12,
+    dying: false,
   };
 };
 
@@ -109,7 +112,11 @@ const TIER_STYLE = [
 
 const DiffBadge = ({ badge }: { badge: Badge }) => (
   <span
-    className={`absolute animate-[land_900ms_ease-out_backwards] whitespace-nowrap font-machine ${TIER_STYLE[badge.tier]}`}
+    className={`absolute whitespace-nowrap font-machine ${
+      badge.dying
+        ? "animate-[fade_700ms_ease-in_forwards]"
+        : "animate-[land_900ms_ease-out_backwards]"
+    } ${TIER_STYLE[badge.tier]}`}
     style={{ left: `${badge.x}%`, top: `${badge.y}%`, translate: "-50% -50%" }}
   >
     {/* The bob lives on an inner span so it never fights the landing rise. */}
@@ -128,7 +135,10 @@ const DiffBadge = ({ badge }: { badge: Badge }) => (
 
 const reducedMotion = (): boolean => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** The churn: every beat, one badge is replaced — agents merge non-stop. */
+/**
+ * The churn: agents merge non-stop. Each beat, whatever finished fading is
+ * replaced in its cell, and one more badge begins its own fade.
+ */
 const useChurn = (): readonly Badge[] => {
   const [field, setField] = useState(initialField);
   useEffect(() => {
@@ -137,11 +147,13 @@ const useChurn = (): readonly Badge[] => {
     let nextId = COLS * ROWS;
     const timer = setInterval(() => {
       setField((badges) => {
-        const slot = Math.floor(rng() * badges.length);
-        const dying = badges[slot];
-        if (dying === undefined) return badges;
-        const born = makeBadge(rng, nextId++, dying.cell);
-        return born === null ? badges : badges.map((badge, i) => (i === slot ? born : badge));
+        const swapped = badges.map((badge) =>
+          badge.dying ? (makeBadge(rng, nextId++, badge.cell) ?? badge) : badge,
+        );
+        const slot = Math.floor(rng() * swapped.length);
+        const chosen = swapped[slot];
+        if (chosen === undefined || chosen.dying) return swapped;
+        return swapped.map((badge, i) => (i === slot ? { ...badge, dying: true } : badge));
       });
     }, CHURN_MS);
     return () => clearInterval(timer);
@@ -165,8 +177,8 @@ const useParallax = () => {
     let running = false;
 
     const step = (): void => {
-      x += (targetX - x) * 0.06;
-      y += (targetY - y) * 0.06;
+      x += (targetX - x) * 0.045;
+      y += (targetY - y) * 0.045;
       for (const [tier, reach] of PARALLAX_PX.entries()) {
         const layer = layers.current[tier];
         if (layer !== null && layer !== undefined) {
