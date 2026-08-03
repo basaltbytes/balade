@@ -12,6 +12,7 @@ import {
   WalkthroughAuthor,
   type AuthorModel,
   type AuthorProgress,
+  type AuthorProgressMode,
   type LoginInteraction,
   type LoginNotification,
   type LoginPrompt,
@@ -25,11 +26,14 @@ import {
 } from "./run.js";
 import {
   matchingModels,
+  modelSelectionFromFlags,
   modelsForPicker,
   NoProviderAuthenticated,
   noProviderMessage,
   orderedLoginMethods,
-  preferredModelForRun,
+  preferredModel,
+  type ModelFilter,
+  type ModelSelection,
 } from "./select.js";
 
 const target = Argument.string("pr").pipe(
@@ -65,30 +69,29 @@ export const generateCommand = Command.make(
         stopMessage("Name one GitHub pull request: `balade generate <pr-url|#n>`.");
         return;
       }
-      const providerId = selectionFlagValue(config.provider);
-      const modelId = selectionFlagValue(config.model);
-      const hasSelectionFlag = Option.isSome(config.provider) || Option.isSome(config.model);
+      const selection = modelSelectionFromFlags(config.provider, config.model);
       const prepared = yield* prepareGeneration({ cwd: process.cwd(), target: pull });
       for (const notice of prepared.notices) {
         writeStdout(`warning ${notice.code}\n  ${notice.message}\n  fix ${notice.hint}\n`);
       }
 
-      const selected = yield* selectAuthorModel(providerId, modelId, hasSelectionFlag);
+      const selected = yield* selectAuthorModel(selection);
       if (Option.isNone(selected)) {
         writeStdout("Generation cancelled.\n");
         return;
       }
 
-      const progress = makeGenerationProgress(writeStdout, { verbose: config.verbose });
+      const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
+      const progress = makeGenerationProgress(writeStdout, progressMode);
       const result = yield* runGeneration({
         source: prepared,
         model: selected.value,
         directory: config.directory,
-        verbose: config.verbose,
+        progressMode,
         progress,
       });
       if (result._tag === "Generated") {
-        if (config.verbose) writeStdout(formatText({ reports: [result.report] }));
+        if (progressMode === "verbose") writeStdout(formatText({ reports: [result.report] }));
         writeStdout(
           generationSuccessText({
             file: result.report.file,
@@ -115,11 +118,7 @@ export const generateCommand = Command.make(
     ),
 ).pipe(Command.withDescription("Draft and validate a walkthrough for a pull request"));
 
-const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
-  providerId: string | undefined,
-  modelId: string | undefined,
-  hasSelectionFlag: boolean,
-) {
+const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: ModelSelection) {
   const author = yield* WalkthroughAuthor;
   const rememberSelected = (selected: AuthorModel) =>
     author.rememberModel(selected).pipe(
@@ -132,8 +131,9 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
       ),
     );
   let available = yield* author.availableModels;
-  if (providerId !== undefined && modelId !== undefined) {
-    const selected = matchingModels(available, providerId, modelId)[0];
+  const filter: ModelFilter = selection._tag === "Choose" ? selection.filter : {};
+  if (filter.providerId !== undefined && filter.modelId !== undefined) {
+    const selected = matchingModels(available, filter)[0];
     if (selected !== undefined) {
       yield* rememberSelected(selected);
       announceModel(selected);
@@ -141,35 +141,37 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
     }
   }
 
-  const preference = hasSelectionFlag
-    ? Option.none()
-    : yield* author.modelPreference.pipe(
-        Effect.catchTag("AuthorPreferenceReadFailed", () =>
-          Effect.sync(() => {
-            writeStderr("warning Pi's saved model preference could not be read; choose a model.\n");
-            return Option.none();
-          }),
-        ),
-      );
-  const preferred = preferredModelForRun(available, preference, hasSelectionFlag);
-  if (Option.isSome(preferred)) {
-    announceModel(preferred.value, "saved preference");
-    return preferred;
+  if (selection._tag === "UsePreference") {
+    const preference = yield* author.modelPreference.pipe(
+      Effect.catchTag("AuthorPreferenceReadFailed", () =>
+        Effect.sync(() => {
+          writeStderr("warning Pi's saved model preference could not be read; choose a model.\n");
+          return Option.none();
+        }),
+      ),
+    );
+    const saved = preferredModel(available, preference);
+    if (Option.isSome(saved)) {
+      announceModel(saved.value, "saved preference");
+      return saved;
+    }
   }
 
   const allMethods = yield* author.loginMethods;
   const providerModels =
-    providerId === undefined ? [] : matchingModels(available, providerId, undefined);
-  const providerMethods = orderedLoginMethods(allMethods, providerId);
+    filter.providerId === undefined
+      ? []
+      : matchingModels(available, { providerId: filter.providerId });
+  const providerMethods = orderedLoginMethods(allMethods, filter.providerId);
   const shouldLogin =
     available.length === 0 ||
-    (providerId !== undefined && providerModels.length === 0 && providerMethods.length > 0);
+    (filter.providerId !== undefined && providerModels.length === 0 && providerMethods.length > 0);
   if (shouldLogin) {
     const methods =
       providerMethods.length > 0 ? providerMethods : orderedLoginMethods(allMethods, undefined);
     if (methods.length === 0) {
       return yield* new NoProviderAuthenticated({
-        requested: requestedModel(providerId, modelId),
+        requested: requestedModel(filter),
       });
     }
     const method = yield* Prompt.run(
@@ -193,13 +195,13 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
     available = yield* author.availableModels;
   }
 
-  const picker = modelsForPicker(available, providerId, modelId);
+  const picker = modelsForPicker(available, filter);
   if (picker.models.length === 0) {
-    return yield* new NoProviderAuthenticated({ requested: requestedModel(providerId, modelId) });
+    return yield* new NoProviderAuthenticated({ requested: requestedModel(filter) });
   }
   if (picker.usedFallback) {
     writeStderr(
-      `warning No available Pi model matches ${requestedModel(providerId, modelId)}; choose from the available models.\n`,
+      `warning No available Pi model matches ${requestedModel(filter)}; choose from the available models.\n`,
     );
   }
 
@@ -227,11 +229,6 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (
   yield* rememberSelected(selected);
   return Option.some(selected);
 });
-
-export function selectionFlagValue(value: Option.Option<string>): string | undefined {
-  const trimmed = Option.getOrUndefined(value)?.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
 
 function loginInteraction(context: Context.Context<Prompt.Environment>): LoginInteraction {
   const runPrompt = Effect.runPromiseWith(context);
@@ -294,7 +291,7 @@ function printLoginNotification(event: LoginNotification): void {
 
 export function makeGenerationProgress(
   write: (value: string) => void,
-  options: { readonly verbose?: boolean } = {},
+  mode: AuthorProgressMode = "compact",
 ): (event: AuthorProgress) => void {
   let turn = 0;
   const announced = new Set<string>();
@@ -308,14 +305,14 @@ export function makeGenerationProgress(
           `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
           `cost $${usage.cost.toFixed(4)}\n`,
       );
-    } else if (options.verbose && event._tag === "AuthorAssistantText") {
+    } else if (mode === "verbose" && event._tag === "AuthorAssistantText") {
       write(`[assistant]\n${withTrailingNewline(event.text)}`);
-    } else if (options.verbose && event._tag === "AuthorToolStarted") {
+    } else if (mode === "verbose" && event._tag === "AuthorToolStarted") {
       write(`[${event.name}]${event.input === "" ? "" : ` ${event.input}`}\n`);
-    } else if (options.verbose && event._tag === "AuthorToolFinished") {
+    } else if (mode === "verbose" && event._tag === "AuthorToolFinished") {
       if (event.output !== "") write(withTrailingNewline(event.output));
       write(`[/${event.name}${event.failed ? " error" : ""}]\n`);
-    } else if (!options.verbose && event._tag === "AuthorToolStarted") {
+    } else if (mode === "compact" && event._tag === "AuthorToolStarted") {
       const message = progressMessage(event.name);
       if (!announced.has(message)) {
         announced.add(message);
@@ -359,8 +356,8 @@ function anthropicBillingCaveat(): string {
   );
 }
 
-function requestedModel(providerId: string | undefined, modelId: string | undefined): string {
-  return `${providerId ?? "any provider"}/${modelId ?? "any model"}`;
+function requestedModel(filter: ModelFilter): string {
+  return `${filter.providerId ?? "any provider"}/${filter.modelId ?? "any model"}`;
 }
 
 function repairSummary(repairs: number): string {

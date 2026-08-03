@@ -282,6 +282,12 @@ anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
 Codex-SDK-plus-API-key pair of adapters instead.
 
+The adapter itself is split at the session boundary: `pi.ts` owns account,
+authentication and global settings, while `pi-session.ts` owns the scoped
+authoring session, its read-only tool policy and provider-event forwarding.
+This keeps preference durability independent from the security-sensitive tool
+sandbox and session lifecycle.
+
 Provider/model defaults use Pi's global `SettingsManager` rather than a second
 balade preference file. Project settings are not trusted or loaded for this
 choice. A confirmed interactive selection updates Pi's default; a matching

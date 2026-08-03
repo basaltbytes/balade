@@ -95,6 +95,8 @@ export type AuthorProgress =
     }
   | { readonly _tag: "AuthorUsageUpdated"; readonly usage: AuthorUsage };
 
+export type AuthorProgressMode = "compact" | "verbose";
+
 export interface AuthorChangedFile {
   readonly path: string;
   readonly status: "A" | "M" | "D" | "R";
@@ -117,7 +119,7 @@ export interface AuthoringRequest {
   };
   readonly files: readonly AuthorChangedFile[];
   readonly model: AuthorModel;
-  readonly verbose: boolean;
+  readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;
 }
 

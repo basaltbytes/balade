@@ -17,6 +17,7 @@ import {
   type AuthorDraft,
   type AuthorModel,
   type AuthorProgress,
+  type AuthorProgressMode,
   type AuthorUsage,
 } from "./author.js";
 
@@ -96,10 +97,13 @@ export class DraftWriteFailed extends Schema.TaggedErrorClass<DraftWriteFailed>(
   { file: Schema.String, cause: Schema.Defect() },
 ) {}
 
+const RepairCause = Schema.Union([ProviderRequestFailed, DraftMalformed, DraftWriteFailed]);
+type RepairCause = typeof RepairCause.Type;
+
 export class RepairFailed extends Schema.TaggedErrorClass<RepairFailed>()("RepairFailed", {
   file: Schema.String,
   report: CheckReportSchema,
-  cause: Schema.Defect(),
+  cause: RepairCause,
 }) {}
 
 export interface RunGenerationOptions {
@@ -107,7 +111,7 @@ export interface RunGenerationOptions {
   readonly model: AuthorModel;
   readonly directory: string;
   readonly progress: (event: AuthorProgress) => void;
-  readonly verbose?: boolean;
+  readonly progressMode: AuthorProgressMode;
   readonly useGh?: boolean;
 }
 
@@ -157,7 +161,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       pull: options.source.pull,
       files: options.source.files,
       model: options.model,
-      verbose: options.verbose ?? false,
+      progressMode: options.progressMode,
       progress: options.progress,
     });
     const initial = session.initial;
@@ -352,10 +356,7 @@ export function generateErrorMessage(error: GenerateError): string {
   }
 }
 
-function repairFailureMessage(cause: unknown): string {
-  if (typeof cause !== "object" || cause === null || !("_tag" in cause)) {
-    return "the replacement draft could not be produced";
-  }
+function repairFailureMessage(cause: RepairCause): string {
   switch (cause._tag) {
     case "ProviderRequestFailed":
       return "the provider stopped before submitting a replacement";
@@ -363,7 +364,5 @@ function repairFailureMessage(cause: unknown): string {
       return "the provider did not submit a valid replacement";
     case "DraftWriteFailed":
       return "the replacement could not be saved atomically";
-    default:
-      return "the replacement draft could not be produced";
   }
 }

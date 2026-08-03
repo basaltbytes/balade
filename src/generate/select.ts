@@ -8,48 +8,68 @@ export class NoProviderAuthenticated extends Schema.TaggedErrorClass<NoProviderA
   { requested: Schema.String },
 ) {}
 
+export interface ModelFilter {
+  readonly providerId?: string;
+  readonly modelId?: string;
+}
+
+export type ModelSelection =
+  | { readonly _tag: "UsePreference" }
+  | { readonly _tag: "Choose"; readonly filter: ModelFilter };
+
+export function modelSelectionFromFlags(
+  provider: Option.Option<string>,
+  model: Option.Option<string>,
+): ModelSelection {
+  if (Option.isNone(provider) && Option.isNone(model)) return { _tag: "UsePreference" };
+  const providerId = normalizedFlag(provider);
+  const modelId = normalizedFlag(model);
+  return {
+    _tag: "Choose",
+    filter: {
+      ...(providerId === undefined ? {} : { providerId }),
+      ...(modelId === undefined ? {} : { modelId }),
+    },
+  };
+}
+
 export function matchingModels(
   models: readonly AuthorModel[],
-  provider: string | undefined,
-  model: string | undefined,
+  filter: ModelFilter,
 ): readonly AuthorModel[] {
   return models.filter(
     (candidate) =>
-      (provider === undefined || candidate.providerId === provider) &&
-      (model === undefined || candidate.modelId === model),
+      (filter.providerId === undefined || candidate.providerId === filter.providerId) &&
+      (filter.modelId === undefined || candidate.modelId === filter.modelId),
   );
 }
 
 export function modelsForPicker(
   models: readonly AuthorModel[],
-  provider: string | undefined,
-  model: string | undefined,
+  filter: ModelFilter,
 ): { readonly models: readonly AuthorModel[]; readonly usedFallback: boolean } {
-  const exact = matchingModels(models, provider, model);
+  const exact = matchingModels(models, filter);
   if (exact.length > 0) return { models: exact, usedFallback: false };
 
-  if (provider !== undefined) {
-    const sameProvider = matchingModels(models, provider, undefined);
+  if (filter.providerId !== undefined) {
+    const sameProvider = matchingModels(models, { providerId: filter.providerId });
     if (sameProvider.length > 0) return { models: sameProvider, usedFallback: true };
   }
-  if (model !== undefined) {
-    const sameModel = matchingModels(models, undefined, model);
+  if (filter.modelId !== undefined) {
+    const sameModel = matchingModels(models, { modelId: filter.modelId });
     if (sameModel.length > 0) return { models: sameModel, usedFallback: true };
   }
   return {
     models,
-    usedFallback: provider !== undefined || model !== undefined,
+    usedFallback: filter.providerId !== undefined || filter.modelId !== undefined,
   };
 }
 
-export function preferredModelForRun(
+export function preferredModel(
   models: readonly AuthorModel[],
   preference: Option.Option<AuthorModelPreference>,
-  hasSelectionFlag: boolean,
 ): Option.Option<AuthorModel> {
-  if (hasSelectionFlag || Option.isNone(preference)) {
-    return Option.none();
-  }
+  if (Option.isNone(preference)) return Option.none();
   return Option.fromNullishOr(
     models.find(
       (candidate) =>
@@ -57,6 +77,12 @@ export function preferredModelForRun(
         candidate.modelId === preference.value.modelId,
     ),
   );
+}
+
+function normalizedFlag(value: Option.Option<string>): string | undefined {
+  if (Option.isNone(value)) return undefined;
+  const trimmed = value.value.trim();
+  return trimmed === "" ? undefined : trimmed;
 }
 
 /** Product-preferred first-run paths; everything else remains available after them. */

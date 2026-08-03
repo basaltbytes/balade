@@ -18,7 +18,6 @@ import {
   generationSuccessText,
   makeGenerationProgress,
   sanitizeTerminalText,
-  selectionFlagValue,
 } from "../src/generate/command.js";
 import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
 import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/prompt.js";
@@ -29,7 +28,12 @@ import {
   slugifyTitle,
   type PreparedGeneration,
 } from "../src/generate/run.js";
-import { matchingModels, modelsForPicker, preferredModelForRun } from "../src/generate/select.js";
+import {
+  matchingModels,
+  modelSelectionFromFlags,
+  modelsForPicker,
+  preferredModel,
+} from "../src/generate/select.js";
 import { shellLayer } from "../src/live.js";
 import { PrLocator } from "../src/pr/locate.js";
 import { cloneOnMain, createFixtureRepo } from "./support/repo.js";
@@ -69,7 +73,7 @@ function authorRequest(
   pin: string,
   model: AuthorModel,
   progress: (event: AuthorProgress) => void = () => {},
-  verbose = false,
+  progressMode: "compact" | "verbose" = "compact",
 ) {
   return {
     root,
@@ -85,7 +89,7 @@ function authorRequest(
     },
     files: [CHANGED_FILE],
     model,
-    verbose,
+    progressMode,
     progress,
   };
 }
@@ -172,7 +176,7 @@ describe("the Pi adapter", () => {
         const author = yield* WalkthroughAuthor;
         const model = yield* fauxModel();
         const session = yield* author.start(
-          authorRequest(repo.dir, repo.pin, model, (event) => progress.push(event), true),
+          authorRequest(repo.dir, repo.pin, model, (event) => progress.push(event), "verbose"),
         );
         return session.initial;
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
@@ -500,6 +504,7 @@ describe("generation", () => {
           source: prepared(repo.dir, repo.pin),
           model,
           directory: "walkthroughs",
+          progressMode: "compact",
           progress: (event) => {
             if (event._tag === "AuthorUsageUpdated") usageTurns.push(event.usage.total);
           },
@@ -547,6 +552,7 @@ describe("generation", () => {
           source: prepared(repo.dir, repo.pin),
           model,
           directory: "drafts",
+          progressMode: "compact",
           progress: () => {},
           useGh: false,
         });
@@ -577,6 +583,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "linked/walkthroughs",
+            progressMode: "compact",
             progress: () => {},
             useGh: false,
           }),
@@ -586,6 +593,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: ".git/walkthroughs",
+            progressMode: "compact",
             progress: () => {},
             useGh: false,
           }),
@@ -613,6 +621,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "walkthroughs",
+            progressMode: "compact",
             progress: () => {},
             useGh: false,
           }),
@@ -643,6 +652,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "drafts",
+            progressMode: "compact",
             progress: (event) => {
               if (event._tag === "AuthorUsageUpdated") usage.push(event.usage.total);
             },
@@ -673,8 +683,7 @@ describe("generation", () => {
             modelName: "One",
           }),
         ],
-        "other",
-        undefined,
+        { providerId: "other" },
       ),
     ).toEqual([]);
     expect(
@@ -689,17 +698,24 @@ describe("generation", () => {
         modelName: "One",
       }),
     ];
+    const first = models[0];
+    if (first === undefined) throw new Error("test model fixture is empty");
     const preference = Option.some({
-      providerId: models[0]!.providerId,
-      modelId: models[0]!.modelId,
+      providerId: first.providerId,
+      modelId: first.modelId,
     });
-    expect(Option.getOrUndefined(preferredModelForRun(models, preference, false))).toEqual(
-      models[0],
-    );
-    expect(Option.isNone(preferredModelForRun(models, preference, true))).toBe(true);
-    expect(selectionFlagValue(Option.some("  faux  "))).toBe("faux");
-    expect(selectionFlagValue(Option.some(""))).toBeUndefined();
-    expect(selectionFlagValue(Option.none())).toBeUndefined();
+    expect(Option.getOrUndefined(preferredModel(models, preference))).toEqual(first);
+    expect(modelSelectionFromFlags(Option.none(), Option.none())).toEqual({
+      _tag: "UsePreference",
+    });
+    expect(modelSelectionFromFlags(Option.some("  faux  "), Option.some(""))).toEqual({
+      _tag: "Choose",
+      filter: { providerId: "faux" },
+    });
+    expect(modelSelectionFromFlags(Option.some(""), Option.none())).toEqual({
+      _tag: "Choose",
+      filter: {},
+    });
 
     const second = Schema.decodeUnknownSync(AuthorModelSchema)({
       providerId: "other",
@@ -707,15 +723,21 @@ describe("generation", () => {
       modelId: "two",
       modelName: "Two",
     });
-    expect(modelsForPicker([...models, second], "faux", "missing")).toEqual({
+    expect(
+      modelsForPicker([...models, second], { providerId: "faux", modelId: "missing" }),
+    ).toEqual({
       models,
       usedFallback: true,
     });
-    expect(modelsForPicker([...models, second], "missing", "two")).toEqual({
-      models: [second],
-      usedFallback: true,
-    });
-    expect(modelsForPicker([...models, second], "missing", "absent")).toEqual({
+    expect(modelsForPicker([...models, second], { providerId: "missing", modelId: "two" })).toEqual(
+      {
+        models: [second],
+        usedFallback: true,
+      },
+    );
+    expect(
+      modelsForPicker([...models, second], { providerId: "missing", modelId: "absent" }),
+    ).toEqual({
       models: [...models, second],
       usedFallback: true,
     });
@@ -761,9 +783,7 @@ describe("generation", () => {
     );
 
     const verboseOutput: string[] = [];
-    const verbose = makeGenerationProgress((value) => verboseOutput.push(value), {
-      verbose: true,
-    });
+    const verbose = makeGenerationProgress((value) => verboseOutput.push(value), "verbose");
     verbose({ _tag: "AuthorAssistantText", text: "I found the behavioral spine." });
     verbose({
       _tag: "AuthorToolStarted",

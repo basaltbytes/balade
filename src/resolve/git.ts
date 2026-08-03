@@ -280,8 +280,8 @@ const makePullSnapshot = Effect.fn("makePullSnapshot")(function* (
   const pull =
     options.requested === undefined ? undefined : Option.getOrUndefined(options.requested.pull);
   const headOption = yield* firstSha(options.root, [
-    pull?.headRefOid,
     options.at,
+    pull?.headRefOid,
     pull?.headRefName,
     "HEAD",
   ]);
