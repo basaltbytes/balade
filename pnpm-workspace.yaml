@@ -7,3 +7,5 @@ trustPolicyExclude:
 
 onlyBuiltDependencies:
   - esbuild
+  # workerd ships the Workers runtime binary; its postinstall places it.
+  - workerd
