@@ -3,3 +3,4 @@ dist/
 .balade/
 .wrangler/
 *.log
+.claude/worktrees

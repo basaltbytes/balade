@@ -13,31 +13,16 @@ import {
   type DiscoveryError,
   walkthroughPr,
 } from "../check/discover.js";
-import { CommandExecutor, gitOut, gitToplevel } from "../resolve/exec.js";
-import { repoSlug } from "../resolve/git.js";
+import { CommandExecutor, gitOut } from "../resolve/exec.js";
+import {
+  fetchPullHead,
+  PullFetchFailed,
+  repositoryRootForTarget,
+  WrongRepository,
+} from "../resolve/git.js";
 import type { PrTarget } from "./target.js";
 
 export { NotARepository } from "../resolve/exec.js";
-
-export class WrongRepository extends Schema.TaggedErrorClass<WrongRepository>()("WrongRepository", {
-  wanted: Schema.String,
-  found: Schema.String,
-}) {
-  get note(): string {
-    return `The pull request lives in ${this.wanted}, but this repository's origin is ${this.found}.`;
-  }
-}
-
-export class PullFetchFailed extends Schema.TaggedErrorClass<PullFetchFailed>()("PullFetchFailed", {
-  number: Schema.Finite,
-}) {
-  get note(): string {
-    return (
-      `Could not fetch pull/${this.number}/head from origin. ` +
-      "Serving a pull request without its branch checked out needs a GitHub origin and network access."
-    );
-  }
-}
 
 export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughForPull>()(
   "NoWalkthroughForPull",
@@ -120,12 +105,7 @@ const locate = (cwd: string, target: PrTarget) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
-    const root = yield* gitToplevel(cwd);
-
-    const slug = yield* repoSlug(root);
-    if (target.slug !== null && target.slug.toLowerCase() !== slug.toLowerCase()) {
-      return yield* new WrongRepository({ wanted: target.slug, found: slug });
-    }
+    const root = yield* repositoryRootForTarget(cwd, target);
 
     const discovered = yield* discoverWalkthroughs(cwd);
     const checkedOut = yield* naming(target.number, discovered.paths, (path) =>
@@ -161,14 +141,6 @@ const naming = <E, R>(
     }
     return found;
   });
-
-/** GitHub advertises every PR head as `pull/<n>/head`; the SHA lands in FETCH_HEAD. */
-const fetchPullHead = (root: string, number: number) =>
-  Effect.gen(function* () {
-    yield* gitOut(["fetch", "--quiet", "origin", `pull/${number}/head`], root);
-    const at = (yield* gitOut(["rev-parse", "FETCH_HEAD"], root)).trim();
-    return at === "" ? yield* new PullFetchFailed({ number }) : at;
-  }).pipe(Effect.mapError(() => new PullFetchFailed({ number })));
 
 const read = (fs: FileSystem.FileSystem, absolute: string) =>
   fs

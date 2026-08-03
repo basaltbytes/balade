@@ -8,6 +8,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { buildErrorMessage, runBuild } from "./build/run.js";
 import { formatJson, formatText } from "./check/report.js";
 import { runCheck } from "./check/run.js";
+import { generateCommand } from "./generate/command.js";
 import { cliLayer } from "./live.js";
 import type { CheckReport } from "./payload/types.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
@@ -198,7 +199,7 @@ const size = (bytes: number): string =>
 
 const balade = Command.make("balade").pipe(
   Command.withDescription("Narrated code walkthroughs for pull requests"),
-  Command.withSubcommands([check, open, build]),
+  Command.withSubcommands([check, open, build, generateCommand]),
 );
 
 NodeRuntime.runMain(Command.run(balade, { version: VERSION }).pipe(Effect.provide(cliLayer)));
