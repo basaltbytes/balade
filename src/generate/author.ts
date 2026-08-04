@@ -5,6 +5,7 @@
  */
 
 import { Context, Effect, Option, Redacted, Schema, Scope } from "effect";
+import type { PullIntentClaims } from "../pr/intent.js";
 
 export const AuthorProviderId = Schema.NonEmptyString.pipe(
   Schema.brand("@balade/AuthorProviderId"),
@@ -117,6 +118,7 @@ export interface AuthoringRequest {
     readonly head: string;
     readonly commits: number;
   };
+  readonly claims: PullIntentClaims;
   readonly files: readonly AuthorChangedFile[];
   readonly model: AuthorModel;
   readonly progressMode: AuthorProgressMode;

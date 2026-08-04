@@ -9,8 +9,8 @@ import { formatJson, formatText } from "../src/check/report.js";
 import { checkOne, outcomeFromReports, runCheck } from "../src/check/run.js";
 import { loadWalkthrough } from "../src/compile/load.js";
 import type { CheckDiagnostic, CheckReport } from "../src/payload/types.js";
-import { CommandExecutor, CommandFailed } from "../src/resolve/exec.js";
 import { prepareSession } from "../src/server/session.js";
+import { unavailableGhLayer } from "./support/command.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
@@ -24,31 +24,6 @@ function find(report: CheckReport, code: string): CheckDiagnostic {
     throw new Error(`no ${code} in ${codes(report.diagnostics).join(", ")}`);
   return diagnostic;
 }
-
-const unavailableGhLayer = Layer.effect(
-  CommandExecutor,
-  Effect.gen(function* () {
-    const live = yield* CommandExecutor;
-    return {
-      exec: Effect.fn("CommandExecutor.unavailableGh")(function* (
-        file: string,
-        args: readonly string[],
-        cwd: string,
-      ) {
-        if (file === "gh") {
-          return yield* new CommandFailed({
-            file,
-            args,
-            cwd,
-            stderr: "gh unavailable in test",
-            code: 1,
-          });
-        }
-        return yield* live.exec(file, args, cwd);
-      }),
-    };
-  }),
-).pipe(Layer.provide(CommandExecutor.layer));
 
 const resolverWithoutGh = Layer.mergeAll(NodeServices.layer, unavailableGhLayer);
 

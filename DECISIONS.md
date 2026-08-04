@@ -398,6 +398,17 @@ Generated files record the full version in the existing scalar metadata map as
 `meta.balade-authoring`; the payload contract does not grow a provenance field,
 and the CLI overwrites any model-supplied value for that reserved key.
 
+Author-stated intent also stays outside the renderer payload contract. The
+generation snapshot carries the PR title and body, linked closing-issue text,
+and at most 20 commit subjects from `base..pin`. `gh pr view` provides the PR
+claims and linked-issue references; generation resolves each reference through
+the same optional `gh` process seam because the reference JSON does not include
+issue text. A failed GitHub lookup remains a carried `gh-unavailable` notice,
+while Git still supplies the capped commit subjects. The prompt labels every
+intent string as untrusted author-controlled claims, forbids following embedded
+instructions, and requires pinned evidence for any stated agreement or
+divergence.
+
 Offline evaluation runs five change shapes through fixture Git repositories,
 Pi's `fauxProvider`, the production adapter and `balade check`. This stays in
 `pnpm test`. Live-provider comparison uses a separate paid Vitest config and

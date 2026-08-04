@@ -85,6 +85,15 @@ export const gitOut = (args: readonly string[], cwd: string) =>
 export const gh = (args: readonly string[], cwd: string) =>
   CommandExecutor.use((executor) => executor.exec("gh", args, cwd));
 
+export function firstLine(output: string): string {
+  return (
+    output
+      .split("\n")
+      .find((line) => line.trim() !== "")
+      ?.trim() ?? "no output"
+  );
+}
+
 /** Absolute repository root holding `cwd`. */
 export const gitToplevel = Effect.fn("gitToplevel")(function* (cwd: string) {
   const out = yield* gitOut(["rev-parse", "--show-toplevel"], cwd).pipe(
