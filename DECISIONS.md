@@ -307,9 +307,11 @@ writes `~/.pi/agent/`: a user's own pi CLI must not observe a balade run, and
 the earlier choice of Pi's global settings file silently changed that CLI's
 default model (revised 2026-08-04, issue #27). The accepted cost is one extra
 login for users who already authenticated the pi CLI. Project settings are not
-trusted or loaded for this choice. A confirmed interactive selection updates
-balade's saved default; a matching default is reused without another picker.
-Every explicit or confirmed selection updates that default. An exact
+trusted or loaded for this choice. Picking a model in the picker is itself the
+confirmation: generation starts directly, with no second confirm prompt
+(revised 2026-08-04, issue #25). An interactive selection updates balade's
+saved default; a matching default is reused without another picker. Every
+explicit or interactive selection updates that default. An exact
 `--provider` and `--model` pair skips the picker; partial, empty, or
 unavailable values open it, narrowed to matching models when possible.
 Preference read and write failures are typed warnings and do not prevent a

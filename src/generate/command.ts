@@ -73,16 +73,11 @@ export const generateCommand = Command.make(
       }
 
       const selected = yield* selectAuthorModel(selection);
-      if (Option.isNone(selected)) {
-        writeStdout("Generation cancelled.\n");
-        return;
-      }
-
       const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
       const progress = makeGenerationProgress(writeStdout, progressMode);
       const result = yield* runGeneration({
         source,
-        model: selected.value,
+        model: selected,
         directory: config.directory,
         progressMode,
         progress,
@@ -134,7 +129,7 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
     if (selected !== undefined) {
       yield* rememberSelected(selected);
       announceModel(selected);
-      return Option.some(selected);
+      return selected;
     }
   }
 
@@ -150,7 +145,7 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
     const saved = preferredModel(available, preference);
     if (Option.isSome(saved)) {
       announceModel(saved.value, "saved preference");
-      return saved;
+      return saved.value;
     }
   }
 
@@ -214,16 +209,9 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
       })),
     }),
   );
-  announceModel(selected);
-  const confirmed = yield* Prompt.run(
-    Prompt.confirm({
-      message: `Generate with ${selected.providerId}/${selected.modelId}?`,
-      initial: true,
-    }),
-  );
-  if (!confirmed) return Option.none<AuthorModel>();
   yield* rememberSelected(selected);
-  return Option.some(selected);
+  announceModel(selected);
+  return selected;
 });
 
 function loginInteraction(context: Context.Context<Prompt.Environment>): LoginInteraction {
