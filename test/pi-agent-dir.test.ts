@@ -2,10 +2,10 @@
 
 import { Schema } from "effect";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
-import { baladePiAgentDir, loadLiveDependencies } from "../src/generate/pi.js";
+import { loadLiveDependencies } from "../src/generate/pi.js";
 
 const SavedDefaults = Schema.Struct({
   defaultProvider: Schema.String,
@@ -25,10 +25,6 @@ describe("balade Pi agent directory", () => {
     );
     return directory;
   }
-
-  it("defaults to ~/.balade/pi", () => {
-    expect(baladePiAgentDir()).toBe(join(homedir(), ".balade", "pi"));
-  });
 
   it("writes the remembered model to its own settings.json", async () => {
     const agentDir = temporaryAgentDir();

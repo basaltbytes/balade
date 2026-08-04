@@ -80,7 +80,7 @@ interface RawLoginMethod {
  * own pi CLI must never observe a balade run, and balade never reads
  * credentials or defaults from it.
  */
-export function baladePiAgentDir(): string {
+function baladePiAgentDir(): string {
   return join(homedir(), ".balade", "pi");
 }
 
