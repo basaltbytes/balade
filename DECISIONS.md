@@ -485,8 +485,10 @@ browser fetch and storage seams.
 `render.test.tsx` still renders the whole fixture to a string. A focused jsdom
 suite now crosses the browser runtime from `useReviewApi`: it exercises a click
 while the initial load is pending, ordered persistence, and interruption on
-unmount. The data suites continue to inject storage and fetch layers directly
-for exhaustive adapter behavior.
+unmount. Because that suite crosses the app's `ManagedRuntime`, it runs through
+`@effect/vitest` `it.effect`; React's Promise-only `act` and polling boundaries
+enter through `Effect.promise`. The data suites continue to inject storage and
+fetch layers directly for exhaustive adapter behavior.
 
 ## In-page navigation never assumes smooth scrolling runs
 
