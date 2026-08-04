@@ -209,6 +209,21 @@ forward, so remembering the older heads would only grow. Keying costs one file
 read and one `git rev-parse`; the watcher in `src/server/session.ts` drops the
 slot when the file itself changes.
 
+## `open` launches the browser through its own detached process port
+
+`balade open` opens the served URL in the default browser (issue #21) through
+`BrowserLauncher` in `src/server/browser.ts`, not through `CommandExecutor`:
+the synchronous adapter blocks the event loop, and a Linux opener that stays
+attached to the browser it starts would freeze the server it was launched for.
+The launcher spawns the platform opener detached and waits a short verdict
+window — a fast non-zero exit (missing binary, no display, no handler) becomes
+a typed `BrowserLaunchFailed`, while an opener still running after the window
+counts as launched and is left behind, unreferenced. The command boundary
+prints the launch failure as a warning with the URL and keeps serving;
+`--no-browser` skips the spawn entirely. Tests inject fixture opener commands
+through `BrowserLauncher.layerWith`, so the suite exercises the real spawn
+seam without opening a browser.
+
 ## Shiki ships fine-grained with a curated language map
 
 The full shiki bundle is 11 MB; the fine-grained core plus 31 hand-picked
