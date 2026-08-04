@@ -435,3 +435,22 @@ suite now crosses the browser runtime from `useReviewApi`: it exercises a click
 while the initial load is pending, ordered persistence, and interruption on
 unmount. The data suites continue to inject storage and fetch layers directly
 for exhaustive adapter behavior.
+
+## In-page navigation never assumes smooth scrolling runs
+
+The first visual pass in a real browser (2026-08-03) found `jumpTo` dead in
+environments where smooth scrolling is disabled (browser flag or accessibility
+setting): Chrome drops the animated `scrollIntoView` outright instead of
+degrading it. `jumpTo` still asks for the smooth scroll, then watches one frame
+pair and jumps without the animation when nothing moved. Hard loads honour the
+URL hash from the walkthrough route — the sections exist only after React
+renders, so the browser's native anchor jump has nothing to hit — with one
+corrective jump after Shiki hydration reflows the content above the target.
+
+Diagram edge labels sit at the midpoint of the edge's *visible run* (between
+the two node borders, measured after layout), not the raw center-to-center
+midpoint, which lands under a node box whenever two connected boxes are
+adjacent. A label whose visible run is shorter than its chip renders above the
+boxes instead of being sliced by them. This stays label placement on straight
+lines — the "no routing engine" stance holds; what would move it is curved or
+multi-segment edges.
