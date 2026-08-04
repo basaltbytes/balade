@@ -277,6 +277,15 @@ Pi lazily (its root barrel loads TUI modules at import time), so `check`,
 `^22.22.2 || ^24.15.0 || >=26.0.0`, covering Pi and its locked production tree;
 Node 20 passed end of life on 2026-04-30.
 
+`@effect/platform-node-shared` is pinned as a direct dependency even though
+balade never imports it. `@effect/platform-node` declares it with a caret
+range, so a fresh npm install of the published package resolves the newest
+beta, whose `effect` peer pulls a second effect runtime into the tree and
+kills the CLI at startup (caught by the npm-package smoke job, 2026-08-04).
+The explicit pin makes npm dedupe onto the version balade's own `effect` pin
+matches. Bump it in lockstep with every effect-family bump; drop it when the
+Effect v4 packages stabilize their internal ranges.
+
 Every Pi surface sits behind the one `WalkthroughAuthor` service, the
 anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
@@ -288,14 +297,23 @@ authoring session, its read-only tool policy and provider-event forwarding.
 This keeps preference durability independent from the security-sensitive tool
 sandbox and session lifecycle.
 
-Provider/model defaults use Pi's global `SettingsManager` rather than a second
-balade preference file. Project settings are not trusted or loaded for this
-choice. A confirmed interactive selection updates Pi's default; a matching
-default is reused without another picker. Every explicit or confirmed selection
-updates that default. An exact `--provider` and `--model` pair skips the picker;
-partial, empty, or unavailable values open it, narrowed to matching models when
-possible. Preference read and write failures are typed warnings and do not
-prevent a generation run.
+Balade points Pi at its own agent directory, `~/.balade/pi/` — `auth.json`,
+`settings.json`, `models.json` and Pi's derived `models-store.json` all live
+there, passed explicitly to `ModelRuntime.create` and `SettingsManager.create`.
+The home dot-directory is deliberate on every platform: it mirrors Pi's own
+`~/.pi` convention rather than `%APPDATA%` or XDG paths, so the two stores sit
+side by side and are equally easy to find and delete. Balade never reads or
+writes `~/.pi/agent/`: a user's own pi CLI must not observe a balade run, and
+the earlier choice of Pi's global settings file silently changed that CLI's
+default model (revised 2026-08-04, issue #27). The accepted cost is one extra
+login for users who already authenticated the pi CLI. Project settings are not
+trusted or loaded for this choice. A confirmed interactive selection updates
+balade's saved default; a matching default is reused without another picker.
+Every explicit or confirmed selection updates that default. An exact
+`--provider` and `--model` pair skips the picker; partial, empty, or
+unavailable values open it, narrowed to matching models when possible.
+Preference read and write failures are typed warnings and do not prevent a
+generation run.
 
 The session runs in memory with a resource loader that exposes no Pi extensions,
 skills, prompts, themes, global context, or working-tree context. It does expose
