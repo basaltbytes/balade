@@ -4,7 +4,7 @@ import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
 import { Effect, Fiber, Layer, Option, Redacted, Schema, Terminal } from "effect";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
@@ -311,6 +311,99 @@ describe("the Pi adapter", () => {
 
       expect(searchContext).toContain("200 matches shown; narrow the query or path to continue");
       expect(searchContext).not.toContain("Use limit=400");
+    }),
+  );
+
+  it.effect("sorts matches by path and line despite colons in match text", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      repo.write(
+        "models/colon_sort.py",
+        [
+          "# colon sort fixture",
+          'first = "sortneedle 00:30:59"',
+          ...Array.from({ length: 7 }, (_, index) => `filler_${index} = ${index}`),
+          'second = "sortneedle"',
+        ].join("\n"),
+      );
+      const pin = repo.commit("test: add colon-bearing match text");
+      let searchContext = "";
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          ai.fauxToolCall("search_source", {
+            query: "sortneedle",
+            mode: "fixed",
+            path: "models/colon_sort.py",
+          }),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          searchContext = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      const second = searchContext.indexOf("models/colon_sort.py:2:");
+      const tenth = searchContext.indexOf("models/colon_sort.py:10:");
+      expect(second).toBeGreaterThan(-1);
+      expect(tenth).toBeGreaterThan(-1);
+      expect(second).toBeLessThan(tenth);
+    }),
+  );
+
+  it.effect("ignores a user ripgrep configuration and keeps search inside the snapshot", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      const outside = mkdtempSync(join(tmpdir(), "balade-outside-"));
+      harnessCleanups.push(() =>
+        rmSync(outside, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      );
+      writeFileSync(
+        join(outside, "secret.py"),
+        'leaked = "planning.slot LEAKED_OUTSIDE"\n',
+        "utf8",
+      );
+      symlinkSync(join(outside, "secret.py"), join(repo.dir, "leak_link.py"));
+      const pin = repo.commit("test: add escaping search symlink");
+      /* A hostile user config: follow symlinks out, filter the real matches away. */
+      const userConfiguration = join(outside, "rg.conf");
+      writeFileSync(userConfiguration, "--follow\n--glob=!models/*\n", "utf8");
+      const previous = process.env.RIPGREP_CONFIG_PATH;
+      harnessCleanups.push(() => {
+        if (previous === undefined) delete process.env.RIPGREP_CONFIG_PATH;
+        else process.env.RIPGREP_CONFIG_PATH = previous;
+      });
+      process.env.RIPGREP_CONFIG_PATH = userConfiguration;
+      let searchContext = "";
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          ai.fauxToolCall("search_source", { query: "planning.slot", mode: "fixed" }),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          searchContext = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(searchContext).toContain("models/planning_slot.py");
+      expect(searchContext).not.toContain("LEAKED_OUTSIDE");
+      expect(searchContext).not.toContain("leak_link.py");
+      expect(process.env.RIPGREP_CONFIG_PATH).toBe(userConfiguration);
     }),
   );
 

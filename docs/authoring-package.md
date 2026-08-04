@@ -65,9 +65,10 @@ confirms each code path, range, and `expect=` boundary echo.
 
 One turn may read at most eight diffs, run twenty source searches, and read
 twelve source ranges across the pin and base. Search results are repo-relative,
-sorted, capped at 200 matches, and character-truncated. A draft may contain at
-most ten code ranges. Those limits live beside the prompt and are also used by
-the Pi tool adapter.
+sorted by path and line, capped at 200 matches, and character-truncated. They
+do not depend on ignore files or on the user's own ripgrep configuration. A
+draft may contain at most ten code ranges. Those limits live beside the prompt
+and are also used by the Pi tool adapter.
 
 ## Version policy
 

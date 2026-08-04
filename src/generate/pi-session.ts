@@ -123,6 +123,7 @@ export async function createPiSession(
   });
 
   const grep = pi.coding.createGrepToolDefinition(snapshot.root);
+  const searchConfiguration = await runSessionEffect(writeSearchConfiguration(snapshotCacheRoot));
   const searchSource = pi.coding.defineTool({
     name: "search_source",
     label: "Search pinned source",
@@ -146,17 +147,19 @@ export async function createPiSession(
       }
       const scope = await runSessionEffect(snapshot.resolvePath(params.path ?? "."));
       searches++;
-      const result = await grep.execute(
-        id,
-        {
-          pattern: params.query,
-          path: scope.absolute,
-          literal: (params.mode ?? "fixed") === "fixed",
-          limit: MAX_SEARCH_MATCHES,
-        },
-        signal,
-        onUpdate,
-        context,
+      const result = await withSearchConfiguration(searchConfiguration, () =>
+        grep.execute(
+          id,
+          {
+            pattern: params.query,
+            path: scope.absolute,
+            literal: (params.mode ?? "fixed") === "fixed",
+            limit: MAX_SEARCH_MATCHES,
+          },
+          signal,
+          onUpdate,
+          context,
+        ),
       );
       return {
         ...result,
@@ -553,6 +556,41 @@ function repositoryPath(sourcePath: string): string {
   return normalized;
 }
 
+/**
+ * Search must not depend on the user's environment: `--no-ignore` keeps the
+ * snapshot's committed ignore files inert even when the cache sits inside a
+ * git repository, and `--no-follow` keeps ripgrep from reading through a
+ * symlink that points outside the snapshot.
+ */
+const writeSearchConfiguration = Effect.fn("writeSearchConfiguration")(function* (
+  cacheRoot: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const file = path.join(cacheRoot, "ripgrep.conf");
+  yield* fs.writeFileString(file, "--no-ignore\n--no-follow\n");
+  return file;
+});
+
+/**
+ * Pi spawns ripgrep with the inherited environment, so a user-level
+ * RIPGREP_CONFIG_PATH could follow symlinks out of the snapshot or filter
+ * matches. Every search runs under the balade-owned configuration instead.
+ */
+async function withSearchConfiguration<A>(
+  configuration: string,
+  search: () => Promise<A>,
+): Promise<A> {
+  const previous = process.env.RIPGREP_CONFIG_PATH;
+  process.env.RIPGREP_CONFIG_PATH = configuration;
+  try {
+    return await search();
+  } finally {
+    if (previous === undefined) delete process.env.RIPGREP_CONFIG_PATH;
+    else process.env.RIPGREP_CONFIG_PATH = previous;
+  }
+}
+
 function normalizeSearchOutput(
   value: string,
   scope: ResolvedSnapshotPath,
@@ -593,8 +631,9 @@ function compareText(left: string, right: string): number {
 }
 
 function compareSearchLines(left: string, right: string): number {
-  const leftMatch = /^(.*):(\d+):/u.exec(left);
-  const rightMatch = /^(.*):(\d+):/u.exec(right);
+  /* Lazy up to the first ":<line>: " so colons in the match text stay out of the key. */
+  const leftMatch = /^(.*?):(\d+): /u.exec(left);
+  const rightMatch = /^(.*?):(\d+): /u.exec(right);
   if (leftMatch === null || rightMatch === null) return compareText(left, right);
   const leftPath = leftMatch[1] ?? "";
   const rightPath = rightMatch[1] ?? "";

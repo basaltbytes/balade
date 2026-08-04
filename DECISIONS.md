@@ -340,9 +340,13 @@ full object id. The snapshot's `tree/` contains only archived Git content: cache
 metadata stays beside it, and no `.git`, history, other branch, or working-tree
 state is present. Listing and reads use that filesystem; search wraps Pi's
 managed ripgrep inside a balade-owned tool. Every caller-supplied scope resolves
-canonically below the snapshot root before use, and ripgrep does not follow
-discovered symlinks. Base reads remain `git show base:path`, so the old side does
-not require a second extraction.
+canonically below the snapshot root before use, and every search runs under a
+balade-owned ripgrep configuration (`--no-ignore`, `--no-follow`) that replaces
+any user-level `RIPGREP_CONFIG_PATH`: a user's ripgrep defaults cannot follow a
+symlink out of the snapshot or filter matches, and the pin's committed ignore
+files stay inert even when the cache directory sits inside a git repository.
+Base reads remain `git show base:path`, so the old side does not require a
+second extraction.
 
 The disk and extraction cost buys repository-wide discovery at the exact pin.
 Repeat and repair turns reuse complete entries, which are built in a sibling
