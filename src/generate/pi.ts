@@ -13,6 +13,8 @@ import {
   Semaphore,
   Terminal,
 } from "effect";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { describeFailure } from "../failure.js";
 import { CommandExecutor } from "../resolve/exec.js";
 import {
@@ -72,7 +74,19 @@ interface RawLoginMethod {
   readonly billing: "standard" | "anthropic-extra-usage";
 }
 
-async function loadLiveDependencies(): Promise<PiAdapterDependencies> {
+/**
+ * Balade's own Pi state directory: auth.json, settings.json, models.json and
+ * Pi's derived models-store.json live here, never in `~/.pi/agent/`. A user's
+ * own pi CLI must never observe a balade run, and balade never reads
+ * credentials or defaults from it.
+ */
+export function baladePiAgentDir(): string {
+  return join(homedir(), ".balade", "pi");
+}
+
+export async function loadLiveDependencies(
+  agentDir: string = baladePiAgentDir(),
+): Promise<PiAdapterDependencies> {
   const [coding, ai] = await Promise.all([
     import("@earendil-works/pi-coding-agent"),
     import("@earendil-works/pi-ai"),
@@ -80,8 +94,11 @@ async function loadLiveDependencies(): Promise<PiAdapterDependencies> {
   return {
     coding,
     ai,
-    modelRuntime: await coding.ModelRuntime.create(),
-    settingsManager: coding.SettingsManager.create(process.cwd(), undefined, {
+    modelRuntime: await coding.ModelRuntime.create({
+      authPath: join(agentDir, "auth.json"),
+      modelsPath: join(agentDir, "models.json"),
+    }),
+    settingsManager: coding.SettingsManager.create(process.cwd(), agentDir, {
       projectTrusted: false,
     }),
   };

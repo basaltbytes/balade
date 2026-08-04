@@ -57,9 +57,11 @@ same commit. It never substitutes files from another checked-out branch. The
 model can't run shell commands or write files.
 
 On the first run, the provider picker offers Anthropic subscription login,
-OpenAI Codex subscription login, and API-key methods through Pi. Existing Pi
-credentials in `~/.pi/agent/auth.json` work without another login. Balade hands
-login prompts to Pi and never reads or prints the credential file.
+OpenAI Codex subscription login, and API-key methods through Pi. Balade keeps
+its own Pi state — credentials and the saved model default — in `~/.balade/pi/`
+and never reads or writes `~/.pi/agent/`, so an existing pi CLI setup is never
+observed or modified; log in once inside balade even if you already use Pi.
+Balade hands login prompts to Pi and never reads or prints the credential file.
 
 Anthropic has a billing rule you should know before choosing it: subscription
 login in third-party tools bills per token as **extra usage** and doesn't draw
@@ -74,7 +76,7 @@ npx balade generate 96 --provider openai-codex
 npx balade generate 96 --dir docs/walkthroughs
 ```
 
-Every confirmed choice becomes Pi's global default and is reused on the next
+Every confirmed choice becomes balade's saved default and is reused on the next
 run when it is available. A valid `--provider` and `--model` pair selects and
 saves that model without prompts. A partial, empty, or unavailable value opens
 the picker, narrowed to matching models when possible; `--model ""` opens the
