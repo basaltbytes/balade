@@ -14,7 +14,12 @@ import type { CheckReport } from "./payload/types.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
 import { launchBrowser } from "./server/browser.js";
-import { findAppBundle, serve } from "./server/serve.js";
+import {
+  browserLaunchWarningText,
+  reviewSessionStartedText,
+  serveReviewSession,
+} from "./server/review.js";
+import { findAppBundle } from "./server/serve.js";
 import { prepareSession, sessionErrorMessage, type Selection } from "./server/session.js";
 
 const VERSION = "0.1.0";
@@ -89,12 +94,10 @@ const open = Command.make(
     Effect.gen(function* () {
       const appDir = yield* findAppBundle().pipe(
         Effect.map(Option.some),
-        Effect.catchTag("AppBundleMissing", (error) =>
-          Effect.sync(() => {
-            stopMessage(error.note);
-            return Option.none<string>();
-          }),
-        ),
+        Effect.catchTags({
+          AppBundleMissing: appBundleUnavailable,
+          AppBundleReadFailed: appBundleUnavailable,
+        }),
       );
       if (Option.isNone(appDir)) return;
 
@@ -131,20 +134,29 @@ const open = Command.make(
         ),
       );
       if (Option.isNone(prepared)) return;
-      return yield* Match.valueTags(prepared.value, {
-        SessionReady: ({ session }) =>
+      const review = yield* serveReviewSession(prepared.value, {
+        appDir: appDir.value,
+        port: config.port,
+      }).pipe(
+        Effect.map(Option.some),
+        Effect.catchTag("ReviewServerFailed", (error) =>
+          Effect.sync(() => {
+            stopMessage(error.note);
+            return Option.none();
+          }),
+        ),
+      );
+      if (Option.isNone(review)) return;
+      return yield* Match.valueTags(review.value, {
+        ReviewSessionStarted: (started) =>
           Effect.gen(function* () {
-            printSoft(session.reports);
-            const url = yield* serve({ appDir: appDir.value, port: config.port, api: session.api });
-            process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
+            printSoft(started.session.reports);
+            process.stdout.write(reviewSessionStartedText(started));
             /* A launch failure is a notice, not a failure: the session stays served. */
-            yield* launchBrowser(config.noBrowser ? "headless" : "launch", url).pipe(
+            yield* launchBrowser(config.noBrowser ? "headless" : "launch", started.url).pipe(
               Effect.catchTag("BrowserLaunchFailed", (error) =>
                 Effect.sync(() => {
-                  process.stderr.write(
-                    `warning your browser did not open (${error.reason})\n` +
-                      `  fix Open ${error.url} yourself, or pass --no-browser.\n`,
-                  );
+                  process.stderr.write(browserLaunchWarningText(error));
                 }),
               ),
             );
@@ -170,6 +182,12 @@ const stopMessage = (message: string): void => {
   process.exitCode = 1;
 };
 
+const appBundleUnavailable = (error: { readonly note: string }) =>
+  Effect.sync(() => {
+    stopMessage(error.note);
+    return Option.none<string>();
+  });
+
 /** Soft commands: what did not resolve is printed here and rides on as error cards. */
 const printSoft = (reports: readonly CheckReport[]): void => {
   const diagnostics = diagnosticsOnly(reports);
@@ -177,9 +195,6 @@ const printSoft = (reports: readonly CheckReport[]): void => {
     process.stdout.write(formatText({ reports: diagnostics }));
   }
 };
-
-const served = (paths: readonly string[]): string =>
-  paths.length === 1 ? (paths[0] ?? "") : `${paths.length} walkthroughs`;
 
 const build = Command.make("build", { files: buildFile, lang: langFlag, out: outFlag }, (config) =>
   Effect.gen(function* () {

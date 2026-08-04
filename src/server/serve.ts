@@ -45,11 +45,23 @@ export class AppBundleMissing extends Schema.TaggedErrorClass<AppBundleMissing>(
   }
 }
 
+export class AppBundleReadFailed extends Schema.TaggedErrorClass<AppBundleReadFailed>()(
+  "AppBundleReadFailed",
+  { path: Schema.String, cause: Schema.Defect() },
+) {
+  get note(): string {
+    return `balade could not inspect the app bundle at ${this.path}.`;
+  }
+}
+
 /** The required served-app bundle directory. */
 export const findAppBundle = Effect.fn("findAppBundle")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  return (yield* fs.exists(path.join(APP_DIR, "index.html")))
+  const index = path.join(APP_DIR, "index.html");
+  return (yield* fs
+    .exists(index)
+    .pipe(Effect.mapError((cause) => new AppBundleReadFailed({ path: index, cause }))))
     ? APP_DIR
     : yield* new AppBundleMissing({ path: APP_DIR });
 });

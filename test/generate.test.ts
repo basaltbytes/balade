@@ -15,6 +15,7 @@ import {
   type AuthorProgress,
 } from "../src/generate/author.js";
 import {
+  generationSummaryText,
   generationSuccessText,
   makeGenerationProgress,
   sanitizeTerminalText,
@@ -987,6 +988,16 @@ describe("generation", () => {
       "Check passed: 7 code ranges verified.\n" +
         "Generated walkthroughs/pr-20-generate-with-pi.md.\n" +
         "Review it with:\n  balade open walkthroughs/pr-20-generate-with-pi.md\n",
+    );
+    expect(
+      generationSummaryText({
+        file: "walkthroughs/pr-20-generate-with-pi.md",
+        ranges: 7,
+        repairs: 1,
+      }),
+    ).toBe(
+      "Check passed after 1 repair turn: 7 code ranges verified.\n" +
+        "Generated walkthroughs/pr-20-generate-with-pi.md.\n",
     );
 
     const verboseOutput: string[] = [];
