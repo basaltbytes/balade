@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
+import { afterEach, beforeEach, describe, expect, it, vi } from "@effect/vitest";
+import { Effect } from "effect";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileEntry, ReviewState } from "../contract";
 import type { FetchLike } from "../data/browser";
 import type { ReviewStoreTarget } from "../data/store";
@@ -124,90 +125,105 @@ describe("the browser review lifecycle", () => {
     delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
   });
 
-  it("keeps review controls read-only until stored state arrives", async () => {
-    const loaded = deferred<Response>();
-    const putBodies: ReviewState[] = [];
-    const fetch: FetchLike = (_url, init) => {
-      if (init?.method === "PUT") {
+  it.effect("keeps review controls read-only until stored state arrives", () =>
+    Effect.gen(function* () {
+      const loaded = deferred<Response>();
+      const putBodies: ReviewState[] = [];
+      const fetch: FetchLike = (_url, init) => {
+        if (init?.method === "PUT") {
+          putBodies.push(JSON.parse(String(init.body)) as ReviewState);
+          return Promise.resolve(new Response("", { status: 200 }));
+        }
+        return loaded.promise;
+      };
+      installFetch(fetch);
+
+      yield* Effect.promise(() => act(async () => root.render(<Probe />)));
+      expect(button(container, "mental model").disabled).toBe(true);
+      yield* Effect.promise(() => act(async () => button(container, "mental model").click()));
+      expect(container.querySelector('[data-testid="sections"]')?.textContent).toBe("");
+      expect(container.querySelector('[data-testid="files"]')?.textContent).toBe("");
+
+      loaded.resolve(Response.json(stored));
+      yield* Effect.promise(() =>
+        act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }),
+      );
+      expect(container.querySelector('[data-testid="ready"]')?.textContent).toBe("true");
+      expect(container.querySelector('[data-testid="sections"]')?.textContent).toBe("overview");
+      expect(container.querySelector('[data-testid="files"]')?.textContent).toBe(
+        `overview//${reviewedFile.path}`,
+      );
+      expect(button(container, "mental model").disabled).toBe(false);
+      expect(putBodies).toHaveLength(0);
+    }),
+  );
+
+  it.effect("serializes review writes in state order", () =>
+    Effect.gen(function* () {
+      const firstWrite = deferred<Response>();
+      const putBodies: ReviewState[] = [];
+      const fetch: FetchLike = (_url, init) => {
+        if (init?.method !== "PUT") return Promise.resolve(new Response("", { status: 404 }));
         putBodies.push(JSON.parse(String(init.body)) as ReviewState);
-        return Promise.resolve(new Response("", { status: 200 }));
-      }
-      return loaded.promise;
-    };
-    installFetch(fetch);
+        return putBodies.length === 1
+          ? firstWrite.promise
+          : Promise.resolve(new Response("", { status: 200 }));
+      };
+      installFetch(fetch);
 
-    await act(async () => root.render(<Probe />));
-    expect(button(container, "mental model").disabled).toBe(true);
-    await act(async () => button(container, "mental model").click());
-    expect(container.querySelector('[data-testid="sections"]')?.textContent).toBe("");
-    expect(container.querySelector('[data-testid="files"]')?.textContent).toBe("");
+      yield* Effect.promise(() => act(async () => root.render(<Probe />)));
+      yield* Effect.promise(() =>
+        act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }),
+      );
+      expect(button(container, "overview").disabled).toBe(false);
+      yield* Effect.promise(() => act(async () => button(container, "overview").click()));
+      yield* Effect.promise(() => vi.waitFor(() => expect(putBodies).toHaveLength(1)));
+      yield* Effect.promise(() => act(async () => button(container, "mental model").click()));
+      yield* Effect.promise(() => Promise.resolve());
+      expect(putBodies).toHaveLength(1);
 
-    loaded.resolve(Response.json(stored));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(container.querySelector('[data-testid="ready"]')?.textContent).toBe("true");
-    expect(container.querySelector('[data-testid="sections"]')?.textContent).toBe("overview");
-    expect(container.querySelector('[data-testid="files"]')?.textContent).toBe(
-      `overview//${reviewedFile.path}`,
-    );
-    expect(button(container, "mental model").disabled).toBe(false);
-    expect(putBodies).toHaveLength(0);
-  });
+      yield* Effect.promise(() =>
+        act(async () => {
+          firstWrite.resolve(new Response("", { status: 200 }));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }),
+      );
+      expect(putBodies).toHaveLength(2);
+      expect(Object.keys(putBodies[0]?.sections ?? {})).toEqual(["overview"]);
+      expect(Object.keys(putBodies[1]?.sections ?? {}).sort()).toEqual([
+        "mental-model",
+        "overview",
+      ]);
+    }),
+  );
 
-  it("serializes review writes in state order", async () => {
-    const firstWrite = deferred<Response>();
-    const putBodies: ReviewState[] = [];
-    const fetch: FetchLike = (_url, init) => {
-      if (init?.method !== "PUT") return Promise.resolve(new Response("", { status: 404 }));
-      putBodies.push(JSON.parse(String(init.body)) as ReviewState);
-      return putBodies.length === 1
-        ? firstWrite.promise
-        : Promise.resolve(new Response("", { status: 200 }));
-    };
-    installFetch(fetch);
+  it.effect("aborts an in-flight load when the component unmounts", () =>
+    Effect.gen(function* () {
+      let signal: AbortSignal | null | undefined;
+      let writes = 0;
+      const fetch: FetchLike = (_url, init) => {
+        if (init?.method === "PUT") {
+          writes += 1;
+          return Promise.resolve(new Response("", { status: 200 }));
+        }
+        signal = init?.signal;
+        return new Promise<Response>(() => undefined);
+      };
+      installFetch(fetch);
 
-    await act(async () => root.render(<Probe />));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(button(container, "overview").disabled).toBe(false);
-    await act(async () => button(container, "overview").click());
-    await vi.waitFor(() => expect(putBodies).toHaveLength(1));
-    await act(async () => button(container, "mental model").click());
-    await Promise.resolve();
-    expect(putBodies).toHaveLength(1);
+      yield* Effect.promise(() => act(async () => root.render(<Probe />)));
+      yield* Effect.promise(() => vi.waitFor(() => expect(signal).toBeDefined()));
+      expect(button(container, "overview").disabled).toBe(true);
+      yield* Effect.promise(() => act(async () => button(container, "overview").click()));
+      yield* Effect.promise(() => act(async () => root.unmount()));
+      expect(signal?.aborted).toBe(true);
+      expect(writes).toBe(0);
 
-    await act(async () => {
-      firstWrite.resolve(new Response("", { status: 200 }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(putBodies).toHaveLength(2);
-    expect(Object.keys(putBodies[0]?.sections ?? {})).toEqual(["overview"]);
-    expect(Object.keys(putBodies[1]?.sections ?? {}).sort()).toEqual(["mental-model", "overview"]);
-  });
-
-  it("aborts an in-flight load when the component unmounts", async () => {
-    let signal: AbortSignal | null | undefined;
-    let writes = 0;
-    const fetch: FetchLike = (_url, init) => {
-      if (init?.method === "PUT") {
-        writes += 1;
-        return Promise.resolve(new Response("", { status: 200 }));
-      }
-      signal = init?.signal;
-      return new Promise<Response>(() => undefined);
-    };
-    installFetch(fetch);
-
-    await act(async () => root.render(<Probe />));
-    await vi.waitFor(() => expect(signal).toBeDefined());
-    expect(button(container, "overview").disabled).toBe(true);
-    await act(async () => button(container, "overview").click());
-    await act(async () => root.unmount());
-    expect(signal?.aborted).toBe(true);
-    expect(writes).toBe(0);
-
-    root = createRoot(container);
-  });
+      root = createRoot(container);
+    }),
+  );
 });
