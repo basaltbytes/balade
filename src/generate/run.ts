@@ -8,6 +8,7 @@ import { discoveryErrorMessage } from "../check/discover.js";
 import { CheckReport as CheckReportSchema } from "../payload/schema.js";
 import type { CheckReport } from "../payload/types.js";
 import type { PullHeadError, PullSnapshot } from "../resolve/git.js";
+import { escapesRoot } from "../resolve/paths.js";
 import {
   AuthorSessionStartFailed,
   DraftMalformed,
@@ -241,9 +242,6 @@ const replaceDraft = Effect.fn("replaceDraft")(
       Effect.mapError((cause) => new DraftWriteFailed({ file, cause })),
     ),
 );
-
-const escapesRoot = (path: Path.Path, relative: string): boolean =>
-  path.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path.sep}`);
 
 const isGitMetadata = (path: Path.Path, relative: string): boolean =>
   relative.toLowerCase() === ".git" || relative.toLowerCase().startsWith(`.git${path.sep}`);

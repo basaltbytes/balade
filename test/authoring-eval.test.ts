@@ -2,6 +2,7 @@
 
 import { Effect } from "effect";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../src/generate/authoring.js";
 import { runGeneration } from "../src/generate/run.js";
@@ -23,7 +24,10 @@ describe(`authoring package ${AUTHORING_PACKAGE_VERSION} offline evaluation`, ()
         Effect.flatMap((repo) =>
           Effect.gen(function* () {
             const harness = yield* Effect.promise(() =>
-              createAuthoringFauxHarness(fixture.transcript),
+              createAuthoringFauxHarness(
+                fixture.transcript,
+                join(repo.directory, ".snapshot-cache"),
+              ),
             );
             const result = yield* Effect.gen(function* () {
               const model = yield* fauxAuthorModel();

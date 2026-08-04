@@ -51,7 +51,7 @@ describe("loadPayload", () => {
         Effect.gen(function* () {
           const serialized: unknown = JSON.parse(JSON.stringify(expected));
           const loaded = yield* loadPayload(location, serialized);
-          expect(loaded.payload).toEqual(expected);
+          expect(loaded.payload).toEqual(serialized);
         }),
         () => Promise.reject(new Error("fetch should not be used")),
       ),
