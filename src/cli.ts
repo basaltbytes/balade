@@ -13,6 +13,7 @@ import { cliLayer } from "./live.js";
 import type { CheckReport } from "./payload/types.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
+import { launchBrowser } from "./server/browser.js";
 import { findAppBundle, serve } from "./server/serve.js";
 import { prepareSession, sessionErrorMessage, type Selection } from "./server/session.js";
 
@@ -61,6 +62,10 @@ const check = Command.make("check", { files, json: jsonFlag }, (config) =>
   ),
 );
 
+const noBrowserFlag = Flag.boolean("no-browser").pipe(
+  Flag.withDescription("Serve headless: print the URL without opening a browser"),
+);
+
 const openTargets = Argument.variadic(
   Argument.string("target").pipe(
     Argument.withDescription(
@@ -79,7 +84,7 @@ const locateSelection = Effect.fn("locateSelection")(function* (target: PrTarget
 
 const open = Command.make(
   "open",
-  { files: openTargets, lang: langFlag, port: portFlag },
+  { files: openTargets, lang: langFlag, port: portFlag, noBrowser: noBrowserFlag },
   (config) =>
     Effect.gen(function* () {
       const appDir = yield* findAppBundle().pipe(
@@ -132,13 +137,24 @@ const open = Command.make(
             printSoft(session.reports);
             const url = yield* serve({ appDir: appDir.value, port: config.port, api: session.api });
             process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
+            /* A launch failure is a notice, not a failure: the session stays served. */
+            yield* launchBrowser(config.noBrowser ? "headless" : "launch", url).pipe(
+              Effect.catchTag("BrowserLaunchFailed", (error) =>
+                Effect.sync(() => {
+                  process.stderr.write(
+                    `warning your browser did not open (${error.reason})\n` +
+                      `  fix Open ${error.url} yourself, or pass --no-browser.\n`,
+                  );
+                }),
+              ),
+            );
             return yield* Effect.never;
           }),
         SessionNotStarted: ({ message }) => Effect.sync(() => stopMessage(message)),
         SessionFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
       });
     }).pipe(Effect.scoped),
-).pipe(Command.withDescription("Serve the interactive walkthrough app"));
+).pipe(Command.withDescription("Serve a live review session and open it in your default browser"));
 
 /** The boundary echo is a `check` affordance for the author; `open` shows diagnostics. */
 const diagnosticsOnly = (reports: readonly CheckReport[]): readonly CheckReport[] =>
@@ -192,7 +208,11 @@ const build = Command.make("build", { files: buildFile, lang: langFlag, out: out
       BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
     });
   }),
-).pipe(Command.withDescription("Export one self-contained HTML file"));
+).pipe(
+  Command.withDescription(
+    "Export one self-contained HTML review; no server, state stays in the browser",
+  ),
+);
 
 const size = (bytes: number): string =>
   bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.round(bytes / 1000)} kB`;
