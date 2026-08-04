@@ -4,15 +4,19 @@
  * ref — and a served session that never needed the branch checked out.
  */
 
-import { Effect } from "effect";
-import { realpathSync, rmSync } from "node:fs";
+import { Effect, Option } from "effect";
+import { execFileSync } from "node:child_process";
+import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { Payload } from "../src/payload/types.js";
 import { locateErrorMessage, PrLocator } from "../src/pr/locate.js";
+import { PULL_COMMIT_SUBJECT_LIMIT } from "../src/pr/intent.js";
 import { parseOpenTarget, parsePrTarget } from "../src/pr/target.js";
-import { repoName, repoSlug } from "../src/resolve/git.js";
+import { CommandFailed } from "../src/resolve/exec.js";
+import { repoName, repoSlug, resolvePullHead } from "../src/resolve/git.js";
 import { prepareSession } from "../src/server/session.js";
+import { commandLayerWithGh, unavailableGhLayer } from "./support/command.js";
 import { provideLive } from "./support/effect.js";
 import {
   advertisePull,
@@ -202,4 +206,117 @@ describe("a served PR without a checkout", () => {
   it("never wrote the walkthrough into the working tree", () => {
     expect(() => rmSync(join(clone.dir, "walkthroughs"), { recursive: true })).toThrow();
   });
+});
+
+const pullFixture = Effect.acquireRelease(Effect.sync(createFixtureRepo), (repo) =>
+  Effect.sync(() => repo.cleanup()),
+);
+
+describe("pull-request authoring intent", () => {
+  it.effect("collects GitHub claims and caps commit subjects from real Git", () =>
+    Effect.gen(function* () {
+      const repo = yield* pullFixture;
+      const baseRefOid = execFileSync("git", ["rev-parse", "main"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      for (let index = 1; index <= PULL_COMMIT_SUBJECT_LIMIT + 2; index++) {
+        repo.commitEmpty(`intent ${index}`);
+      }
+      const headRefOid = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      const linkedIssueUrl = "https://github.com/acme/planning/issues/14";
+      const prFields =
+        "url,state,author,baseRefName,headRefName,baseRefOid,headRefOid,commits,title,body,closingIssuesReferences";
+      const ghLayer = commandLayerWithGh((args, cwd) => {
+        if (args.join("\0") === ["pr", "view", "42", "--json", prFields].join("\0")) {
+          return Effect.succeed(
+            JSON.stringify({
+              url: "https://github.com/acme/planning/pull/42",
+              state: "OPEN",
+              author: { login: "reviewer" },
+              baseRefName: "main",
+              headRefName: "feature/pool",
+              baseRefOid,
+              headRefOid,
+              commits: Array.from({ length: PULL_COMMIT_SUBJECT_LIMIT + 3 }, () => ({})),
+              title: "Honor the author's review intent",
+              body: "Claims must be checked against the pinned implementation.",
+              closingIssuesReferences: [{ id: "issue-14", url: linkedIssueUrl }],
+            }),
+          );
+        }
+        if (
+          args.join("\0") === ["issue", "view", linkedIssueUrl, "--json", "title,body"].join("\0")
+        ) {
+          return Effect.succeed(
+            JSON.stringify({
+              title: "Keep generation available without gh",
+              body: "Commit subjects remain available from the local repository.",
+            }),
+          );
+        }
+        return Effect.fail(
+          new CommandFailed({
+            file: "gh",
+            args,
+            cwd,
+            stderr: "unexpected gh command",
+            code: 1,
+          }),
+        );
+      });
+
+      const source = yield* resolvePullHead({
+        cwd: repo.dir,
+        target: { number: 42, slug: null },
+      }).pipe(Effect.provide(ghLayer));
+      const github = Option.getOrUndefined(source.claims.github);
+
+      expect(github).toEqual({
+        title: "Honor the author's review intent",
+        body: "Claims must be checked against the pinned implementation.",
+        linkedIssues: [
+          {
+            title: "Keep generation available without gh",
+            body: Option.some("Commit subjects remain available from the local repository."),
+          },
+        ],
+      });
+      expect(source.claims.commitSubjects).toHaveLength(PULL_COMMIT_SUBJECT_LIMIT);
+      expect(source.claims.commitSubjects[0]).toBe(`intent ${PULL_COMMIT_SUBJECT_LIMIT + 2}`);
+      expect(source.claims.commitSubjects).not.toContain("feat: live planning pool items");
+      expect(source.notices).toEqual([]);
+    }),
+  );
+
+  it.effect("keeps Git claims and the gh warning when GitHub is unavailable", () =>
+    Effect.gen(function* () {
+      const origin = yield* pullFixture;
+      const clone = yield* Effect.acquireRelease(
+        Effect.sync(() => cloneOnMain(origin, 42)),
+        (value) => Effect.sync(() => value.cleanup()),
+      );
+      execFileSync("git", ["remote", "set-head", "origin", "main"], { cwd: clone.dir });
+      execFileSync("git", ["fetch", "origin", "main"], { cwd: clone.dir });
+      const fetchHead = readFileSync(join(clone.dir, ".git", "FETCH_HEAD"), "utf8");
+
+      const source = yield* resolvePullHead({
+        cwd: clone.dir,
+        target: { number: 42, slug: null },
+      }).pipe(Effect.provide(unavailableGhLayer));
+
+      expect(source.pin).toBe(origin.pin);
+      expect(Option.isNone(source.claims.github)).toBe(true);
+      expect(source.claims.commitSubjects).toEqual(["feat: live planning pool items"]);
+      expect(source.notices).toContainEqual(expect.objectContaining({ code: "gh-unavailable" }));
+      expect(source.files.map((file) => file.path)).toContain("models/planning_pool_item.py");
+      expect(readFileSync(join(clone.dir, ".git", "FETCH_HEAD"), "utf8")).toBe(fetchHead);
+      expect(readFileSync(`${clone.dir}/models/planning_pool_item.py`, "utf8")).not.toContain(
+        "_auto = False",
+      );
+    }),
+  );
 });

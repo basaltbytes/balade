@@ -29,8 +29,8 @@ import {
   preferredModel,
 } from "../src/generate/select.js";
 import { shellLayer } from "../src/live.js";
-import { resolvePullHead, type PullSnapshot } from "../src/resolve/git.js";
-import { cloneOnMain, createFixtureRepo } from "./support/repo.js";
+import type { PullSnapshot } from "../src/resolve/git.js";
+import { createFixtureRepo } from "./support/repo.js";
 
 const PINNED_LINE = "from odoo import api, fields, models";
 const CHANGED_FILE = {
@@ -81,6 +81,10 @@ function authorRequest(
       head: "feature/pool",
       commits: 1,
     },
+    claims: {
+      github: Option.none(),
+      commitSubjects: ["feat: live planning pool items"],
+    },
     files: [CHANGED_FILE],
     model,
     progressMode,
@@ -104,6 +108,10 @@ function prepared(root: string, pin: string): PullSnapshot {
       head: "feature/pool",
       commits: 1,
       stats: { files: 1, additions: 6, deletions: 1 },
+    },
+    claims: {
+      github: Option.none(),
+      commitSubjects: ["feat: live planning pool items"],
     },
     files: [{ ...CHANGED_FILE, binary: false }],
     notices: [],
@@ -490,38 +498,17 @@ describe("the Pi adapter", () => {
 });
 
 describe("generation", () => {
-  it.effect("resolves the exact advertised PR head without checking out its branch", () =>
-    Effect.gen(function* () {
-      const origin = yield* fixture;
-      const clone = yield* Effect.acquireRelease(
-        Effect.sync(() => cloneOnMain(origin, 42)),
-        (value) => Effect.sync(() => value.cleanup()),
-      );
-      execFileSync("git", ["remote", "set-head", "origin", "main"], { cwd: clone.dir });
-      execFileSync("git", ["fetch", "origin", "main"], { cwd: clone.dir });
-      const fetchHead = readFileSync(join(clone.dir, ".git", "FETCH_HEAD"), "utf8");
-      const source = yield* resolvePullHead({
-        cwd: clone.dir,
-        target: { number: 42, slug: null },
-        useGh: false,
-      }).pipe(Effect.provide(shellLayer));
-
-      expect(source.pin).toBe(origin.pin);
-      expect(source.files.map((file) => file.path)).toContain("models/planning_pool_item.py");
-      expect(readFileSync(join(clone.dir, ".git", "FETCH_HEAD"), "utf8")).toBe(fetchHead);
-      expect(readFileSync(`${clone.dir}/models/planning_pool_item.py`, "utf8")).not.toContain(
-        "_auto = False",
-      );
-    }),
-  );
-
   it.effect("writes stamped frontmatter and repairs a draft through check", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
+      let initialContext = "";
       let repairContext = "";
       harness.faux.setResponses([
-        submitted(invalidBody),
+        (context) => {
+          initialContext = JSON.stringify(context.messages);
+          return submitted(invalidBody);
+        },
         (context) => {
           repairContext = JSON.stringify(context.messages);
           return submitted(validBody);
@@ -545,6 +532,8 @@ describe("generation", () => {
       expect(result.repairs).toBe(1);
       expect(usageTurns).toHaveLength(2);
       expect(usageTurns[1]).toBeGreaterThan(usageTurns[0] ?? 0);
+      expect(initialContext).toContain("feat: live planning pool items");
+      expect(initialContext).not.toContain('\\"pullRequest\\"');
       expect(repairContext).toContain("range-");
       expect(readFileSync(result.file, "utf8")).toBe(
         renderDraft(prepared(repo.dir, repo.pin), {

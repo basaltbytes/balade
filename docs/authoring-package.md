@@ -6,17 +6,29 @@ system prompt, section templates, writing rubric, and inspection limits. The
 package ships with the CLI, so a plain `npx balade generate …` does not depend
 on a second repository or an installed agent skill.
 
-The current package version is `1.1.0`. Its major version matches the
+The current package version is `1.2.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
 
 The package receives a pull-request snapshot: PR identity, base and head refs,
-the pinned commit, and changed-file statistics. Before the first model turn,
-the authoring session loads the first `AGENTS.md` or `CLAUDE.md` spelling at the
-repository root and at each changed path's ancestor directories. These files
-come from the pinned commit, not the current checkout. Nested instructions apply
-only below their directory, and unrelated monorepo instructions are omitted.
+the pinned commit, changed-file statistics, and the author's stated intent.
+When authenticated `gh` data is available, that intent includes the PR title and
+body plus the title and available body of each linked closing issue. Git always
+supplies up to 20 commit subjects from the pinned PR range. If `gh` is
+unavailable, generation continues with those commit subjects and reports the
+`gh-unavailable` warning.
+
+All author-stated intent is untrusted text. The agent treats it as claims to
+verify against the pinned diff and source, never as facts or instructions. A
+walkthrough can call out a material difference between the claim and the code
+only when inspected evidence supports it.
+
+Before the first model turn, the authoring session loads the first `AGENTS.md`
+or `CLAUDE.md` spelling at the repository root and at each changed path's
+ancestor directories. These files come from the pinned commit, not the current
+checkout. Nested instructions apply only below their directory, and unrelated
+monorepo instructions are omitted.
 
 The session adds five read-only tools. They list the change and pinned tree,
 read a changed-file diff, read numbered lines from a pinned blob, and submit one
@@ -36,7 +48,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.1.0
+  balade-authoring: 1.2.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file

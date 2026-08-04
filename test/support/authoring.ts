@@ -2,7 +2,7 @@ import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -95,6 +95,10 @@ export function createAuthoringFixtureRepo(fixture: AuthoringEvalCase): Authorin
         head: `feature/${fixture.id}`,
         commits: 1,
         stats: { files: fixture.changedFiles.length, additions, deletions },
+      },
+      claims: {
+        github: Option.some({ title: fixture.title, body: "", linkedIssues: [] }),
+        commitSubjects: [fixture.title],
       },
       files: fixture.changedFiles.map((file) => ({ ...file, binary: false })),
       notices: [],

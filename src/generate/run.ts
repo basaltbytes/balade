@@ -99,6 +99,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       pin: options.source.pin,
       base: options.source.base,
       pull: options.source.pull,
+      claims: options.source.claims,
       files: options.source.files,
       model: options.model,
       progressMode: options.progressMode,

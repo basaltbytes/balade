@@ -7,10 +7,23 @@
 import { Effect, Option, Schema } from "effect";
 import { basename, win32 } from "node:path";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../payload/types.js";
+import {
+  readPullIntentClaims,
+  type PullIntentClaims,
+  type PullNotice,
+  type PullRequestClaimsSource,
+} from "../pr/intent.js";
 import type { PrTarget } from "../pr/target.js";
 import type { ResolveContext } from "../resolve/context.js";
 import { changedLines, splitDiff } from "./diff.js";
-import { gh, gitOut, gitToplevel, type CommandFailed, type NotARepository } from "./exec.js";
+import {
+  firstLine,
+  gh,
+  gitOut,
+  gitToplevel,
+  type CommandFailed,
+  type NotARepository,
+} from "./exec.js";
 import { sha256 } from "./hash.js";
 import { langOf } from "./lang.js";
 
@@ -63,12 +76,6 @@ export class PullFetchFailed extends Schema.TaggedErrorClass<PullFetchFailed>()(
 export type ResolveError = NotARepository | CommandFailed | CommitUnresolvable;
 export type PullHeadError = NotARepository | CommandFailed | WrongRepository | PullFetchFailed;
 
-export interface PullNotice {
-  readonly code: "gh-unavailable";
-  readonly message: string;
-  readonly hint: string;
-}
-
 export interface PullFile {
   readonly path: string;
   readonly status: FileStatus;
@@ -78,7 +85,7 @@ export interface PullFile {
   readonly oldPath?: string;
 }
 
-export interface PullSnapshot {
+interface ResolvedPull {
   readonly root: string;
   readonly repoSlug: string;
   readonly pin: string;
@@ -89,6 +96,10 @@ export interface PullSnapshot {
   readonly notices: readonly PullNotice[];
 }
 
+export interface PullSnapshot extends ResolvedPull {
+  readonly claims: PullIntentClaims;
+}
+
 export interface ResolvePullHeadOptions {
   readonly cwd: string;
   readonly target: PrTarget;
@@ -96,7 +107,7 @@ export interface ResolvePullHeadOptions {
 }
 
 /** What the resolver keeps of `gh pr view`, once every field has been checked. */
-interface PullRequest {
+interface PullRequest extends PullRequestClaimsSource {
   readonly url: string;
   readonly state: string;
   readonly author: string | undefined;
@@ -125,6 +136,13 @@ const PullRequestResponse = Schema.Struct({
   baseRefOid: Schema.NonEmptyString,
   headRefOid: Schema.NonEmptyString,
   commits: Schema.Array(Schema.Unknown),
+  title: Schema.NonEmptyString,
+  body: Schema.String,
+  closingIssuesReferences: Schema.Array(
+    Schema.StructWithRest(Schema.Struct({ url: Schema.NonEmptyString }), [
+      Schema.Record(Schema.String, Schema.Unknown),
+    ]),
+  ),
 });
 
 const decodePullRequest = Schema.decodeUnknownEffect(PullRequestResponse, {
@@ -139,7 +157,7 @@ export const resolveContext = Effect.fn("resolveContext")(function* (options: Re
     return yield* new CommitUnresolvable({ commit: options.commit, file: options.file });
   const pin = pinProbe.value;
   const requested = options.useGh === false ? undefined : yield* readPullRequest(root, options.pr);
-  const snapshot = yield* makePullSnapshot({
+  const snapshot = yield* makeResolvedPull({
     root,
     number: options.pr,
     pin,
@@ -231,19 +249,31 @@ export const resolvePullHead = Effect.fn("resolvePullHead")(function* (
   const root = yield* repositoryRootForTarget(options.cwd, options.target);
   const requested =
     options.useGh === false ? undefined : yield* readPullRequest(root, options.target.number);
-  const pull = requested === undefined ? undefined : Option.getOrUndefined(requested.pull);
+  const pullOption = requested?.pull ?? Option.none<PullRequest>();
+  const pull = Option.getOrUndefined(pullOption);
   const localHead = yield* resolveCommit(root, "HEAD");
   const pin =
     pull !== undefined && Option.isSome(localHead) && localHead.value === pull.headRefOid
       ? localHead.value
       : yield* fetchPullHead(root, options.target.number);
-  return yield* makePullSnapshot({
+  const resolved = yield* makeResolvedPull({
     root,
     number: options.target.number,
     pin,
     at: pin,
     requested,
   });
+  const claims = yield* readPullIntentClaims({
+    root: resolved.root,
+    base: resolved.base,
+    pin: resolved.pin,
+    github: pullOption,
+  });
+  return {
+    ...resolved,
+    claims: claims.claims,
+    notices: [...resolved.notices, ...claims.notices],
+  } satisfies PullSnapshot;
 });
 
 export const repositoryRootForTarget = Effect.fn("repositoryRootForTarget")(function* (
@@ -258,7 +288,7 @@ export const repositoryRootForTarget = Effect.fn("repositoryRootForTarget")(func
   return root;
 });
 
-interface MakePullSnapshotOptions {
+interface MakeResolvedPullOptions {
   readonly root: string;
   readonly number: number;
   readonly pin: string;
@@ -266,8 +296,8 @@ interface MakePullSnapshotOptions {
   readonly requested: PullRequestResult | undefined;
 }
 
-const makePullSnapshot = Effect.fn("makePullSnapshot")(function* (
-  options: MakePullSnapshotOptions,
+const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
+  options: MakeResolvedPullOptions,
 ) {
   let probedDefault: string | undefined;
   const defaultBranch = Effect.suspend(() =>
@@ -330,7 +360,7 @@ const makePullSnapshot = Effect.fn("makePullSnapshot")(function* (
     pull: pr,
     files,
     notices: options.requested?.notices ?? [],
-  } satisfies PullSnapshot;
+  } satisfies ResolvedPull;
 });
 
 /* ------------------------------------------------------------------ */
@@ -454,7 +484,7 @@ const readPullRequest = (root: string, number: number) =>
       "view",
       String(number),
       "--json",
-      "url,state,author,baseRefName,headRefName,baseRefOid,headRefOid,commits",
+      "url,state,author,baseRefName,headRefName,baseRefOid,headRefOid,commits,title,body,closingIssuesReferences",
     ],
     root,
   ).pipe(
@@ -489,6 +519,9 @@ const readPullRequest = (root: string, number: number) =>
                 baseRefOid: response.baseRefOid,
                 headRefOid: response.headRefOid,
                 commits: response.commits.length,
+                title: response.title,
+                body: response.body,
+                linkedIssueUrls: response.closingIssuesReferences.map(({ url }) => url),
               }),
               notices: [],
             }),
@@ -501,17 +534,8 @@ function ghNotice(detail: string): PullNotice {
   return {
     code: "gh-unavailable",
     message: `gh unavailable — PR header uses git fallbacks (${detail}).`,
-    hint: "Install gh and run `gh auth login` to fill the author, state, base branch and commit count; git alone resolves every range.",
+    hint: "Install gh and run `gh auth login` to fill the PR header and author-stated intent; git alone resolves every range and commit subject.",
   };
-}
-
-function firstLine(stderr: string): string {
-  return (
-    stderr
-      .split("\n")
-      .find((line) => line.trim() !== "")
-      ?.trim() ?? "no output"
-  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -623,7 +647,7 @@ const readFileSummaries = Effect.fn("readFileSummaries")(function* (
   });
 });
 
-const hydrateFiles = Effect.fn("hydrateFiles")(function* (snapshot: PullSnapshot) {
+const hydrateFiles = Effect.fn("hydrateFiles")(function* (snapshot: ResolvedPull) {
   const { root, base, pin } = snapshot;
   const diffs = new Map(
     splitDiff(yield* gitOut(["diff", "-M", "--unified=3", base, pin], root)).map((record) => [

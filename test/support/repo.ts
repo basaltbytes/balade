@@ -19,6 +19,7 @@ export interface FixtureRepo {
   pin: string;
   write(path: string, content: string): void;
   commit(message: string): string;
+  commitEmpty(message: string): void;
   /** Writes a fixture walkthrough with `__COMMIT__` replaced, and commits it. */
   addWalkthrough(name: string, fixture: string): string;
   cleanup(): void;
@@ -41,7 +42,8 @@ function removeRepo(dir: string): void {
 }
 
 function run(dir: string, args: string[]): string {
-  return execFileSync("git", args, {
+  const config = NO_BACKGROUND_MAINTENANCE.flatMap(([key, value]) => ["-c", `${key}=${value}`]);
+  return execFileSync("git", [...config, ...args], {
     cwd: dir,
     encoding: "utf8",
     env: {
@@ -198,13 +200,6 @@ export function createFixtureRepo(): FixtureRepo {
   };
 
   run(dir, ["init", "-b", "main"]);
-  run(dir, ["config", "user.email", "fixture@example.com"]);
-  run(dir, ["config", "user.name", "Fixture"]);
-  run(dir, ["config", "commit.gpgsign", "false"]);
-  for (const [key, value] of NO_BACKGROUND_MAINTENANCE) {
-    run(dir, ["config", key, value]);
-  }
-
   write("models/planning_pool_item.py", BASE_MODEL);
   write(
     "models/planning_slot.py",
@@ -248,6 +243,9 @@ export function createFixtureRepo(): FixtureRepo {
     pin,
     write,
     commit,
+    commitEmpty: (message) => {
+      run(dir, ["commit", "--allow-empty", "--no-gpg-sign", "-m", message]);
+    },
     addWalkthrough,
     cleanup: () => removeRepo(dir),
   };
