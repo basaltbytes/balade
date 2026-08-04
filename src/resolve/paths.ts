@@ -48,10 +48,10 @@ const real = (fs: FileSystem.FileSystem, path: string) =>
 const stat = (fs: FileSystem.FileSystem, path: string) =>
   fs.stat(path).pipe(Effect.mapError((cause) => new PathResolutionFailed({ path, cause })));
 
-const escapesRoot = (path: Path.Path, relative: string) =>
+export const escapesRoot = (path: Path.Path, relative: string): boolean =>
   relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
 
-const gitPath = (path: Path.Path, value: string) => value.replaceAll(path.sep, "/");
+export const gitPath = (path: Path.Path, value: string): string => value.replaceAll(path.sep, "/");
 
 const sameFile = (left: FileSystem.File.Info, right: FileSystem.File.Info) =>
   left.dev === right.dev &&

@@ -3,6 +3,7 @@
 import { Effect, FileSystem, Option, Path, Result, Schema } from "effect";
 import { sha256 } from "../resolve/hash.js";
 import { CommandExecutor, type CommandExecutorShape } from "../resolve/exec.js";
+import { escapesRoot, gitPath } from "../resolve/paths.js";
 
 const TREE_DIRECTORY = "tree";
 const ACCESS_FILE = "accessed";
@@ -15,13 +16,12 @@ export interface OpenPinnedRepositorySnapshotOptions {
   readonly cacheRoot: string;
   readonly repositoryRoot: string;
   readonly pin: string;
-  readonly maximumEntries?: number;
 }
 
 export interface ResolvedSnapshotPath {
   readonly absolute: string;
   readonly relative: string;
-  readonly type: "File" | "Directory" | "Other";
+  readonly type: "File" | "Directory";
 }
 
 export interface PinnedRepositorySnapshot {
@@ -60,6 +60,11 @@ interface CacheEntry {
   readonly accessedAt: number;
 }
 
+class SnapshotCacheRejected extends Schema.TaggedErrorClass<SnapshotCacheRejected>()(
+  "SnapshotCacheRejected",
+  { path: Schema.String, reason: Schema.String },
+) {}
+
 /**
  * Materialize or reuse a snapshot. Entries are built beside their final path,
  * then atomically renamed so concurrent readers never observe a partial tree.
@@ -70,7 +75,6 @@ export const openPinnedRepositorySnapshot = Effect.fn("openPinnedRepositorySnaps
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const commands = yield* CommandExecutor;
-  const maximumEntries = options.maximumEntries ?? DEFAULT_MAXIMUM_ENTRIES;
 
   if (!PIN.test(options.pin)) {
     return yield* new SnapshotOpenFailed({
@@ -79,31 +83,32 @@ export const openPinnedRepositorySnapshot = Effect.fn("openPinnedRepositorySnaps
       cause: new Error("The snapshot pin must be a full hexadecimal object id."),
     });
   }
-  if (!Number.isSafeInteger(maximumEntries) || maximumEntries < 1) {
-    return yield* new SnapshotOpenFailed({
-      repositoryRoot: options.repositoryRoot,
-      pin: options.pin,
-      cause: new Error("The snapshot cache must retain at least one entry."),
-    });
-  }
-
+  const pin = options.pin.toLowerCase();
   const opened = Effect.gen(function* () {
     const repositoryRoot = yield* fs.realPath(options.repositoryRoot);
     const requestedCacheRoot = path.resolve(options.cacheRoot);
     yield* fs.makeDirectory(requestedCacheRoot, { recursive: true });
     const cacheRoot = yield* fs.realPath(requestedCacheRoot);
-    const repositoryDirectory = path.join(cacheRoot, repositoryCacheKey(path, repositoryRoot));
-    const entry = path.join(repositoryDirectory, options.pin.toLowerCase());
+    const repositoryKey = repositoryCacheKey(path, repositoryRoot);
+    const requestedRepositoryDirectory = path.join(cacheRoot, repositoryKey);
+    yield* fs.makeDirectory(requestedRepositoryDirectory, { recursive: true });
+    const repositoryDirectory = yield* fs.realPath(requestedRepositoryDirectory);
+    if (path.relative(cacheRoot, repositoryDirectory) !== repositoryKey) {
+      return yield* new SnapshotCacheRejected({
+        path: requestedRepositoryDirectory,
+        reason: "The repository cache directory resolves outside its assigned location.",
+      });
+    }
+    const entry = path.join(repositoryDirectory, pin);
     const tree = path.join(entry, TREE_DIRECTORY);
 
-    yield* fs.makeDirectory(repositoryDirectory, { recursive: true });
     if (!(yield* cacheEntryIsReady(fs, path, cacheRoot, entry))) {
       if (yield* fs.exists(entry)) yield* fs.remove(entry, { recursive: true, force: true });
-      yield* materializeEntry(fs, path, commands, repositoryRoot, options.pin, cacheRoot, entry);
+      yield* materializeEntry(fs, path, commands, repositoryRoot, pin, cacheRoot, entry);
     }
 
-    yield* touchEntry(fs, path, entry, options.pin);
-    yield* cleanCache(fs, path, cacheRoot, entry, maximumEntries).pipe(
+    yield* touchEntry(fs, path, entry, pin);
+    yield* cleanCache(fs, path, cacheRoot, entry).pipe(
       Effect.catch((cause) => Effect.logWarning("Snapshot cache cleanup failed", cause)),
     );
     const root = yield* fs.realPath(tree);
@@ -132,7 +137,7 @@ function makeSnapshot(
   ) {
     const requested = sourcePath === "" ? "." : sourcePath.replace(/^\.\//u, "");
     const candidate = path.resolve(root, requested);
-    if (outsideRoot(path, root, candidate)) {
+    if (escapesRoot(path, path.relative(root, candidate))) {
       return yield* new SnapshotPathRejected({
         path: sourcePath,
         reason: "The path escapes the pinned snapshot.",
@@ -142,7 +147,7 @@ function makeSnapshot(
     const canonical = yield* fs
       .realPath(candidate)
       .pipe(Effect.mapError((cause) => new SnapshotReadFailed({ path: sourcePath, cause })));
-    if (outsideRoot(path, root, canonical)) {
+    if (escapesRoot(path, path.relative(root, canonical))) {
       return yield* new SnapshotPathRejected({
         path: sourcePath,
         reason: "The path resolves through a symlink outside the pinned snapshot.",
@@ -152,34 +157,47 @@ function makeSnapshot(
       .stat(canonical)
       .pipe(Effect.mapError((cause) => new SnapshotReadFailed({ path: sourcePath, cause })));
     const relative = gitPath(path, path.relative(root, candidate));
-    const type: ResolvedSnapshotPath["type"] =
-      info.type === "File" || info.type === "Directory" ? info.type : "Other";
+    if (info.type !== "File" && info.type !== "Directory") {
+      return yield* new SnapshotPathRejected({
+        path: sourcePath,
+        reason: "The source path is neither a regular file nor a directory.",
+      });
+    }
     return {
       absolute: canonical,
       relative: relative === "" ? "." : relative,
-      type,
+      type: info.type,
     };
   });
 
   const listFiles = Effect.gen(function* () {
-    const entries = yield* fs
-      .readDirectory(root, { recursive: true })
-      .pipe(Effect.mapError((cause) => new SnapshotReadFailed({ path: root, cause })));
     const files: string[] = [];
-    for (const entry of entries) {
-      const absolute = path.isAbsolute(entry) ? entry : path.join(root, entry);
-      const relative = gitPath(path, path.relative(root, absolute));
-      if (outsideRoot(path, root, absolute)) continue;
+    const directories = [root];
+    while (directories.length > 0) {
+      const directory = directories.pop();
+      if (directory === undefined) break;
+      const entries = yield* fs
+        .readDirectory(directory)
+        .pipe(Effect.mapError((cause) => new SnapshotReadFailed({ path: directory, cause })));
+      for (const entry of entries) {
+        const absolute = path.join(directory, entry);
+        const relative = gitPath(path, path.relative(root, absolute));
+        const link = yield* Effect.result(fs.readLink(absolute));
+        if (Result.isSuccess(link)) {
+          files.push(relative);
+          continue;
+        }
 
-      const link = yield* Effect.result(fs.readLink(absolute));
-      if (Result.isSuccess(link)) {
-        files.push(relative);
-        continue;
+        const canonical = yield* fs
+          .realPath(absolute)
+          .pipe(Effect.mapError((cause) => new SnapshotReadFailed({ path: relative, cause })));
+        if (escapesRoot(path, path.relative(root, canonical))) continue;
+        const info = yield* fs
+          .stat(canonical)
+          .pipe(Effect.mapError((cause) => new SnapshotReadFailed({ path: relative, cause })));
+        if (info.type === "File") files.push(relative);
+        else if (info.type === "Directory") directories.push(canonical);
       }
-      const info = yield* fs
-        .stat(absolute)
-        .pipe(Effect.mapError((cause) => new SnapshotReadFailed({ path: relative, cause })));
-      if (info.type === "File") files.push(relative);
     }
     return files.sort(compareText);
   }).pipe(Effect.withSpan("PinnedRepositorySnapshot.listFiles"));
@@ -253,6 +271,7 @@ function cacheEntryIsReady(
     const access = path.join(entry, ACCESS_FILE);
     const tree = path.join(entry, TREE_DIRECTORY);
     if (!(yield* fs.exists(access)) || !(yield* fs.exists(tree))) return false;
+    if (Result.isSuccess(yield* Effect.result(fs.readLink(entry)))) return false;
 
     const resolved = yield* Effect.result(
       Effect.all({
@@ -262,8 +281,10 @@ function cacheEntryIsReady(
       }),
     );
     if (Result.isFailure(resolved)) return false;
+    const marker = yield* Effect.result(fs.readFileString(access));
+    if (Result.isFailure(marker) || marker.success.trim() !== path.basename(entry)) return false;
     return (
-      !outsideRoot(path, cacheRoot, resolved.success.entry) &&
+      !escapesRoot(path, path.relative(cacheRoot, resolved.success.entry)) &&
       path.relative(resolved.success.entry, resolved.success.access) === ACCESS_FILE &&
       path.relative(resolved.success.entry, resolved.success.tree) === TREE_DIRECTORY
     );
@@ -275,7 +296,6 @@ function cleanCache(
   path: Path.Path,
   cacheRoot: string,
   protectedEntry: string,
-  maximumEntries: number,
 ) {
   return Effect.gen(function* () {
     const repositories = (yield* fs.readDirectory(cacheRoot)).filter((name) =>
@@ -298,7 +318,7 @@ function cleanCache(
       }
     }
 
-    const excess = Math.max(0, entries.length - maximumEntries);
+    const excess = Math.max(0, entries.length - DEFAULT_MAXIMUM_ENTRIES);
     const oldest = entries
       .filter((entry) => entry.directory !== protectedEntry)
       .sort((left, right) => {
@@ -320,15 +340,6 @@ function repositoryCacheKey(path: Path.Path, repositoryRoot: string): string {
     .slice(0, 48);
   const digest = sha256(repositoryRoot).slice("sha256:".length, "sha256:".length + 16);
   return `${name === "" ? "repository" : name}-${digest}`;
-}
-
-function outsideRoot(path: Path.Path, root: string, candidate: string): boolean {
-  const relative = path.relative(root, candidate);
-  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
-}
-
-function gitPath(path: Path.Path, value: string): string {
-  return value.replaceAll(path.sep, "/");
 }
 
 function compareText(left: string, right: string): number {

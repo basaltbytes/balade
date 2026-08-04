@@ -278,6 +278,42 @@ describe("the Pi adapter", () => {
     }),
   );
 
+  it.effect("caps search results with balade-owned guidance", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      repo.write(
+        "models/search_limit.py",
+        Array.from({ length: 205 }, (_, index) => `needle_${index} = "needle"`).join("\n"),
+      );
+      const pin = repo.commit("test: add enough matches to reach the search cap");
+      let searchContext = "";
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          ai.fauxToolCall("search_source", {
+            query: "needle",
+            mode: "fixed",
+            path: "models/search_limit.py",
+          }),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          searchContext = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(searchContext).toContain("200 matches shown; narrow the query or path to continue");
+      expect(searchContext).not.toContain("Use limit=400");
+    }),
+  );
+
   it.effect("loads applicable repository instructions from the pin before the first turn", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;

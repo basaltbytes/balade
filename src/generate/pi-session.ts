@@ -1,6 +1,11 @@
 /** Pi's per-generation session, restricted to balade-owned read-only tools. */
 
-import type { AgentSession, ModelRuntime, ResourceLoader } from "@earendil-works/pi-coding-agent";
+import type {
+  AgentSession,
+  GrepToolDetails,
+  ModelRuntime,
+  ResourceLoader,
+} from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
@@ -157,7 +162,7 @@ export async function createPiSession(
         ...result,
         content: result.content.map((block) =>
           block.type === "text"
-            ? { ...block, text: normalizeSearchOutput(block.text, scope) }
+            ? { ...block, text: normalizeSearchOutput(block.text, scope, result.details) }
             : block,
         ),
       };
@@ -548,9 +553,13 @@ function repositoryPath(sourcePath: string): string {
   return normalized;
 }
 
-function normalizeSearchOutput(value: string, scope: ResolvedSnapshotPath): string {
+function normalizeSearchOutput(
+  value: string,
+  scope: ResolvedSnapshotPath,
+  details: GrepToolDetails | undefined,
+): string {
   if (value === "No matches found") return value;
-  const [matches = "", ...notices] = value.split("\n\n");
+  const [matches = ""] = value.split("\n\n");
   const prefix = searchPathPrefix(scope);
   const sorted = matches
     .split("\n")
@@ -558,7 +567,18 @@ function normalizeSearchOutput(value: string, scope: ResolvedSnapshotPath): stri
     .map((line) => `${prefix}${line}`)
     .sort(compareSearchLines)
     .join("\n");
-  return limitCharacters([sorted, ...notices].filter((part) => part !== "").join("\n\n"));
+  const notices = [
+    details?.matchLimitReached === undefined
+      ? undefined
+      : `… ${details.matchLimitReached} matches shown; narrow the query or path to continue.`,
+    details?.truncation?.truncated === true
+      ? "… search output truncated; narrow the query or path to continue."
+      : undefined,
+    details?.linesTruncated === true
+      ? "… some matching lines were shortened; use read_source for their full contents."
+      : undefined,
+  ].filter((notice): notice is string => notice !== undefined);
+  return limitCharacters([sorted, ...notices].join("\n"));
 }
 
 function searchPathPrefix(scope: ResolvedSnapshotPath): string {
