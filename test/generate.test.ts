@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "@effect/vitest";
+import { afterEach, describe, expect, it } from "@effect/vitest";
 import {
   AuthorModel as AuthorModelSchema,
   WalkthroughAuthor,
@@ -41,6 +41,10 @@ const CHANGED_FILE = {
 };
 
 async function piHarness(registerFaux = true, settingsManager = coding.SettingsManager.inMemory()) {
+  const snapshotCacheRoot = mkdtempSync(join(tmpdir(), "balade-pi-snapshots-"));
+  harnessCleanups.push(() =>
+    rmSync(snapshotCacheRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+  );
   const credentials = new ai.InMemoryCredentialStore();
   const modelRuntime = await coding.ModelRuntime.create({
     credentials,
@@ -53,10 +57,16 @@ async function piHarness(registerFaux = true, settingsManager = coding.SettingsM
     await modelRuntime.refresh({ allowNetwork: false });
   }
   const layer = piWalkthroughAuthorLayer({
+    snapshotCacheRoot,
     load: async () => ({ coding, ai, modelRuntime, settingsManager }),
   }).pipe(Layer.provideMerge(shellLayer));
   return { credentials, faux, layer, modelRuntime, settingsManager };
 }
+
+const harnessCleanups: Array<() => void> = [];
+afterEach(() => {
+  for (const cleanup of harnessCleanups.splice(0)) cleanup();
+});
 
 const fixture = Effect.acquireRelease(Effect.sync(createFixtureRepo), (repo) =>
   Effect.sync(() => repo.cleanup()),
@@ -213,6 +223,58 @@ describe("the Pi adapter", () => {
           failed: false,
         }),
       );
+    }),
+  );
+
+  it.effect("searches the pinned snapshot and can read the old implementation", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      repo.write("models/planning_slot.py", "dirty working tree only\n");
+      let searchContext = "";
+      let baseContext = "";
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          ai.fauxToolCall("search_source", {
+            query: "planning.slot",
+            mode: "fixed",
+          }),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          searchContext = JSON.stringify({ messages: context.messages, tools: context.tools });
+          return ai.fauxAssistantMessage(
+            ai.fauxToolCall("read_base_source", {
+              path: "models/planning_pool_item.py",
+              from: 1,
+              to: 4,
+            }),
+            { stopReason: "toolUse" },
+          );
+        },
+        (context) => {
+          baseContext = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(searchContext).toContain("models/planning_allocation.py");
+      expect(searchContext).toContain("models/planning_slot.py");
+      expect(searchContext.indexOf("models/planning_allocation.py")).toBeLessThan(
+        searchContext.indexOf("models/planning_slot.py"),
+      );
+      expect(searchContext).not.toContain("dirty working tree only");
+      expect(searchContext).toContain('"name":"search_source"');
+      expect(searchContext).toContain('"name":"read_base_source"');
+      expect(searchContext).not.toContain('"name":"grep"');
+      expect(baseContext).toContain("from odoo import fields, models");
+      expect(baseContext).not.toContain("from odoo import api, fields, models");
     }),
   );
 
@@ -769,15 +831,18 @@ describe("generation", () => {
     };
 
     progress({ _tag: "AuthorToolStarted", name: "list_pr_changes", input: "{}" });
+    progress({ _tag: "AuthorToolStarted", name: "search_source", input: "{}" });
     progress({ _tag: "AuthorToolStarted", name: "read_pr_diff", input: "{}" });
     progress({ _tag: "AuthorToolStarted", name: "read_pr_diff", input: "{}" });
     progress({ _tag: "AuthorToolStarted", name: "read_source", input: "{}" });
     progress({ _tag: "AuthorToolStarted", name: "read_source", input: "{}" });
+    progress({ _tag: "AuthorToolStarted", name: "read_base_source", input: "{}" });
     progress({ _tag: "AuthorToolStarted", name: "submit_walkthrough", input: "{}" });
     progress({ _tag: "AuthorUsageUpdated", usage });
 
     expect(output).toEqual([
       "Inspecting pull-request changes…\n",
+      "Searching pinned source…\n",
       "Reading relevant diffs…\n",
       "Confirming pinned source ranges…\n",
       "Submitting the walkthrough draft…\n",

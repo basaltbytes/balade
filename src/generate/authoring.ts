@@ -8,12 +8,13 @@
 import { Option } from "effect";
 import type { AuthoringRequest } from "./author.js";
 
-export const AUTHORING_PACKAGE_VERSION = "1.2.0";
+export const AUTHORING_PACKAGE_VERSION = "1.3.0";
 export const AUTHORING_WALKTHROUGH_SCHEMA_VERSION = 1;
 export const AUTHORING_META_KEY = "balade-authoring";
 
 export const AUTHORING_LIMITS = {
   diffReads: 8,
+  searches: 20,
   sourceReads: 12,
   codeRanges: 10,
   suggestedSections: { minimum: 2, maximum: 5 },
@@ -132,7 +133,7 @@ export const AUTHORING_SYSTEM_PROMPT = `You author thin, committed balade walkth
 
 Input and output contract
 
-- Input is pull-request context plus read-only tools for the diff and repository blobs at one pinned commit.
+- Input is pull-request context plus read-only tools for the diff and a filesystem snapshot of one pinned commit.
 - Before the first turn, follow the pinned AGENTS.md or CLAUDE.md instructions that apply from the repository root through each changed file's directory. Nested instructions apply only to paths below their directory. No instruction is read from the working tree or the user's global Pi configuration.
 - Output is one walkthrough schema ${AUTHORING_WALKTHROUGH_SCHEMA_VERSION} Markdoc body submitted through submit_walkthrough. Balade adds the YAML frontmatter.
 - The submission has a concise title, short scalar metadata, an optional preset only when the repository warrants it, and the complete body. Do not add frontmatter or an outer Markdown fence.
@@ -146,7 +147,7 @@ Use these claims as hypotheses that guide inspection. Verify them against the pi
 
 Evidence rules
 
-List the changes, inspect the relevant diff, then read exact numbered source lines at the pin. If a loaded repository instruction requires another project document, read it at the pin before analyzing the change. Never guess a path, line number, range boundary, behavior, or expect echo. Use no more than ${AUTHORING_LIMITS.diffReads} diff reads and ${AUTHORING_LIMITS.sourceReads} source reads.
+List the changes and inspect the relevant diff. Before claiming how an identifier, type, or configuration value is used, call search_source across the pin, then read the exact numbered source ranges that the matches make relevant. Prefer fixed search for identifiers and regex only when a pattern carries meaning. Use read_base_source only when a rewrite or deletion needs more old implementation than the diff context provides. If a loaded repository instruction requires another project document, read it at the pin before analyzing the change. Never guess a path, line number, range boundary, behavior, or expect echo. Do not inventory the repository. Use no more than ${AUTHORING_LIMITS.diffReads} diff reads, ${AUTHORING_LIMITS.searches} searches, and ${AUTHORING_LIMITS.sourceReads} source reads.
 
 Choose the behavioral spine instead of inventorying changed files. A substantial walkthrough usually needs ${AUTHORING_LIMITS.suggestedSections.minimum}-${AUTHORING_LIMITS.suggestedSections.maximum} sections and ${AUTHORING_LIMITS.suggestedCodeRanges.minimum}-${AUTHORING_LIMITS.suggestedCodeRanges.maximum} focused code ranges. The package has a hard maximum of ${AUTHORING_LIMITS.codeRanges} code ranges. Small, mechanical, or documentation-only changes often need one section and few or no code ranges. Omit plumbing and unchanged context unless they carry evidence needed to review the change.
 

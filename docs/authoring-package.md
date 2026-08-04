@@ -6,7 +6,7 @@ system prompt, section templates, writing rubric, and inspection limits. The
 package ships with the CLI, so a plain `npx balade generate …` does not depend
 on a second repository or an installed agent skill.
 
-The current package version is `1.2.0`. Its major version matches the
+The current package version is `1.3.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -30,11 +30,19 @@ ancestor directories. These files come from the pinned commit, not the current
 checkout. Nested instructions apply only below their directory, and unrelated
 monorepo instructions are omitted.
 
-The session adds five read-only tools. They list the change and pinned tree,
-read a changed-file diff, read numbered lines from a pinned blob, and submit one
-structured draft. A loaded instruction can direct the model to read another
+The session adds seven balade-owned read-only tools. They list the change and
+pinned tree, search the pinned snapshot with fixed text or a regular expression,
+read a changed-file diff, read numbered lines at the pin or PR base, and submit
+one structured draft. A loaded instruction can direct the model to read another
 project document through the pinned source tool. The session cannot run shell
-commands or write files.
+commands or write files. Every requested path is resolved through the snapshot
+root, including symlink targets, before a filesystem-backed tool uses it.
+
+The pinned tree is extracted with `git archive` into
+`~/.balade/cache/snapshots/`. Cache entries are keyed by repository and commit,
+and the extracted `tree/` directory contains no cache metadata. Repeat and
+repair turns reuse an entry. On each open, a least-recently-used cleanup keeps
+the five newest snapshot entries across repositories.
 
 The submitted draft contains a title, scalar metadata, an optional preset, and
 a complete Markdoc body. Balade owns the envelope. It stamps `walkthrough`,
@@ -48,16 +56,18 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.2.0
+  balade-authoring: 1.3.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
 through the same walkthrough v1 contract used by hand-authored files and
 confirms each code path, range, and `expect=` boundary echo.
 
-One turn may read at most eight diffs and twelve source ranges. A draft may
-contain at most ten code ranges. Those limits live beside the prompt and are
-also used by the Pi tool adapter.
+One turn may read at most eight diffs, run twenty source searches, and read
+twelve source ranges across the pin and base. Search results are repo-relative,
+sorted, capped at 200 matches, and character-truncated. A draft may contain at
+most ten code ranges. Those limits live beside the prompt and are also used by
+the Pi tool adapter.
 
 ## Version policy
 

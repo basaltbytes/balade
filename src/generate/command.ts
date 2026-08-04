@@ -327,7 +327,10 @@ function progressMessage(tool: string): string {
       return "Inspecting pull-request changes…";
     case "read_pr_diff":
       return "Reading relevant diffs…";
+    case "search_source":
+      return "Searching pinned source…";
     case "read_source":
+    case "read_base_source":
       return "Confirming pinned source ranges…";
     case "submit_walkthrough":
       return "Submitting the walkthrough draft…";

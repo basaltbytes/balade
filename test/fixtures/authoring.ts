@@ -3,7 +3,7 @@ import type { AuthorChangedFile, AuthorDraft } from "../../src/generate/author.j
 export type AuthoringTranscriptStep =
   | {
       readonly _tag: "Tool";
-      readonly name: "list_pr_changes" | "read_pr_diff" | "read_source";
+      readonly name: "list_pr_changes" | "search_source" | "read_pr_diff" | "read_source";
       readonly input: Readonly<Record<string, string | number>>;
     }
   | { readonly _tag: "Submit"; readonly draft: AuthorDraft };
@@ -74,6 +74,11 @@ it("stops on a non-retryable status", () => {
     ],
     transcript: [
       { _tag: "Tool", name: "read_pr_diff", input: { path: "src/retries.ts" } },
+      {
+        _tag: "Tool",
+        name: "search_source",
+        input: { query: "shouldRetry", mode: "fixed" },
+      },
       { _tag: "Tool", name: "read_source", input: { path: "src/retries.ts", from: 1, to: 12 } },
       {
         _tag: "Tool",

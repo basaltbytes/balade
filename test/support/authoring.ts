@@ -125,7 +125,10 @@ function fauxResponse(step: AuthoringTranscriptStep) {
   });
 }
 
-export async function createAuthoringFauxHarness(transcript: readonly AuthoringTranscriptStep[]) {
+export async function createAuthoringFauxHarness(
+  transcript: readonly AuthoringTranscriptStep[],
+  snapshotCacheRoot: string,
+) {
   const credentials = new ai.InMemoryCredentialStore();
   const modelRuntime = await coding.ModelRuntime.create({
     credentials,
@@ -140,6 +143,7 @@ export async function createAuthoringFauxHarness(transcript: readonly AuthoringT
     final?._tag === "Submit" ? [fauxResponse(final), fauxResponse(final)] : [];
   faux.setResponses([...transcript.map(fauxResponse), ...repairResponses]);
   const layer = piWalkthroughAuthorLayer({
+    snapshotCacheRoot,
     load: async () => ({
       coding,
       ai,

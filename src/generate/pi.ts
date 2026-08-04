@@ -5,18 +5,20 @@ import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
 import {
   Context,
   Effect,
+  FileSystem,
   Layer,
   Option,
+  Path,
   Redacted,
   Result,
   Schema,
   Semaphore,
   Terminal,
 } from "effect";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { describeFailure } from "../failure.js";
 import { CommandExecutor } from "../resolve/exec.js";
+import { baladePiAgentDirectory, baladeSnapshotCacheDirectory } from "../state/paths.js";
 import {
   AuthorDiscoveryFailed,
   AuthorDraft,
@@ -50,9 +52,11 @@ export interface PiAdapterDependencies extends PiSessionDependencies {
 export interface PiWalkthroughAuthorOptions {
   /** Explicit injection keeps adapter tests on Pi's faux provider and in-memory stores. */
   readonly load?: () => Promise<PiAdapterDependencies>;
+  /** Explicit injection keeps adapter tests out of the user's balade cache. */
+  readonly snapshotCacheRoot?: string;
 }
 
-type CommandDependencies = CommandExecutor;
+type SessionDependencies = CommandExecutor | FileSystem.FileSystem | Path.Path;
 
 const decodeModels = Schema.decodeUnknownEffect(Schema.Array(AuthorModel), {
   onExcessProperty: "error",
@@ -80,12 +84,8 @@ interface RawLoginMethod {
  * own pi CLI must never observe a balade run, and balade never reads
  * credentials or defaults from it.
  */
-function baladePiAgentDir(): string {
-  return join(homedir(), ".balade", "pi");
-}
-
 export async function loadLiveDependencies(
-  agentDir: string = baladePiAgentDir(),
+  agentDir: string = baladePiAgentDirectory(),
 ): Promise<PiAdapterDependencies> {
   const [coding, ai] = await Promise.all([
     import("@earendil-works/pi-coding-agent"),
@@ -109,10 +109,13 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
   return Layer.effect(
     WalkthroughAuthor,
     Effect.gen(function* () {
-      const commandContext = Context.pick(CommandExecutor)(
-        yield* Effect.context<CommandDependencies>(),
-      );
-      const runCommand = Effect.runPromiseWith(commandContext);
+      const sessionContext = Context.pick(
+        FileSystem.FileSystem,
+        Path.Path,
+        CommandExecutor,
+      )(yield* Effect.context<SessionDependencies>());
+      const runSessionEffect = Effect.runPromiseWith(sessionContext);
+      const snapshotCacheRoot = options.snapshotCacheRoot ?? baladeSnapshotCacheDirectory();
       let loaded: Promise<PiAdapterDependencies> | undefined;
       /* Pi drains reported settings errors, but a load failure still makes its
          manager silently reject later saves. Retain that failure for this layer. */
@@ -277,7 +280,7 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
                   `Model ${request.model.providerId}/${request.model.modelId} is no longer available.`,
                 );
               }
-              return createPiSession(pi, model, request, runCommand);
+              return createPiSession(pi, model, request, runSessionEffect, snapshotCacheRoot);
             },
             catch: (cause) =>
               new AuthorSessionStartFailed({

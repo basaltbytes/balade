@@ -327,20 +327,40 @@ and it cannot leak a different checked-out branch into analysis. Instruction
 loading is outside the source-read budget; documents that an instruction names
 are read through the normal pinned source tool and count toward that budget.
 
-The allowlist contains only five balade-owned tools: list PR changes, list
-pinned paths, read a pinned diff, read numbered lines from a pinned blob, and
-submit the structured draft. The agent never receives Pi's shell or mutation
-tools. `submit_walkthrough` ends the agent loop; the adapter stamps the schema
-version, PR and commit after the model returns.
+The allowlist contains only seven balade-owned tools: list PR changes, list
+pinned paths, search pinned source, read a pinned diff, read numbered lines at
+the pin or base, and submit the structured draft. The agent never receives Pi's
+shell or mutation tools. `submit_walkthrough` ends the agent loop; the adapter
+stamps the schema version, PR and commit after the model returns.
+
+Pinned source inspection is filesystem-backed (revised 2026-08-04, issue #28).
+After the resolver fetches the PR head object, `git archive` extracts that pin
+under `~/.balade/cache/snapshots/`, keyed by a repository-root digest and the
+full object id. The snapshot's `tree/` contains only archived Git content: cache
+metadata stays beside it, and no `.git`, history, other branch, or working-tree
+state is present. Listing and reads use that filesystem; search wraps Pi's
+managed ripgrep inside a balade-owned tool. Every caller-supplied scope resolves
+canonically below the snapshot root before use, and ripgrep does not follow
+discovered symlinks. Base reads remain `git show base:path`, so the old side does
+not require a second extraction.
+
+The disk and extraction cost buys repository-wide discovery at the exact pin.
+Repeat and repair turns reuse complete entries, which are built in a sibling
+temporary directory and atomically renamed so concurrent sessions do not see a
+partial tree. Each open updates access metadata outside `tree/`; a global LRU
+keeps five entries and deletes older ones. This bounds retained disk while
+preserving the common repeat-run cache hit.
 
 The baseline authoring turn is deliberately bounded to eight diff reads and
-twelve source reads. The prompt asks for the behavioral spine in two to five
-sections and normally three to eight focused ranges, with ten as a hard maximum.
-These limits keep provider context and cost proportional to a review story
-instead of rewarding an inventory of every changed file; richer curation remains
-a separate quality layer. The read allowance resets for a repair turn so the
-agent can verify a corrected range. The submit tool rejects drafts above the
-range ceiling and asks the agent to focus the complete draft before accepting it.
+twenty searches plus twelve source reads shared across pin and base. Search gets
+the larger allowance because a capped match list makes the following reads more
+targeted. The prompt asks for the behavioral spine in two to five sections and
+normally three to eight focused ranges, with ten as a hard maximum. These limits
+keep provider context and cost proportional to a review story instead of
+rewarding an inventory of every changed file. All inspection allowances reset
+for a repair turn so the agent can verify a corrected range. The submit tool
+rejects drafts above the range ceiling and asks the agent to focus the complete
+draft before accepting it.
 
 A failed check gets at most two repair turns. Repairs use a new
 `AgentSession.prompt()` in the same in-memory session, rather than Pi's queued

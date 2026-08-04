@@ -50,11 +50,19 @@ npx balade generate '#96'
 
 If the PR branch is checked out, balade uses its current head. Otherwise it
 fetches the exact object advertised by `pull/96/head` without changing your
-checkout or `FETCH_HEAD`. The model can inspect the diff and read numbered
-source lines at that exact commit. Before analysis, balade also loads the
-`AGENTS.md` or `CLAUDE.md` instructions that apply to the changed paths from the
-same commit. It never substitutes files from another checked-out branch. The
-model can't run shell commands or write files.
+checkout or `FETCH_HEAD`. Balade extracts that commit under
+`~/.balade/cache/snapshots/`, then exposes only its read-only search, list, and
+read tools over those files. The model can inspect the diff and source without
+seeing a dirty working tree, another branch, or repository history. Before
+analysis, balade also loads the `AGENTS.md` or `CLAUDE.md` instructions that
+apply to the changed paths from the same commit. It never substitutes files
+from another checked-out branch. The model can't run shell commands or write
+files.
+
+Snapshots are reused by repository and commit. Balade retains the five most
+recently used snapshots and removes older entries when generation starts, so
+repeat and repair turns avoid another extraction without leaving an unbounded
+cache.
 
 On the first run, the provider picker offers Anthropic subscription login,
 OpenAI Codex subscription login, and API-key methods through Pi. Balade keeps
@@ -123,7 +131,7 @@ pr: 96                        # the pull request this narrates
 commit: 9f3c2ad…              # the stamped commit every reference resolves at
 meta:                         # scalar header chips
   module: acme_loan
-  balade-authoring: 1.2.0     # generated drafts record their authoring package
+  balade-authoring: 1.3.0     # generated drafts record their authoring package
 ---
 ```
 

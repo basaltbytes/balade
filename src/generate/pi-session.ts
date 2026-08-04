@@ -4,10 +4,15 @@ import type { AgentSession, ModelRuntime, ResourceLoader } from "@earendil-works
 import type { Model } from "@earendil-works/pi-ai";
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
-import { Effect, Option, Result } from "effect";
+import { Effect, FileSystem, Option, Path, Result } from "effect";
 import { CommandExecutor, gitOut } from "../resolve/exec.js";
 import type { AuthoringRequest } from "./author.js";
 import { AUTHORING_LIMITS, AUTHORING_SYSTEM_PROMPT } from "./authoring.js";
+import {
+  openPinnedRepositorySnapshot,
+  type PinnedRepositorySnapshot,
+  type ResolvedSnapshotPath,
+} from "./snapshot.js";
 
 export type CodingAgentSdk = typeof import("@earendil-works/pi-coding-agent");
 export type AiSdk = typeof import("@earendil-works/pi-ai");
@@ -18,11 +23,13 @@ export interface PiSessionDependencies {
   readonly modelRuntime: ModelRuntime;
 }
 
-type RunCommand = <A, E>(effect: Effect.Effect<A, E, CommandExecutor>) => Promise<A>;
+type SessionDependencies = CommandExecutor | FileSystem.FileSystem | Path.Path;
+type RunSessionEffect = <A, E>(effect: Effect.Effect<A, E, SessionDependencies>) => Promise<A>;
 
 const MAX_TREE_FILES = 2_000;
 const MAX_SOURCE_LINES = 400;
 const MAX_DIFF_LINES = 800;
+const MAX_SEARCH_MATCHES = 200;
 const MAX_TOOL_CHARACTERS = 80_000;
 const SESSION_ABORT_TIMEOUT = "1 second";
 const PROJECT_CONTEXT_FILE_NAMES = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
@@ -36,22 +43,29 @@ export async function createPiSession(
   pi: PiSessionDependencies,
   model: Model<string>,
   request: AuthoringRequest,
-  runCommand: RunCommand,
+  runSessionEffect: RunSessionEffect,
+  snapshotCacheRoot: string,
 ) {
   let draft: unknown;
   let diffReads = 0;
+  let searches = 0;
   let sourceReads = 0;
+  const snapshot = await runSessionEffect(
+    openPinnedRepositorySnapshot({
+      cacheRoot: snapshotCacheRoot,
+      repositoryRoot: request.root,
+      pin: request.pin,
+    }),
+  );
   let sourcePathLoad: Promise<readonly string[]> | undefined;
   const sourcePaths = (): Promise<readonly string[]> => {
     if (sourcePathLoad === undefined) {
-      sourcePathLoad = runCommand(
-        gitOut(["ls-tree", "-r", "--name-only", "-z", request.pin], request.root),
-      ).then((out) => out.split("\0").filter((path) => path !== ""));
+      sourcePathLoad = runSessionEffect(snapshot.listFiles);
     }
     return sourcePathLoad;
   };
   const changed = new Set(request.files.map((file) => file.path));
-  const projectContextFiles = await loadPinnedProjectContext(request, sourcePaths, runCommand);
+  const projectContextFiles = await loadPinnedProjectContext(request, snapshot, sourcePaths);
 
   const listChanges = pi.coding.defineTool({
     name: "list_pr_changes",
@@ -103,6 +117,53 @@ export async function createPiSession(
     },
   });
 
+  const grep = pi.coding.createGrepToolDefinition(snapshot.root);
+  const searchSource = pi.coding.defineTool({
+    name: "search_source",
+    label: "Search pinned source",
+    description: `Search the pinned repository snapshot with ripgrep. Results are repo-relative, sorted, and capped at ${MAX_SEARCH_MATCHES} matches.`,
+    parameters: pi.ai.Type.Object({
+      query: pi.ai.Type.String({ minLength: 1, description: "Fixed text or regular expression" }),
+      mode: pi.ai.Type.Optional(
+        pi.ai.Type.Union([pi.ai.Type.Literal("fixed"), pi.ai.Type.Literal("regex")], {
+          description: "Match mode; defaults to fixed",
+        }),
+      ),
+      path: pi.ai.Type.Optional(
+        pi.ai.Type.String({ description: "Repo-relative file or directory scope" }),
+      ),
+    }),
+    execute: async (id, params, signal, onUpdate, context) => {
+      if (searches >= AUTHORING_LIMITS.searches) {
+        return toolText(
+          `Source search budget reached after ${AUTHORING_LIMITS.searches} searches. Use the matches already collected to choose exact source ranges, then submit the walkthrough.`,
+        );
+      }
+      const scope = await runSessionEffect(snapshot.resolvePath(params.path ?? "."));
+      searches++;
+      const result = await grep.execute(
+        id,
+        {
+          pattern: params.query,
+          path: scope.absolute,
+          literal: (params.mode ?? "fixed") === "fixed",
+          limit: MAX_SEARCH_MATCHES,
+        },
+        signal,
+        onUpdate,
+        context,
+      );
+      return {
+        ...result,
+        content: result.content.map((block) =>
+          block.type === "text"
+            ? { ...block, text: normalizeSearchOutput(block.text, scope) }
+            : block,
+        ),
+      };
+    },
+  });
+
   const readDiff = pi.coding.defineTool({
     name: "read_pr_diff",
     label: "Read pinned diff",
@@ -121,7 +182,7 @@ export async function createPiSession(
         );
       }
       diffReads++;
-      const out = await runCommand(
+      const out = await runSessionEffect(
         gitOut(
           [
             "diff",
@@ -159,10 +220,33 @@ export async function createPiSession(
         );
       }
       sourceReads++;
-      const content = await runCommand(
-        gitOut(["show", `${request.pin}:${params.path}`], request.root),
-      );
+      const content = await runSessionEffect(snapshot.readFile(params.path));
       return toolText(numberedLines(params.path, content, params.from, params.to));
+    },
+  });
+
+  const readBaseSource = pi.coding.defineTool({
+    name: "read_base_source",
+    label: "Read base source",
+    description:
+      "Read exact, numbered source lines from a repo-relative file at the pull request base commit.",
+    parameters: pi.ai.Type.Object({
+      path: pi.ai.Type.String({ description: "Exact repo-relative path" }),
+      from: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "First line" })),
+      to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
+    }),
+    execute: async (_id, params) => {
+      const sourcePath = repositoryPath(params.path);
+      if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
+        return toolText(
+          `Source inspection budget reached after ${AUTHORING_LIMITS.sourceReads} reads. Submit using the verified ranges already collected; do not invent more.`,
+        );
+      }
+      sourceReads++;
+      const content = await runSessionEffect(
+        gitOut(["show", `${request.base}:${sourcePath}`], request.root),
+      );
+      return toolText(numberedLines(sourcePath, content, params.from, params.to));
     },
   });
 
@@ -198,19 +282,29 @@ export async function createPiSession(
   });
 
   const { session } = await pi.coding.createAgentSession({
-    cwd: request.root,
+    cwd: snapshot.root,
     model,
     modelRuntime: pi.modelRuntime,
     resourceLoader: minimalResourceLoader(pi.coding, AUTHORING_SYSTEM_PROMPT, projectContextFiles),
     tools: [
       "list_pr_changes",
       "list_source_files",
+      "search_source",
       "read_pr_diff",
       "read_source",
+      "read_base_source",
       "submit_walkthrough",
     ],
-    customTools: [listChanges, listSources, readDiff, readSource, submit],
-    sessionManager: pi.coding.SessionManager.inMemory(request.root),
+    customTools: [
+      listChanges,
+      listSources,
+      searchSource,
+      readDiff,
+      readSource,
+      readBaseSource,
+      submit,
+    ],
+    sessionManager: pi.coding.SessionManager.inMemory(snapshot.root),
     settingsManager: pi.coding.SettingsManager.inMemory({
       compaction: { enabled: false },
       retry: { enabled: false },
@@ -251,6 +345,7 @@ export async function createPiSession(
     },
     resetInspectionBudget: () => {
       diffReads = 0;
+      searches = 0;
       sourceReads = 0;
     },
     getDraft: () => draft,
@@ -398,8 +493,8 @@ function minimalResourceLoader(
 
 async function loadPinnedProjectContext(
   request: AuthoringRequest,
+  snapshot: PinnedRepositorySnapshot,
   sourcePaths: () => Promise<readonly string[]>,
-  runCommand: RunCommand,
 ): Promise<readonly ProjectContextFile[]> {
   const available = new Set(await sourcePaths());
   const directories = new Set([""]);
@@ -424,7 +519,7 @@ async function loadPinnedProjectContext(
   return Promise.all(
     paths.map(async (path) => ({
       path: `${request.pin}:${path}`,
-      content: await runCommand(gitOut(["show", `${request.pin}:${path}`], request.root)),
+      content: await Effect.runPromise(snapshot.readFile(path)),
     })),
   );
 }
@@ -437,4 +532,52 @@ function limitCharacters(value: string): string {
   return value.length <= MAX_TOOL_CHARACTERS
     ? value
     : `${value.slice(0, MAX_TOOL_CHARACTERS)}\n… output capped at ${MAX_TOOL_CHARACTERS} characters.`;
+}
+
+function repositoryPath(sourcePath: string): string {
+  const normalized = sourcePath.replace(/^\.\//u, "");
+  const segments = normalized.split("/");
+  if (
+    normalized === "" ||
+    normalized.startsWith("/") ||
+    normalized.includes("\\") ||
+    segments.some((segment) => segment === "" || segment === "." || segment === "..")
+  ) {
+    throw new Error(`${sourcePath} is not a contained repo-relative path.`);
+  }
+  return normalized;
+}
+
+function normalizeSearchOutput(value: string, scope: ResolvedSnapshotPath): string {
+  if (value === "No matches found") return value;
+  const [matches = "", ...notices] = value.split("\n\n");
+  const prefix = searchPathPrefix(scope);
+  const sorted = matches
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => `${prefix}${line}`)
+    .sort(compareSearchLines)
+    .join("\n");
+  return limitCharacters([sorted, ...notices].filter((part) => part !== "").join("\n\n"));
+}
+
+function searchPathPrefix(scope: ResolvedSnapshotPath): string {
+  if (scope.relative === ".") return "";
+  if (scope.type === "Directory") return `${scope.relative}/`;
+  const slash = scope.relative.lastIndexOf("/");
+  return slash === -1 ? "" : scope.relative.slice(0, slash + 1);
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compareSearchLines(left: string, right: string): number {
+  const leftMatch = /^(.*):(\d+):/u.exec(left);
+  const rightMatch = /^(.*):(\d+):/u.exec(right);
+  if (leftMatch === null || rightMatch === null) return compareText(left, right);
+  const leftPath = leftMatch[1] ?? "";
+  const rightPath = rightMatch[1] ?? "";
+  const paths = compareText(leftPath, rightPath);
+  return paths === 0 ? Number(leftMatch[2] ?? "0") - Number(rightMatch[2] ?? "0") : paths;
 }
