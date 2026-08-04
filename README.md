@@ -65,10 +65,11 @@ Balade hands login prompts to Pi and never reads or prints the credential file.
 
 Anthropic has a billing rule you should know before choosing it: subscription
 login in third-party tools bills per token as **extra usage** and doesn't draw
-on Claude plan limits. Balade prints this warning before confirmation.
+on Claude plan limits. Balade shows this warning in the picker and again when
+the chosen model is announced.
 
-Choose and confirm a provider/model in the picker. Automation can supply both
-ids and skip the prompts:
+Choose a provider/model in the picker; generation starts right away. Automation
+can supply both ids and skip the picker:
 
 ```sh
 npx balade generate 96 --provider openai-codex --model gpt-5.4
@@ -76,8 +77,8 @@ npx balade generate 96 --provider openai-codex
 npx balade generate 96 --dir docs/walkthroughs
 ```
 
-Every confirmed choice becomes balade's saved default and is reused on the next
-run when it is available. A valid `--provider` and `--model` pair selects and
+Every choice becomes balade's saved default and is reused on the next run when
+it is available. A valid `--provider` and `--model` pair selects and
 saves that model without prompts. A partial, empty, or unavailable value opens
 the picker, narrowed to matching models when possible; `--model ""` opens the
 full available list.
