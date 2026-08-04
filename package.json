@@ -56,6 +56,7 @@
     "@earendil-works/pi-ai": "0.83.0",
     "@earendil-works/pi-coding-agent": "0.83.0",
     "@effect/platform-node": "4.0.0-beta.102",
+    "@effect/platform-node-shared": "4.0.0-beta.102",
     "@markdoc/markdoc": "0.5.8",
     "effect": "4.0.0-beta.102",
     "yaml": "^2.9.0"

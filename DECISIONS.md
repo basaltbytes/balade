@@ -277,6 +277,15 @@ Pi lazily (its root barrel loads TUI modules at import time), so `check`,
 `^22.22.2 || ^24.15.0 || >=26.0.0`, covering Pi and its locked production tree;
 Node 20 passed end of life on 2026-04-30.
 
+`@effect/platform-node-shared` is pinned as a direct dependency even though
+balade never imports it. `@effect/platform-node` declares it with a caret
+range, so a fresh npm install of the published package resolves the newest
+beta, whose `effect` peer pulls a second effect runtime into the tree and
+kills the CLI at startup (caught by the npm-package smoke job, 2026-08-04).
+The explicit pin makes npm dedupe onto the version balade's own `effect` pin
+matches. Bump it in lockstep with every effect-family bump; drop it when the
+Effect v4 packages stabilize their internal ranges.
+
 Every Pi surface sits behind the one `WalkthroughAuthor` service, the
 anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
