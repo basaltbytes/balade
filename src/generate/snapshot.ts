@@ -143,6 +143,7 @@ function makeSnapshot(
         reason: "The path escapes the pinned snapshot.",
       });
     }
+    yield* rejectEscapingSymlinkSegments(fs, path, root, candidate, sourcePath);
 
     const canonical = yield* fs
       .realPath(candidate)
@@ -217,6 +218,28 @@ function makeSnapshot(
 
   return { root, listFiles, resolvePath, readFile };
 }
+
+const rejectEscapingSymlinkSegments = Effect.fn("rejectEscapingSymlinkSegments")(function* (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  root: string,
+  candidate: string,
+  sourcePath: string,
+) {
+  let current = root;
+  for (const segment of path.relative(root, candidate).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    const link = yield* Effect.result(fs.readLink(current));
+    if (Result.isFailure(link)) continue;
+    const target = path.resolve(path.dirname(current), link.success);
+    if (escapesRoot(path, path.relative(root, target))) {
+      return yield* new SnapshotPathRejected({
+        path: sourcePath,
+        reason: "The path resolves through a symlink outside the pinned snapshot.",
+      });
+    }
+  }
+});
 
 function materializeEntry(
   fs: FileSystem.FileSystem,
