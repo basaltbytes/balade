@@ -5,12 +5,12 @@
 
 import Markdoc from "@markdoc/markdoc";
 import type { Node, ValidateError } from "@markdoc/markdoc";
-import type { CheckDiagnostic } from "../payload/types.js";
+import type { CheckDiagnostic } from "../contract/types.js";
 import { getPreset, presetNames } from "../preset/registry.js";
 import type { Preset } from "../preset/types.js";
-import { MARKDOC_CONFIG } from "../schema/config.js";
-import { parseFrontmatter, frontmatterLine, type Frontmatter } from "../schema/frontmatter.js";
-import { CORE_TAG_NAMES } from "../schema/tags.js";
+import { MARKDOC_CONFIG } from "./config.js";
+import { parseFrontmatter, frontmatterLine, type Frontmatter } from "./frontmatter.js";
+import { CORE_TAG_NAMES } from "./tags.js";
 
 /** A document that cleared the frontmatter gate — `compileDocument` takes only this shape. */
 export interface ValidDocument {

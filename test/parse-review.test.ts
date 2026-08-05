@@ -3,9 +3,9 @@
 
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { parseReviewJson, parseReviewState } from "../src/payload/parse-review.js";
-import { ReviewState as ReviewStateSchema } from "../src/payload/schema.js";
-import type { ReviewState } from "../src/payload/types.js";
+import { parseReviewJson, parseReviewState } from "../src/contract/parse-review.js";
+import { ReviewState as ReviewStateSchema } from "../src/contract/schema.js";
+import type { ReviewState } from "../src/contract/types.js";
 
 const state: ReviewState = {
   version: 1,

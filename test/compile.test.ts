@@ -1,9 +1,9 @@
 import { basename } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { loadWalkthrough, type LoadResult } from "../src/compile/load.js";
-import type { Payload } from "../src/payload/types.js";
-import { sha256 } from "../src/resolve/hash.js";
+import { loadWalkthrough, type LoadResult } from "../src/walkthrough/load.js";
+import type { Payload } from "../src/contract/types.js";
+import { sha256 } from "../src/contract/hash.js";
 import { firstBlock } from "./support/blocks.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";

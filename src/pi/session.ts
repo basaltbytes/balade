@@ -10,7 +10,7 @@ import type { Model } from "@earendil-works/pi-ai";
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { Effect, FileSystem, Option, Path, Result } from "effect";
-import { CommandExecutor, gitOut } from "../resolve/exec.js";
+import { CommandExecutor, gitOut } from "../shell.js";
 import type { AuthoringRequest } from "./author.js";
 import { AUTHORING_LIMITS, AUTHORING_SYSTEM_PROMPT } from "./authoring.js";
 import {

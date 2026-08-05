@@ -17,15 +17,15 @@ import type {
   PatternItem,
   RangeEcho,
   TestItem,
-} from "../payload/types.js";
+} from "../contract/types.js";
 import type { MacroApi, Preset } from "../preset/types.js";
 import { presetOfTag } from "../preset/registry.js";
-import type { ResolveContext } from "../resolve/context.js";
-import { countEntries, isGettext, poLanguage } from "../resolve/gettext.js";
-import { matchesGlob } from "../resolve/glob.js";
-import { langOf } from "../resolve/lang.js";
-import { CHILD_TAGS, FILE_STATUSES, statusList } from "../schema/tags.js";
-import { diagramBlock } from "./diagram.js";
+import type { ResolveContext } from "../contract/context.js";
+import { countEntries, isGettext, poLanguage } from "./gettext.js";
+import { matchesGlob } from "./glob.js";
+import { langOf } from "../contract/lang.js";
+import { CHILD_TAGS, FILE_STATUSES, statusList } from "./tags.js";
+import { diagramBlock } from "../contract/diagram.js";
 import { bodyInline, inlineOf, mdNodesOf, paragraphsOf, plainText } from "./inline.js";
 
 export interface CompileEnv {

@@ -12,10 +12,14 @@
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { loadWalkthrough, type LoadError, type LoadResult } from "../compile/load.js";
-import { CommandExecutor, gitOut, type CommandFailed } from "../resolve/exec.js";
-import { repoSlug, resolveCommit } from "../resolve/git.js";
-import { frontmatterBlock, parseFrontmatter, type Frontmatter } from "../schema/frontmatter.js";
+import { loadWalkthrough, type LoadError, type LoadResult } from "../walkthrough/load.js";
+import { CommandExecutor, gitOut, type CommandFailed } from "../shell.js";
+import { repoSlug, resolveCommit } from "../git/git.js";
+import {
+  frontmatterBlock,
+  parseFrontmatter,
+  type Frontmatter,
+} from "../walkthrough/frontmatter.js";
 
 /** What one index row needs, read straight from the file and from git. */
 export interface IndexRow {

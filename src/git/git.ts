@@ -6,15 +6,15 @@
 
 import { Effect, Option, Schema } from "effect";
 import { basename, win32 } from "node:path";
-import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../payload/types.js";
+import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../contract/types.js";
 import {
   readPullIntentClaims,
   type PullIntentClaims,
   type PullNotice,
   type PullRequestClaimsSource,
-} from "../pr/intent.js";
-import type { PrTarget } from "../pr/target.js";
-import type { ResolveContext } from "../resolve/context.js";
+} from "./intent.js";
+import type { PrTarget } from "./pr.js";
+import type { ResolveContext } from "../contract/context.js";
 import { changedLines, splitDiff } from "./diff.js";
 import {
   firstLine,
@@ -23,9 +23,9 @@ import {
   gitToplevel,
   type CommandFailed,
   type NotARepository,
-} from "./exec.js";
-import { sha256 } from "./hash.js";
-import { langOf } from "./lang.js";
+} from "../shell.js";
+import { sha256 } from "../contract/hash.js";
+import { langOf } from "../contract/lang.js";
 
 export interface ResolveOptions {
   /** Any directory inside the repository. */

@@ -1,11 +1,7 @@
 /** Command layer that keeps real Git while replacing only the optional gh seam. */
 
 import { Effect, Layer } from "effect";
-import {
-  CommandExecutor,
-  CommandFailed,
-  type CommandExecutorShape,
-} from "../../src/resolve/exec.js";
+import { CommandExecutor, CommandFailed, type CommandExecutorShape } from "../../src/shell.js";
 
 type GhExecutor = (args: readonly string[], cwd: string) => Effect.Effect<string, CommandFailed>;
 

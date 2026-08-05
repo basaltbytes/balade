@@ -4,7 +4,7 @@
  * would otherwise inflate every number.
  */
 
-import { fileName } from "./paths.js";
+import { fileName } from "../contract/paths.js";
 
 export interface EntryCounts {
   new?: number;

@@ -1,9 +1,9 @@
 /** A filesystem snapshot containing only one pinned Git tree. */
 
 import { Effect, FileSystem, Option, Path, Result, Schema } from "effect";
-import { sha256 } from "../resolve/hash.js";
-import { CommandExecutor, type CommandExecutorShape } from "../resolve/exec.js";
-import { escapesRoot, gitPath } from "../resolve/paths.js";
+import { sha256 } from "../contract/hash.js";
+import { CommandExecutor, type CommandExecutorShape } from "../shell.js";
+import { escapesRoot, gitPath } from "../contract/paths.js";
 
 const TREE_DIRECTORY = "tree";
 const ACCESS_FILE = "accessed";

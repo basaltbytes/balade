@@ -5,8 +5,8 @@
  */
 
 import type { Node, Schema } from "@markdoc/markdoc";
-import type { Block, FieldRow, Inline } from "../payload/types.js";
-import type { ResolveContext } from "../resolve/context.js";
+import type { Block, FieldRow, Inline } from "../contract/types.js";
+import type { ResolveContext } from "../contract/context.js";
 
 /** A diagnostic a macro raises; the compiler fills in file and line. */
 export interface MacroDiagnostic {

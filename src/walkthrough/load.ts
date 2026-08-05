@@ -4,10 +4,10 @@
  */
 
 import { Effect, FileSystem, Match, Path, Schema } from "effect";
-import type { CheckDiagnostic, Payload, RangeEcho } from "../payload/types.js";
-import type { CommandFailed } from "../resolve/exec.js";
-import { resolveContext, type ResolveError } from "../resolve/git.js";
-import { repoRelative, type PathResolutionFailed } from "../resolve/paths.js";
+import type { CheckDiagnostic, Payload, RangeEcho } from "../contract/types.js";
+import type { CommandFailed } from "../shell.js";
+import { resolveContext, type ResolveError } from "../git/git.js";
+import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
 import { compileDocument, referencedFiles } from "./compile.js";
 import { parseDocument, type ValidDocument } from "./document.js";
 

@@ -1,4 +1,4 @@
-import type { AuthorChangedFile, AuthorDraft } from "../../src/generate/author.js";
+import type { AuthorChangedFile, AuthorDraft } from "../../src/pi/author.js";
 
 export type AuthoringTranscriptStep =
   | {

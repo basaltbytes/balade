@@ -10,15 +10,15 @@
 
 import { Effect, Match, Option, Schema } from "effect";
 import { describeFailure } from "../failure.js";
-import { parseReviewState } from "../payload/parse-review.js";
+import { parseReviewState } from "../contract/parse-review.js";
 import type {
   CheckDiagnostic,
   IndexEntry,
   IndexPayload,
   Payload,
   ReviewState,
-} from "../payload/types.js";
-import { ReviewStateStore, type ReviewStateStoreShape } from "../state/store.js";
+} from "../contract/types.js";
+import { ReviewStateStore, type ReviewStateStoreShape } from "../state.js";
 import { PayloadCache, type PayloadCacheShape } from "./cache.js";
 import { ServerRepo, type ServerRepoShape } from "./repo.js";
 

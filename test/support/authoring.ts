@@ -7,10 +7,10 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { WalkthroughAuthor } from "../../src/generate/author.js";
-import { piWalkthroughAuthorLayer } from "../../src/generate/pi.js";
+import { WalkthroughAuthor } from "../../src/pi/author.js";
+import { piWalkthroughAuthorLayer } from "../../src/pi/client.js";
 import { shellLayer } from "../../src/live.js";
-import type { PullSnapshot } from "../../src/resolve/git.js";
+import type { PullSnapshot } from "../../src/git/git.js";
 import type {
   AuthoringDecisionExpectation,
   AuthoringEvalCase,

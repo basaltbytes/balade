@@ -4,11 +4,11 @@
  */
 
 import { Result, Schema, SchemaIssue } from "effect";
-import { Frontmatter as FrontmatterSchema } from "../payload/schema.js";
-import type { CheckDiagnostic, Frontmatter as FrontmatterType } from "../payload/types.js";
+import { Frontmatter as FrontmatterSchema } from "../contract/schema.js";
+import type { CheckDiagnostic, Frontmatter as FrontmatterType } from "../contract/types.js";
 import { parse as parseYaml } from "yaml";
 
-export type { Frontmatter } from "../payload/types.js";
+export type { Frontmatter } from "../contract/types.js";
 
 const SCHEMA_VERSION = 1;
 

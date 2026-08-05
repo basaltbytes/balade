@@ -9,14 +9,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import type { LoadResult } from "../src/compile/load.js";
-import type { IndexPayload, Payload, ReviewState } from "../src/payload/types.js";
+import type { LoadResult } from "../src/walkthrough/load.js";
+import type { IndexPayload, Payload, ReviewState } from "../src/contract/types.js";
 import { PayloadCache } from "../src/server/cache.js";
 import { ServerRepo } from "../src/server/repo.js";
 import { startReviewSession } from "../src/server/review.js";
 import { findAppBundle, serve } from "../src/server/serve.js";
 import { prepareSession, type Session } from "../src/server/session.js";
-import { ReviewStateStore, stateFileName } from "../src/state/store.js";
+import { ReviewStateStore, stateFileName } from "../src/state.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 

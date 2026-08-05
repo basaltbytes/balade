@@ -5,7 +5,7 @@
  */
 
 import { Context, Effect, Option, Redacted, Schema, Scope } from "effect";
-import type { PullIntentClaims } from "../pr/intent.js";
+import type { PullIntentClaims } from "../git/intent.js";
 
 export const AuthorProviderId = Schema.NonEmptyString.pipe(
   Schema.brand("@balade/AuthorProviderId"),

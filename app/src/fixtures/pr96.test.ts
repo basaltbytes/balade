@@ -1,6 +1,6 @@
 import { expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
-import { Payload as PayloadSchema } from "../../../src/payload/schema";
+import { Payload as PayloadSchema } from "../../../src/contract/schema";
 import { pr96 } from "./pr96";
 
 it.effect("keeps the representative PR fixture inside the payload contract", () =>

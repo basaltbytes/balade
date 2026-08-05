@@ -5,8 +5,8 @@
  */
 
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
-import { gitOut, gitToplevel, type CommandFailed, type NotARepository } from "../resolve/exec.js";
-import { frontmatterBlock } from "../schema/frontmatter.js";
+import { gitOut, gitToplevel, type CommandFailed, type NotARepository } from "../shell.js";
+import { frontmatterBlock } from "./frontmatter.js";
 
 const WALKTHROUGH_PATH = /(?:^|\/)walkthroughs\/[^/]+\.md$/;
 

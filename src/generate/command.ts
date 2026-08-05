@@ -3,8 +3,8 @@
 import { Context, Effect, Option, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { formatText } from "../check/report.js";
-import { parsePrTarget } from "../pr/target.js";
-import { resolvePullHead } from "../resolve/git.js";
+import { parsePrTarget } from "../git/pr.js";
+import { resolvePullHead } from "../git/git.js";
 import { runReviewSession } from "../review/run.js";
 import { writeStderr, writeStdout } from "../terminal.js";
 import {
@@ -20,7 +20,7 @@ import {
   type LoginNotification,
   type LoginPrompt,
   type LoginSecretPrompt,
-} from "./author.js";
+} from "../pi/author.js";
 import { generateErrorMessage, runGeneration, type GenerateError } from "./run.js";
 import {
   matchingModels,

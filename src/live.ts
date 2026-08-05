@@ -2,9 +2,9 @@
 
 import { NodeServices } from "@effect/platform-node";
 import { Layer } from "effect";
-import { piWalkthroughAuthorLive } from "./generate/pi.js";
+import { piWalkthroughAuthorLive } from "./pi/client.js";
 import { PrLocator } from "./pr/locate.js";
-import { CommandExecutor } from "./resolve/exec.js";
+import { CommandExecutor } from "./shell.js";
 import { BrowserLauncher } from "./server/browser.js";
 
 /** Host services and the process adapters used by the effectful shell. */

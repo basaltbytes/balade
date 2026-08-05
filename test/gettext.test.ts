@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { FastCheck } from "effect/testing";
-import { countEntries, parsePo, poLanguage } from "../src/resolve/gettext.js";
+import { countEntries, parsePo, poLanguage } from "../src/walkthrough/gettext.js";
 
 const poEntries = FastCheck.uniqueArray(
   FastCheck.tuple(

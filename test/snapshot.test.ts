@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
-import { openPinnedRepositorySnapshot } from "../src/generate/snapshot.js";
+import { openPinnedRepositorySnapshot } from "../src/pi/snapshot.js";
 import { createFixtureRepo } from "./support/repo.js";
 import { provideLive } from "./support/effect.js";
 

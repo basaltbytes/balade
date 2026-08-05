@@ -4,8 +4,8 @@
  */
 
 import type { Node, Schema, ValidationError } from "@markdoc/markdoc";
-import { diagramBlock } from "../compile/diagram.js";
-import type { Block, FieldRow, Inline } from "../payload/types.js";
+import { diagramBlock } from "../contract/diagram.js";
+import type { Block, FieldRow, Inline } from "../contract/types.js";
 import type { MacroApi, Preset, PresetTag } from "./types.js";
 
 /** Relational kinds carry a comodel; `check` fails when one is missing. */

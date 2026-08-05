@@ -5,8 +5,8 @@
  * of every code range, so an authoring agent self-verifies in one pass.
  */
 
-import type { CheckDiagnostic, CheckReport, RangeEcho } from "../payload/types.js";
-import type { CheckOutcome } from "./run.js";
+import type { CheckDiagnostic, CheckReport, RangeEcho } from "../contract/types.js";
+import type { CheckOutcome } from "../walkthrough/validate.js";
 
 export function formatJson(outcome: CheckOutcome): string {
   return JSON.stringify({ ok: outcome._tag === "CheckPassed", reports: outcome.reports }, null, 2);

@@ -11,11 +11,11 @@ import {
   NO_WALKTHROUGH,
   NOT_A_REPO,
   type DiscoveryError,
-} from "../check/discover.js";
-import { softReport } from "../check/run.js";
-import { loadWalkthrough, type LoadError } from "../compile/load.js";
+} from "../walkthrough/discover.js";
+import { softReport } from "../walkthrough/validate.js";
+import { loadWalkthrough, type LoadError } from "../walkthrough/load.js";
 import { describeFailure } from "../failure.js";
-import type { CheckReport } from "../payload/types.js";
+import type { CheckReport } from "../contract/types.js";
 import { exportHtml, type ExportAssets } from "./html.js";
 
 export interface BuildOptions {

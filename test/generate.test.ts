@@ -13,9 +13,9 @@ import {
   WalkthroughAuthor,
   type AuthorModel,
   type AuthorProgress,
-} from "../src/generate/author.js";
-import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
-import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/authoring.js";
+} from "../src/pi/author.js";
+import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
+import { AUTHORING_SYSTEM_PROMPT } from "../src/pi/authoring.js";
 import { renderDraft, runGeneration, slugifyTitle } from "../src/generate/run.js";
 import {
   matchingModels,
@@ -24,7 +24,7 @@ import {
   preferredModel,
 } from "../src/generate/select.js";
 import { shellLayer } from "../src/live.js";
-import type { PullSnapshot } from "../src/resolve/git.js";
+import type { PullSnapshot } from "../src/git/git.js";
 import { createFixtureRepo } from "./support/repo.js";
 
 const PINNED_LINE = "from odoo import api, fields, models";

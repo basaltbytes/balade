@@ -5,7 +5,7 @@
  */
 
 import type { Node } from "@markdoc/markdoc";
-import type { Inline, MdNode } from "../payload/types.js";
+import type { Inline, MdNode } from "../contract/types.js";
 
 /** Joins neighbouring strings so the payload carries one text run per span. */
 function merge(parts: Inline[]): Inline[] {

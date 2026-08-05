@@ -1,7 +1,7 @@
 /** Author-controlled pull-request claims collected for walkthrough generation. */
 
 import { Array as Arr, Effect, Option, Schema } from "effect";
-import { firstLine, gh, gitOut } from "../resolve/exec.js";
+import { firstLine, gh, gitOut } from "../shell.js";
 
 export const PULL_COMMIT_SUBJECT_LIMIT = 20;
 

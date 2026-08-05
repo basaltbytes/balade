@@ -5,8 +5,8 @@
  */
 
 import { Effect, Path, Result } from "effect";
-import { loadErrorDiagnostic, loadWalkthrough, type LoadResult } from "../compile/load.js";
-import type { CheckReport } from "../payload/types.js";
+import { loadErrorDiagnostic, loadWalkthrough, type LoadResult } from "./load.js";
+import type { CheckReport } from "../contract/types.js";
 import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discover.js";
 
 export interface CheckFileOptions {

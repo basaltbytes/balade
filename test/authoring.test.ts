@@ -8,9 +8,9 @@ import {
   AUTHORING_SYSTEM_PROMPT,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
   initialAuthoringPrompt,
-} from "../src/generate/authoring.js";
+} from "../src/pi/authoring.js";
 import { renderDraft } from "../src/generate/run.js";
-import type { PullSnapshot } from "../src/resolve/git.js";
+import type { PullSnapshot } from "../src/git/git.js";
 
 const source: PullSnapshot = {
   root: "/fixture",

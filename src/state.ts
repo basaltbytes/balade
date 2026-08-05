@@ -10,9 +10,27 @@
  * report or log deliberately.
  */
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { parseReviewJson } from "../payload/parse-review.js";
-import type { ReviewState } from "../payload/types.js";
+import { parseReviewJson } from "./contract/parse-review.js";
+import type { ReviewState } from "./contract/types.js";
+
+/* ------------------------------------------------------------------ */
+/* Predictable balade-owned state below the user's home directory      */
+/* ------------------------------------------------------------------ */
+
+export function baladeStateDirectory(): string {
+  return join(homedir(), ".balade");
+}
+
+export function baladePiAgentDirectory(): string {
+  return join(baladeStateDirectory(), "pi");
+}
+
+export function baladeSnapshotCacheDirectory(): string {
+  return join(baladeStateDirectory(), "cache", "snapshots");
+}
 
 const STATE_DIR = ".balade";
 

@@ -2,7 +2,7 @@
 
 import { Effect, Match } from "effect";
 import { formatText } from "../check/report.js";
-import type { CheckReport } from "../payload/types.js";
+import type { CheckReport } from "../contract/types.js";
 import { launchBrowser, type BrowserMode } from "../server/browser.js";
 import { startReviewSession, type ReviewServerFailed } from "../server/review.js";
 import { findAppBundle, type AppBundleMissing, type AppBundleReadFailed } from "../server/serve.js";

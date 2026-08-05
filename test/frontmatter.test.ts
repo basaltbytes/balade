@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
-import { Frontmatter as FrontmatterSchema } from "../src/payload/schema.js";
-import { parseFrontmatter } from "../src/schema/frontmatter.js";
+import { Frontmatter as FrontmatterSchema } from "../src/contract/schema.js";
+import { parseFrontmatter } from "../src/walkthrough/frontmatter.js";
 
 describe("frontmatter schema diagnostics", () => {
   it.prop(

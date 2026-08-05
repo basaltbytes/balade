@@ -19,12 +19,12 @@ import type {
   Payload,
   RangeEcho,
   Section,
-} from "../payload/types.js";
-import type { ResolveContext } from "../resolve/context.js";
-import { sha256 } from "../resolve/hash.js";
-import { fileName } from "../resolve/paths.js";
-import { frontmatterLine } from "../schema/frontmatter.js";
-import { SECTION_ID } from "../schema/tags.js";
+} from "../contract/types.js";
+import type { ResolveContext } from "../contract/context.js";
+import { sha256 } from "../contract/hash.js";
+import { fileName } from "../contract/paths.js";
+import { frontmatterLine } from "./frontmatter.js";
+import { SECTION_ID } from "./tags.js";
 import { attrStrings, compileBlocks, lineOf, short, type CompileEnv } from "./blocks.js";
 import type { ValidDocument } from "./document.js";
 

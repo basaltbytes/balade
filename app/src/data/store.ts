@@ -1,7 +1,7 @@
 /** Review-state persistence as an Effect service with local and served layers. */
 
 import { Context, Effect, Layer, Option, Schema, Semaphore } from "effect";
-import { parseReviewJson } from "../../../src/payload/parse-review";
+import { parseReviewJson } from "../../../src/contract/parse-review";
 import type { ReviewState } from "../contract";
 import { BrowserFetch, BrowserStorage, type FetchLike, type StorageLike } from "./browser";
 

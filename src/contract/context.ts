@@ -5,7 +5,7 @@
  */
 
 import type { Option } from "effect";
-import type { FileEntry, Payload } from "../payload/types.js";
+import type { FileEntry, Payload } from "./types.js";
 
 export interface ResolveContext {
   /** Absolute path of the repository root. */

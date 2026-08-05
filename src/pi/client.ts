@@ -17,8 +17,8 @@ import {
 } from "effect";
 import { join } from "node:path";
 import { describeFailure } from "../failure.js";
-import { CommandExecutor } from "../resolve/exec.js";
-import { baladePiAgentDirectory, baladeSnapshotCacheDirectory } from "../state/paths.js";
+import { CommandExecutor } from "../shell.js";
+import { baladePiAgentDirectory, baladeSnapshotCacheDirectory } from "../state.js";
 import {
   AuthorDiscoveryFailed,
   AuthorDraft,
@@ -43,7 +43,7 @@ import {
   type LoginSecretPrompt,
 } from "./author.js";
 import { initialAuthoringPrompt, repairAuthoringPrompt } from "./authoring.js";
-import { createPiSession, releasePiSession, type PiSessionDependencies } from "./pi-session.js";
+import { createPiSession, releasePiSession, type PiSessionDependencies } from "./session.js";
 
 export interface PiAdapterDependencies extends PiSessionDependencies {
   readonly settingsManager: SettingsManager;

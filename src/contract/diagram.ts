@@ -4,7 +4,7 @@
  */
 
 import type { Node } from "@markdoc/markdoc";
-import type { DiagramBlock, DiagramEdge, DiagramNode, Inline } from "../payload/types.js";
+import type { DiagramBlock, DiagramEdge, DiagramNode, Inline } from "./types.js";
 
 const CHANGES = ["new", "mod", "ctx"] as const;
 const EDGE_KINDS = ["new", "mod", "ctx", "derived"] as const;
