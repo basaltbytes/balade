@@ -91,6 +91,7 @@ can supply both ids and skip the picker:
 ```sh
 npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --provider openai-codex
+npx balade generate 96 --preset odoo # activate a preset's tags for this walkthrough
 npx balade generate 96 --dir docs/walkthroughs
 npx balade generate 96 --no-browser # serve and print the URL without launching a browser
 npx balade generate 96 --no-open    # generate, print the path and exit
@@ -109,6 +110,13 @@ same name. The author works within bounded diff and source inspection budgets so
 the baseline draft stays focused. A failed check goes back to the model for at
 most two repair turns. `--dir` is repository-relative; paths through symlinks
 outside the repository and paths inside `.git` are rejected.
+
+`--preset <name>` activates a preset for the run: balade teaches the author that
+preset's tags and stamps `preset:` in the frontmatter, so the tags are active
+when `check` reads the draft. Without the flag no preset is used, and the author
+is told not to invent one. `odoo` is the preset that ships today; an unknown name
+fails before any model runs. A preset can also be activated by hand — add
+`preset: odoo` to a walkthrough's frontmatter.
 
 Generated frontmatter records the prompt, template, and rubric version under
 `meta.balade-authoring`. See the [authoring package](docs/authoring-package.md)

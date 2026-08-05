@@ -19,6 +19,7 @@ import {
   type AuthorProgress,
   type AuthorProgressMode,
   type AuthorUsage,
+  type AuthoringPreset,
 } from "../../pi/author.js";
 import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../../pi/authoring.js";
 
@@ -52,6 +53,8 @@ export interface RunGenerationOptions {
   readonly source: PullSnapshot;
   readonly model: AuthorModel;
   readonly directory: string;
+  /** Named by `--preset`; teaches the author its tags and stamps the frontmatter. */
+  readonly preset?: AuthoringPreset;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
 }
@@ -103,6 +106,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       claims: options.source.claims,
       files: options.source.files,
       model: options.model,
+      ...(options.preset === undefined ? {} : { preset: options.preset }),
       progressMode: options.progressMode,
       progress: options.progress,
     });
@@ -120,7 +124,9 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       options.directory,
     );
     yield* fs
-      .writeFileString(file, renderDraft(options.source, initial.draft), { flag: "wx" })
+      .writeFileString(file, renderDraft(options.source, initial.draft, options.preset), {
+        flag: "wx",
+      })
       .pipe(
         Effect.mapError((cause) =>
           cause.reason._tag === "AlreadyExists"
@@ -137,9 +143,12 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       turn = yield* session
         .repair(formatText({ reports: [report] }))
         .pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
-      yield* replaceDraft(fs, path, file, renderDraft(options.source, turn.draft)).pipe(
-        Effect.mapError((cause) => new RepairFailed({ file, report, cause })),
-      );
+      yield* replaceDraft(
+        fs,
+        path,
+        file,
+        renderDraft(options.source, turn.draft, options.preset),
+      ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
       report = yield* checkGeneratedDraft(options.source.root, file);
     }
 
@@ -246,14 +255,21 @@ const replaceDraft = Effect.fn("replaceDraft")(
 const isGitMetadata = (path: Path.Path, relative: string): boolean =>
   relative.toLowerCase() === ".git" || relative.toLowerCase().startsWith(`.git${path.sep}`);
 
-export function renderDraft(source: PullSnapshot, draft: AuthorDraft): string {
+export function renderDraft(
+  source: PullSnapshot,
+  draft: AuthorDraft,
+  preset?: AuthoringPreset,
+): string {
+  /* An explicit `--preset` is the authority: the model is told not to set one,
+     and a stamped preset is what makes its tags active at check time. */
+  const active = preset?.name ?? draft.preset;
   const frontmatter = stringifyYaml({
     walkthrough: 1,
     title: draft.title,
     pr: source.pull.number,
     commit: source.pin,
     meta: { ...draft.meta, [AUTHORING_META_KEY]: AUTHORING_PACKAGE_VERSION },
-    ...(draft.preset === undefined ? {} : { preset: draft.preset }),
+    ...(active === undefined ? {} : { preset: active }),
   }).trimEnd();
   return `---\n${frontmatter}\n---\n\n${draft.body.trim()}\n`;
 }

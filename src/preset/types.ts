@@ -47,4 +47,11 @@ export interface Preset {
   tags: Record<string, PresetTag>;
   /** Tone chips beside a core `method` signature, derived from its decorator. */
   methodChips(decorator: string | undefined): string[] | undefined;
+  /**
+   * What an authoring model must know to use these tags: the exact syntax of
+   * each one and when it carries review signal. `generate --preset <name>` puts
+   * this in the system prompt. The preset owns the text so the generation
+   * engine needs no knowledge of any particular preset.
+   */
+  authoring: string;
 }

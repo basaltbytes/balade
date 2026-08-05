@@ -15,7 +15,7 @@ import {
   type AuthorProgress,
 } from "../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
-import { AUTHORING_SYSTEM_PROMPT } from "../src/pi/authoring.js";
+import { authoringSystemPrompt } from "../src/pi/authoring.js";
 import { renderDraft, runGeneration, slugifyTitle } from "../src/commands/generate/pipeline.js";
 import {
   matchingModels,
@@ -203,8 +203,8 @@ describe("the Pi adapter", () => {
       expect(secondRequest).toContain("submit_walkthrough");
       expect(secondRequest).not.toContain('"bash"');
       expect(secondRequest).not.toContain('"write_file"');
-      expect(AUTHORING_SYSTEM_PROMPT).toContain("no more than 8 diff reads");
-      expect(AUTHORING_SYSTEM_PROMPT).toContain("hard maximum of 10 code ranges");
+      expect(authoringSystemPrompt()).toContain("no more than 8 diff reads");
+      expect(authoringSystemPrompt()).toContain("hard maximum of 10 code ranges");
       expect(progress).toContainEqual({
         _tag: "AuthorAssistantText",
         text: "Inspecting the pinned source.",

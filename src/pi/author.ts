@@ -106,6 +106,12 @@ export interface AuthorChangedFile {
   readonly oldPath?: string;
 }
 
+/** A preset's name and the guidance that teaches its tags, supplied by the caller. */
+export interface AuthoringPreset {
+  readonly name: string;
+  readonly authoring: string;
+}
+
 export interface AuthoringRequest {
   readonly root: string;
   readonly pin: string;
@@ -121,6 +127,8 @@ export interface AuthoringRequest {
   readonly claims: PullIntentClaims;
   readonly files: readonly AuthorChangedFile[];
   readonly model: AuthorModel;
+  /** Active preset, when the command line named one. */
+  readonly preset?: AuthoringPreset;
   readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;
 }
