@@ -42,6 +42,8 @@ describe("check", () => {
     repo.addWalkthrough("valid.md", "valid.md");
     repo.addWalkthrough("errors.md", "errors.md");
     repo.addWalkthrough("duplicate.md", "duplicate.md");
+    /* `generate` writes here by default; discovery must still see it. */
+    repo.addWalkthrough("dotted.md", "valid.md", ".agents/walkthroughs");
     valid = await Effect.runPromise(
       provideLive(
         checkOne({
@@ -270,6 +272,7 @@ describe("check", () => {
     Effect.gen(function* () {
       const outcome = yield* provideLive(runCheck({ cwd: repo.dir, useGh: false }));
       expect(outcome.reports.map((report) => report.file)).toEqual([
+        ".agents/walkthroughs/dotted.md",
         "walkthroughs/duplicate.md",
         "walkthroughs/errors.md",
         "walkthroughs/valid.md",

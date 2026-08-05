@@ -467,6 +467,13 @@ context from that written pin with Git alone and never probe GitHub a second
 time. Changed-file summaries stay lightweight until compilation asks for blob
 content.
 
+Generated walkthroughs default to `.agents/walkthroughs/` (revised 2026-08-05):
+a walkthrough is an agent-authored artifact, and grouping it with the other
+agent-facing files keeps it out of the way of the source tree a reviewer reads.
+The location is a default, not a convention change — discovery still matches
+git-tracked `**/walkthroughs/*.md` at any depth, so the dot-directory is found
+by the same rule as a root `walkthroughs/`, and `--dir` still overrides it.
+
 Output paths are repository-relative, exclude `.git`, and are checked through
 their nearest existing canonical ancestor before any directory is created.
 The first draft uses an exclusive create. Each repair is written to a temporary
