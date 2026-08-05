@@ -3,7 +3,7 @@
  * baked as `window.__BALADE__` ahead of the app. Pure string transforms.
  */
 
-import type { Payload } from "../contract/types.js";
+import type { Payload } from "../../contract/types.js";
 
 export interface ExportAssets {
   /** The export bundle's single entry chunk. */

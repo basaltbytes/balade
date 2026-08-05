@@ -9,7 +9,7 @@ import {
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
   initialAuthoringPrompt,
 } from "../src/pi/authoring.js";
-import { renderDraft } from "../src/generate/run.js";
+import { renderDraft } from "../src/commands/generate/run.js";
 import type { PullSnapshot } from "../src/git/git.js";
 
 const source: PullSnapshot = {

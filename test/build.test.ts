@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { runBuild as runBuildEffect, type BuildOptions } from "../src/build/run.js";
+import { runBuild as runBuildEffect, type BuildOptions } from "../src/commands/build/run.js";
 import type { Payload } from "../src/contract/types.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";

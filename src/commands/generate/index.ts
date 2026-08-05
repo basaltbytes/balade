@@ -2,11 +2,10 @@
 
 import { Context, Effect, Option, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
-import { formatText } from "../check/report.js";
-import { parsePrTarget } from "../git/pr.js";
-import { resolvePullHead } from "../git/git.js";
-import { runReviewSession } from "../review/run.js";
-import { writeStderr, writeStdout } from "../terminal.js";
+import { parsePrTarget } from "../../git/pr.js";
+import { resolvePullHead } from "../../git/git.js";
+import { runReviewSession } from "../../server/review.js";
+import { formatText, stopMessage, writeStderr, writeStdout } from "../../terminal.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
@@ -20,7 +19,7 @@ import {
   type LoginNotification,
   type LoginPrompt,
   type LoginSecretPrompt,
-} from "../pi/author.js";
+} from "../../pi/author.js";
 import { generateErrorMessage, runGeneration, type GenerateError } from "./run.js";
 import {
   matchingModels,
@@ -444,8 +443,3 @@ function loginErrorMessage(error: LoginFailed): string {
       return `Pi could not authenticate ${error.provider}. Run the pi CLI login, then retry balade generate.`;
   }
 }
-
-const stopMessage = (message: string): void => {
-  writeStderr(`${message}\n`);
-  process.exitCode = 1;
-};

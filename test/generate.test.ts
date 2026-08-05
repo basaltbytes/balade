@@ -16,14 +16,14 @@ import {
 } from "../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
 import { AUTHORING_SYSTEM_PROMPT } from "../src/pi/authoring.js";
-import { renderDraft, runGeneration, slugifyTitle } from "../src/generate/run.js";
+import { renderDraft, runGeneration, slugifyTitle } from "../src/commands/generate/run.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
   modelsForPicker,
   preferredModel,
-} from "../src/generate/select.js";
-import { shellLayer } from "../src/live.js";
+} from "../src/commands/generate/select.js";
+import { shellLayer } from "./support/effect.js";
 import type { PullSnapshot } from "../src/git/git.js";
 import { createFixtureRepo } from "./support/repo.js";
 

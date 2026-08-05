@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { WalkthroughAuthor } from "../../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../../src/pi/client.js";
-import { shellLayer } from "../../src/live.js";
+import { shellLayer } from "./effect.js";
 import type { PullSnapshot } from "../../src/git/git.js";
 import type {
   AuthoringDecisionExpectation,

@@ -11,11 +11,11 @@ import {
   NO_WALKTHROUGH,
   NOT_A_REPO,
   type DiscoveryError,
-} from "../walkthrough/discover.js";
-import { softReport } from "../walkthrough/validate.js";
-import { loadWalkthrough, type LoadError } from "../walkthrough/load.js";
-import { describeFailure } from "../failure.js";
-import type { CheckReport } from "../contract/types.js";
+} from "../../walkthrough/discover.js";
+import { softReport } from "../../walkthrough/validate.js";
+import { loadWalkthrough, type LoadError } from "../../walkthrough/load.js";
+import { describeFailure } from "../../failure.js";
+import type { CheckReport } from "../../contract/types.js";
 import { exportHtml, type ExportAssets } from "./html.js";
 
 export interface BuildOptions {
@@ -67,7 +67,7 @@ export class ExportWriteFailed extends Schema.TaggedErrorClass<ExportWriteFailed
 export type BuildError = DiscoveryError | LoadError | ExportBundleReadFailed | ExportWriteFailed;
 
 /** The export bundle ships beside the compiled CLI: `dist/cli.js` next to `dist/export/`. */
-const BUNDLE_DIR = fileURLToPath(new URL("../export/", import.meta.url));
+const BUNDLE_DIR = fileURLToPath(new URL("../../export/", import.meta.url));
 
 const EXPORT_BUNDLE_MISSING =
   `balade: no export bundle at ${BUNDLE_DIR}. In a checkout, run \`pnpm run build:app\`; ` +

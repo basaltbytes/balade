@@ -2,13 +2,13 @@
 
 import { Effect, FileSystem, Path, Result, Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
-import { formatText } from "../check/report.js";
-import { runCheck } from "../walkthrough/validate.js";
-import { discoveryErrorMessage } from "../walkthrough/discover.js";
-import { CheckReport as CheckReportSchema } from "../contract/schema.js";
-import type { CheckReport } from "../contract/types.js";
-import type { PullHeadError, PullSnapshot } from "../git/git.js";
-import { escapesRoot } from "../contract/paths.js";
+import { formatText } from "../../terminal.js";
+import { runCheck } from "../../walkthrough/validate.js";
+import { discoveryErrorMessage } from "../../walkthrough/discover.js";
+import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
+import type { CheckReport } from "../../contract/types.js";
+import type { PullHeadError, PullSnapshot } from "../../git/git.js";
+import { escapesRoot } from "../../contract/paths.js";
 import {
   AuthorSessionStartFailed,
   DraftMalformed,
@@ -19,8 +19,8 @@ import {
   type AuthorProgress,
   type AuthorProgressMode,
   type AuthorUsage,
-} from "../pi/author.js";
-import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../pi/authoring.js";
+} from "../../pi/author.js";
+import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../../pi/authoring.js";
 
 const MAX_REPAIR_ATTEMPTS = 2;
 

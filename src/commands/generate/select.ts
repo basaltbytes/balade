@@ -1,7 +1,7 @@
 /** Pure provider/model filtering; the terminal picker stays at the CLI boundary. */
 
 import { Option, Schema } from "effect";
-import type { AuthorLoginMethod, AuthorModel, AuthorModelPreference } from "../pi/author.js";
+import type { AuthorLoginMethod, AuthorModel, AuthorModelPreference } from "../../pi/author.js";
 
 export class NoProviderAuthenticated extends Schema.TaggedErrorClass<NoProviderAuthenticated>()(
   "NoProviderAuthenticated",
