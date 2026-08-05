@@ -13,9 +13,9 @@ import { cliLayer } from "./live.js";
 import type { CheckReport } from "./payload/types.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
-import { launchBrowser } from "./server/browser.js";
-import { findAppBundle, serve } from "./server/serve.js";
-import { prepareSession, sessionErrorMessage, type Selection } from "./server/session.js";
+import { runReviewSession } from "./review/run.js";
+import type { Selection } from "./server/session.js";
+import { writeStderr, writeStdout } from "./terminal.js";
 
 const VERSION = "0.1.0";
 
@@ -52,7 +52,7 @@ const check = Command.make("check", { files, json: jsonFlag }, (config) =>
   Effect.gen(function* () {
     const outcome = yield* runCheck({ cwd: process.cwd(), paths: config.files });
     yield* Effect.sync(() => {
-      process.stdout.write(config.json ? `${formatJson(outcome)}\n` : formatText(outcome));
+      writeStdout(config.json ? `${formatJson(outcome)}\n` : formatText(outcome));
       if (outcome._tag === "CheckFailed") process.exitCode = 1;
     });
   }),
@@ -87,17 +87,6 @@ const open = Command.make(
   { files: openTargets, lang: langFlag, port: portFlag, noBrowser: noBrowserFlag },
   (config) =>
     Effect.gen(function* () {
-      const appDir = yield* findAppBundle().pipe(
-        Effect.map(Option.some),
-        Effect.catchTag("AppBundleMissing", (error) =>
-          Effect.sync(() => {
-            stopMessage(error.note);
-            return Option.none<string>();
-          }),
-        ),
-      );
-      if (Option.isNone(appDir)) return;
-
       const target = parseOpenTarget(config.files);
       if (target.kind === "invalid") {
         stopMessage(target.message);
@@ -116,42 +105,14 @@ const open = Command.make(
             )
           : Option.some<Selection>(target);
       if (Option.isNone(selection)) return;
-
-      const prepared = yield* prepareSession({
-        cwd: process.cwd(),
-        selection: selection.value,
-        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-      }).pipe(
-        Effect.map(Option.some),
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            stopMessage(sessionErrorMessage(error));
-            return Option.none();
-          }),
-        ),
-      );
-      if (Option.isNone(prepared)) return;
-      return yield* Match.valueTags(prepared.value, {
-        SessionReady: ({ session }) =>
-          Effect.gen(function* () {
-            printSoft(session.reports);
-            const url = yield* serve({ appDir: appDir.value, port: config.port, api: session.api });
-            process.stdout.write(`balade is serving ${served(session.paths)} at ${url}\n`);
-            /* A launch failure is a notice, not a failure: the session stays served. */
-            yield* launchBrowser(config.noBrowser ? "headless" : "launch", url).pipe(
-              Effect.catchTag("BrowserLaunchFailed", (error) =>
-                Effect.sync(() => {
-                  process.stderr.write(
-                    `warning your browser did not open (${error.reason})\n` +
-                      `  fix Open ${error.url} yourself, or pass --no-browser.\n`,
-                  );
-                }),
-              ),
-            );
-            return yield* Effect.never;
-          }),
-        SessionNotStarted: ({ message }) => Effect.sync(() => stopMessage(message)),
-        SessionFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
+      return yield* runReviewSession({
+        session: {
+          cwd: process.cwd(),
+          selection: selection.value,
+          ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+        },
+        port: config.port,
+        browserMode: config.noBrowser ? "headless" : "launch",
       });
     }).pipe(Effect.scoped),
 ).pipe(Command.withDescription("Serve a live review session and open it in your default browser"));
@@ -161,12 +122,12 @@ const diagnosticsOnly = (reports: readonly CheckReport[]): readonly CheckReport[
   reports.map((report) => ({ ...report, ranges: [] }));
 
 const stopReports = (reports: readonly CheckReport[]): void => {
-  process.stdout.write(formatText({ reports: diagnosticsOnly(reports) }));
+  writeStdout(formatText({ reports: diagnosticsOnly(reports) }));
   process.exitCode = 1;
 };
 
 const stopMessage = (message: string): void => {
-  process.stderr.write(`${message}\n`);
+  writeStderr(`${message}\n`);
   process.exitCode = 1;
 };
 
@@ -174,12 +135,9 @@ const stopMessage = (message: string): void => {
 const printSoft = (reports: readonly CheckReport[]): void => {
   const diagnostics = diagnosticsOnly(reports);
   if (diagnostics.some((report) => report.diagnostics.length > 0)) {
-    process.stdout.write(formatText({ reports: diagnostics }));
+    writeStdout(formatText({ reports: diagnostics }));
   }
 };
-
-const served = (paths: readonly string[]): string =>
-  paths.length === 1 ? (paths[0] ?? "") : `${paths.length} walkthroughs`;
 
 const build = Command.make("build", { files: buildFile, lang: langFlag, out: outFlag }, (config) =>
   Effect.gen(function* () {
@@ -202,7 +160,7 @@ const build = Command.make("build", { files: buildFile, lang: langFlag, out: out
       Built: ({ reports, file, bytes }) =>
         Effect.sync(() => {
           printSoft(reports);
-          process.stdout.write(`balade wrote ${file} (${size(bytes)})\n`);
+          writeStdout(`balade wrote ${file} (${size(bytes)})\n`);
         }),
       BuildNotRun: ({ message }) => Effect.sync(() => stopMessage(message)),
       BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),

@@ -224,6 +224,16 @@ prints the launch failure as a warning with the URL and keeps serving;
 through `BrowserLauncher.layerWith`, so the suite exercises the real spawn
 seam without opening a browser.
 
+## A passing generation enters the live review pipeline
+
+`balade generate` now hands a checked draft directly to the same prepared-session,
+server and `BrowserLauncher` path as `balade open`. The authoring session closes
+before the review server starts; the long-lived server remains owned by the CLI
+scope. `--no-browser` keeps that session headless, while `--no-open` is the explicit
+generate-and-exit mode for scripts and CI and preserves the generated path plus
+`balade open …` hint. A draft that still has check errors never reaches session
+preparation, so its retained-file and non-zero-exit behavior is unchanged.
+
 ## Shiki ships fine-grained with a curated language map
 
 The full shiki bundle is 11 MB; the fine-grained core plus 31 hand-picked
@@ -418,10 +428,10 @@ terminal string has control sequences removed. By default, tool events collapse
 to one message per inspection phase, and detailed tool results are not
 materialized across the adapter boundary. `--verbose` opts into assistant-visible
 text, every allowlisted tool input and result, and the successful range report;
-provider-hidden reasoning remains hidden. A normal successful check prints only
-the verified range count, generated path, and the next `balade open` command;
-full diagnostics remain visible when the generated draft still needs manual
-repair.
+provider-hidden reasoning remains hidden. A normal successful generation prints
+the verified range count and generated path before entering the live review
+session. `--no-open` additionally prints the next `balade open` command and exits;
+full diagnostics remain visible when the generated draft still needs manual repair.
 
 ## Balade owns the versioned authoring package
 

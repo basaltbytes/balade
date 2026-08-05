@@ -2,10 +2,11 @@
 
 import { Context, Effect, Option, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
-import { stripVTControlCharacters } from "node:util";
 import { formatText } from "../check/report.js";
 import { parsePrTarget } from "../pr/target.js";
 import { resolvePullHead } from "../resolve/git.js";
+import { runReviewSession } from "../review/run.js";
+import { writeStderr, writeStdout } from "../terminal.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
@@ -56,9 +57,22 @@ const verbose = Flag.boolean("verbose").pipe(
   Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
 );
 
+const noOpen = Flag.boolean("no-open").pipe(
+  Flag.withDescription("Generate only: print the path and open hint without starting a server"),
+);
+
+const noBrowser = Flag.boolean("no-browser").pipe(
+  Flag.withDescription("Serve headless: print the URL without opening a browser"),
+);
+
+const port = Flag.integer("port").pipe(
+  Flag.withDescription("Review-server port; 0 asks the system for a free one"),
+  Flag.withDefault(0),
+);
+
 export const generateCommand = Command.make(
   "generate",
-  { pr: target, provider, model, directory, verbose },
+  { pr: target, provider, model, directory, verbose, noOpen, noBrowser, port },
   (config) =>
     Effect.gen(function* () {
       const pull = parsePrTarget(config.pr);
@@ -84,13 +98,24 @@ export const generateCommand = Command.make(
       });
       if (result._tag === "Generated") {
         if (progressMode === "verbose") writeStdout(formatText({ reports: [result.report] }));
-        writeStdout(
-          generationSuccessText({
-            file: result.report.file,
-            ranges: result.report.ranges.length,
-            repairs: result.repairs,
-          }),
-        );
+        const summary = {
+          file: result.report.file,
+          ranges: result.report.ranges.length,
+          repairs: result.repairs,
+        };
+        if (config.noOpen) {
+          writeStdout(generationSuccessText(summary));
+          return;
+        }
+        writeStdout(generationSummaryText(summary));
+        return yield* runReviewSession({
+          session: {
+            cwd: source.root,
+            selection: { kind: "files", paths: [result.file] },
+          },
+          port: config.port,
+          browserMode: config.noBrowser ? "headless" : "launch",
+        });
       } else {
         writeStdout(formatText({ reports: [result.report] }));
         writeStderr(
@@ -99,6 +124,7 @@ export const generateCommand = Command.make(
         process.exitCode = 1;
       }
     }).pipe(
+      Effect.scoped,
       Effect.catch((error) =>
         Effect.sync(() => {
           if (error._tag === "RepairFailed") {
@@ -108,7 +134,7 @@ export const generateCommand = Command.make(
         }),
       ),
     ),
-).pipe(Command.withDescription("Draft and validate a walkthrough for a pull request"));
+).pipe(Command.withDescription("Draft, validate, and open a walkthrough for a pull request"));
 
 const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: ModelSelection) {
   const author = yield* WalkthroughAuthor;
@@ -366,11 +392,18 @@ export function generationSuccessText(result: {
   readonly ranges: number;
   readonly repairs: number;
 }): string {
+  return generationSummaryText(result) + `Review it with:\n  balade open ${result.file}\n`;
+}
+
+export function generationSummaryText(result: {
+  readonly file: string;
+  readonly ranges: number;
+  readonly repairs: number;
+}): string {
   const ranges = `${result.ranges} code ${result.ranges === 1 ? "range" : "ranges"}`;
   return (
     `Check passed${repairSummary(result.repairs)}: ${ranges} verified.\n` +
-    `Generated ${result.file}.\n` +
-    `Review it with:\n  balade open ${result.file}\n`
+    `Generated ${result.file}.\n`
   );
 }
 
@@ -415,29 +448,4 @@ function loginErrorMessage(error: LoginFailed): string {
 const stopMessage = (message: string): void => {
   writeStderr(`${message}\n`);
   process.exitCode = 1;
-};
-
-export function sanitizeTerminalText(value: string): string {
-  let safe = "";
-  for (const character of stripVTControlCharacters(value)) {
-    const point = character.codePointAt(0);
-    if (
-      point === undefined ||
-      point === 9 ||
-      point === 10 ||
-      point === 13 ||
-      (point >= 32 && (point < 127 || point > 159))
-    ) {
-      safe += character;
-    }
-  }
-  return safe;
-}
-
-const writeStdout = (value: string): void => {
-  process.stdout.write(sanitizeTerminalText(value));
-};
-
-const writeStderr = (value: string): void => {
-  process.stderr.write(sanitizeTerminalText(value));
 };

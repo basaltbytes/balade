@@ -13,7 +13,7 @@ diffs, blobs and PR metadata are read from the repository at run time.
 No install needed; the package ships the app bundle.
 
 ```sh
-npx balade generate https://github.com/acme/tools/pull/96 # draft, check and save a walkthrough
+npx balade generate https://github.com/acme/tools/pull/96 # draft, check and open a live review
 npx balade open   walkthroughs/pr-96-loan-refactor.md   # review in your browser, live
 npx balade open   https://github.com/acme/tools/pull/96 # review a PR's walkthrough — no checkout needed
 npx balade build  walkthroughs/pr-96-loan-refactor.md   # write one self-contained HTML file
@@ -22,7 +22,9 @@ npx balade check  walkthroughs/pr-96-loan-refactor.md   # validate; exit code is
 
 - `generate` takes a pull-request URL, `#96`, or `96`. It reads the PR at an
   exact commit, asks a Pi-backed coding agent to draft the walkthrough, then
-  runs the same checks used in CI. See [Generating a walkthrough](#generating-a-walkthrough).
+  runs the same checks used in CI and opens the passing draft as a live review.
+  `--no-open` stops after generation for scripts and CI. See
+  [Generating a walkthrough](#generating-a-walkthrough).
 - `open` starts a live review session — a local server backed by the
   repository, with source refresh and review state in `.balade/` — and opens
   it in your default browser. `--no-browser` serves headless and prints the
@@ -89,6 +91,8 @@ can supply both ids and skip the picker:
 npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --provider openai-codex
 npx balade generate 96 --dir docs/walkthroughs
+npx balade generate 96 --no-browser # serve and print the URL without launching a browser
+npx balade generate 96 --no-open    # generate, print the path and exit
 ```
 
 Every choice becomes balade's saved default and is reused on the next run when
@@ -109,17 +113,22 @@ Generated frontmatter records the prompt, template, and rubric version under
 `meta.balade-authoring`. See the [authoring package](docs/authoring-package.md)
 for its contract, version policy, writing rubric, and offline comparison suite.
 
-After a successful check, balade prints the generated path and the exact
-`balade open …` command to start reviewing it. Generation itself doesn't start
-the review server.
+After a successful check, balade starts the same live review session as
+`balade open <generated-file>` and launches it in the default browser. Use
+`--no-browser` to keep the server headless and print its URL, and `--port` to
+choose its port. Browser-launch failures keep the server running and print the
+URL with a recovery hint.
+
+Use `--no-open` for scripts and CI that need generation to print the generated
+path and the exact `balade open …` command, then exit without starting a server.
 
 Use `--verbose` to show assistant-visible text, every allowlisted Pi tool input
 and result, and the successful code-range report. Provider-hidden reasoning and
 terminal control sequences are never printed.
 
 Generation never stages, commits, pushes, or opens a pull request. If the draft
-still fails validation, balade keeps the file and exits with status 1; edit the
-reported lines, then check it again:
+still fails validation, balade keeps the file, never starts a server, and exits
+with status 1; edit the reported lines, then check it again:
 
 ```sh
 npx balade check walkthroughs/pr-96-loan-refactor.md

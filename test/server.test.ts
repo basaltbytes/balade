@@ -13,6 +13,7 @@ import type { LoadResult } from "../src/compile/load.js";
 import type { IndexPayload, Payload, ReviewState } from "../src/payload/types.js";
 import { PayloadCache } from "../src/server/cache.js";
 import { ServerRepo } from "../src/server/repo.js";
+import { startReviewSession } from "../src/server/review.js";
 import { findAppBundle, serve } from "../src/server/serve.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { ReviewStateStore, stateFileName } from "../src/state/store.js";
@@ -125,6 +126,29 @@ describe("the served API", () => {
           const url = yield* serve({ appDir, port: 0, api: session.api });
           expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
           yield* Effect.promise(() => exercise(url, path));
+        }),
+      ),
+    ),
+  );
+
+  it.live("prepares and serves a generated walkthrough as one review session", () =>
+    Effect.scoped(
+      provideLive(
+        Effect.gen(function* () {
+          const review = yield* startReviewSession({
+            session: {
+              cwd: repo.dir,
+              selection: { kind: "files", paths: [join(repo.dir, "walkthroughs/valid.md")] },
+              useGh: false,
+            },
+            appDir,
+            port: 0,
+          });
+          expect(review._tag).toBe("ReviewSessionStarted");
+          if (review._tag !== "ReviewSessionStarted") return;
+          expect(review.session.paths).toEqual(["walkthroughs/valid.md"]);
+          const page = yield* Effect.promise(async () => (await fetch(`${review.url}/`)).text());
+          expect(page).toContain("balade");
         }),
       ),
     ),
