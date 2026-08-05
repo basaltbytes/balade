@@ -3,13 +3,12 @@
 import { Effect, Match, Schema } from "effect";
 import { formatText } from "../check/report.js";
 import type { CheckReport } from "../payload/types.js";
-import { sanitizeTerminalText } from "../terminal.js";
+import { writeStderr, writeStdout } from "../terminal.js";
 import { launchBrowser, type BrowserMode } from "./browser.js";
 import { AppBundleMissing, AppBundleReadFailed, findAppBundle, serve } from "./serve.js";
 import {
   prepareSession,
   sessionErrorMessage,
-  type Prepared,
   type Session,
   type SessionError,
   type SessionOptions,
@@ -32,12 +31,16 @@ class ReviewServerFailed extends Schema.TaggedErrorClass<ReviewServerFailed>()(
   }
 }
 
-interface StartReviewSessionOptions {
+interface ReviewSessionOptions {
   readonly session: SessionOptions;
   readonly port: number;
 }
 
-interface RunReviewSessionOptions extends StartReviewSessionOptions {
+interface StartReviewSessionOptions extends ReviewSessionOptions {
+  readonly appDir: string;
+}
+
+interface RunReviewSessionOptions extends ReviewSessionOptions {
   readonly browserMode: BrowserMode;
 }
 
@@ -47,11 +50,11 @@ type ReviewSessionError =
   | SessionError
   | ReviewServerFailed;
 
-/** Only a ready selection opens a port; rejected selections stay report values. */
-export const serveReviewSession = Effect.fn("serveReviewSession")(function* (
-  prepared: Prepared,
-  options: { readonly appDir: string; readonly port: number },
+/** Prepare the selected walkthroughs and open a port only when they are ready. */
+export const startReviewSession = Effect.fn("startReviewSession")(function* (
+  options: StartReviewSessionOptions,
 ) {
+  const prepared = yield* prepareSession(options.session);
   return yield* Match.valueTags(prepared, {
     SessionReady: ({ session }) =>
       serve({ appDir: options.appDir, port: options.port, api: session.api }).pipe(
@@ -64,18 +67,17 @@ export const serveReviewSession = Effect.fn("serveReviewSession")(function* (
 });
 
 /** Resolve the shipped app, prepare the repository session, and open its scoped port. */
-const startReviewSession = Effect.fn("startReviewSession")(function* (
-  options: StartReviewSessionOptions,
+const openReviewSession = Effect.fn("openReviewSession")(function* (
+  options: RunReviewSessionOptions,
 ) {
   const appDir = yield* findAppBundle();
-  const prepared = yield* prepareSession(options.session);
-  return yield* serveReviewSession(prepared, { appDir, port: options.port });
+  return yield* startReviewSession({ session: options.session, port: options.port, appDir });
 });
 
 /** Present one live session at the CLI boundary and own it until interruption. */
 export const runReviewSession = Effect.fn("runReviewSession")((options: RunReviewSessionOptions) =>
   Effect.gen(function* () {
-    const result = yield* startReviewSession(options);
+    const result = yield* openReviewSession(options);
     return yield* Match.valueTags(result, {
       ReviewSessionStarted: (started) =>
         Effect.gen(function* () {
@@ -136,14 +138,6 @@ const printSoft = (reports: readonly CheckReport[]): void => {
   if (diagnostics.some((report) => report.diagnostics.length > 0)) {
     writeStdout(formatText({ reports: diagnostics }));
   }
-};
-
-const writeStdout = (value: string): void => {
-  process.stdout.write(sanitizeTerminalText(value));
-};
-
-const writeStderr = (value: string): void => {
-  process.stderr.write(sanitizeTerminalText(value));
 };
 
 const served = (paths: readonly string[]): string =>

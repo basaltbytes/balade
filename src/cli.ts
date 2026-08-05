@@ -15,6 +15,7 @@ import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
 import { runReviewSession } from "./server/review.js";
 import type { Selection } from "./server/session.js";
+import { writeStderr, writeStdout } from "./terminal.js";
 
 const VERSION = "0.1.0";
 
@@ -51,7 +52,7 @@ const check = Command.make("check", { files, json: jsonFlag }, (config) =>
   Effect.gen(function* () {
     const outcome = yield* runCheck({ cwd: process.cwd(), paths: config.files });
     yield* Effect.sync(() => {
-      process.stdout.write(config.json ? `${formatJson(outcome)}\n` : formatText(outcome));
+      writeStdout(config.json ? `${formatJson(outcome)}\n` : formatText(outcome));
       if (outcome._tag === "CheckFailed") process.exitCode = 1;
     });
   }),
@@ -121,12 +122,12 @@ const diagnosticsOnly = (reports: readonly CheckReport[]): readonly CheckReport[
   reports.map((report) => ({ ...report, ranges: [] }));
 
 const stopReports = (reports: readonly CheckReport[]): void => {
-  process.stdout.write(formatText({ reports: diagnosticsOnly(reports) }));
+  writeStdout(formatText({ reports: diagnosticsOnly(reports) }));
   process.exitCode = 1;
 };
 
 const stopMessage = (message: string): void => {
-  process.stderr.write(`${message}\n`);
+  writeStderr(`${message}\n`);
   process.exitCode = 1;
 };
 
@@ -134,7 +135,7 @@ const stopMessage = (message: string): void => {
 const printSoft = (reports: readonly CheckReport[]): void => {
   const diagnostics = diagnosticsOnly(reports);
   if (diagnostics.some((report) => report.diagnostics.length > 0)) {
-    process.stdout.write(formatText({ reports: diagnostics }));
+    writeStdout(formatText({ reports: diagnostics }));
   }
 };
 
@@ -159,7 +160,7 @@ const build = Command.make("build", { files: buildFile, lang: langFlag, out: out
       Built: ({ reports, file, bytes }) =>
         Effect.sync(() => {
           printSoft(reports);
-          process.stdout.write(`balade wrote ${file} (${size(bytes)})\n`);
+          writeStdout(`balade wrote ${file} (${size(bytes)})\n`);
         }),
       BuildNotRun: ({ message }) => Effect.sync(() => stopMessage(message)),
       BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),

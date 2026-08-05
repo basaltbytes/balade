@@ -18,3 +18,11 @@ export function sanitizeTerminalText(value: string): string {
   }
   return safe;
 }
+
+export function writeStdout(value: string): void {
+  process.stdout.write(sanitizeTerminalText(value));
+}
+
+export function writeStderr(value: string): void {
+  process.stderr.write(sanitizeTerminalText(value));
+}

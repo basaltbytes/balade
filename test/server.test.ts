@@ -13,7 +13,7 @@ import type { LoadResult } from "../src/compile/load.js";
 import type { IndexPayload, Payload, ReviewState } from "../src/payload/types.js";
 import { PayloadCache } from "../src/server/cache.js";
 import { ServerRepo } from "../src/server/repo.js";
-import { serveReviewSession } from "../src/server/review.js";
+import { startReviewSession } from "../src/server/review.js";
 import { findAppBundle, serve } from "../src/server/serve.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { ReviewStateStore, stateFileName } from "../src/state/store.js";
@@ -131,16 +131,19 @@ describe("the served API", () => {
     ),
   );
 
-  it.live("turns a generated walkthrough into a live review session", () =>
+  it.live("prepares and serves a generated walkthrough as one review session", () =>
     Effect.scoped(
       provideLive(
         Effect.gen(function* () {
-          const prepared = yield* prepareSession({
-            cwd: repo.dir,
-            selection: { kind: "files", paths: [join(repo.dir, "walkthroughs/valid.md")] },
-            useGh: false,
+          const review = yield* startReviewSession({
+            session: {
+              cwd: repo.dir,
+              selection: { kind: "files", paths: [join(repo.dir, "walkthroughs/valid.md")] },
+              useGh: false,
+            },
+            appDir,
+            port: 0,
           });
-          const review = yield* serveReviewSession(prepared, { appDir, port: 0 });
           expect(review._tag).toBe("ReviewSessionStarted");
           if (review._tag !== "ReviewSessionStarted") return;
           expect(review.session.paths).toEqual(["walkthroughs/valid.md"]);

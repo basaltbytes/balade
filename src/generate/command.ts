@@ -6,7 +6,7 @@ import { formatText } from "../check/report.js";
 import { parsePrTarget } from "../pr/target.js";
 import { resolvePullHead } from "../resolve/git.js";
 import { runReviewSession } from "../server/review.js";
-import { sanitizeTerminalText } from "../terminal.js";
+import { writeStderr, writeStdout } from "../terminal.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
@@ -448,12 +448,4 @@ function loginErrorMessage(error: LoginFailed): string {
 const stopMessage = (message: string): void => {
   writeStderr(`${message}\n`);
   process.exitCode = 1;
-};
-
-const writeStdout = (value: string): void => {
-  process.stdout.write(sanitizeTerminalText(value));
-};
-
-const writeStderr = (value: string): void => {
-  process.stderr.write(sanitizeTerminalText(value));
 };
