@@ -5,7 +5,7 @@ import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { formatText } from "../check/report.js";
 import { parsePrTarget } from "../pr/target.js";
 import { resolvePullHead } from "../resolve/git.js";
-import { runReviewSession } from "../server/review.js";
+import { runReviewSession } from "../review/run.js";
 import { writeStderr, writeStdout } from "../terminal.js";
 import {
   AuthorDiscoveryFailed,

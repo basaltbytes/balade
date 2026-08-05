@@ -13,7 +13,7 @@ import { cliLayer } from "./live.js";
 import type { CheckReport } from "./payload/types.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
-import { runReviewSession } from "./server/review.js";
+import { runReviewSession } from "./review/run.js";
 import type { Selection } from "./server/session.js";
 import { writeStderr, writeStdout } from "./terminal.js";
 
