@@ -32,6 +32,9 @@ BIN="$PROJECT/node_modules/.bin/balade"
 "$BIN" --help | grep -qi "walkthrough"
 "$BIN" generate --help | grep -qi "provider"
 "$BIN" generate --help | grep -qi "verbose"
+"$BIN" generate --help | grep -qi -- "--no-open"
+"$BIN" generate --help | grep -qi -- "--no-browser"
+"$BIN" generate --help | grep -qi -- "--port"
 if "$BIN" generate --help | grep -qi "choose-model"; then
   echo "obsolete --choose-model flag is still exposed" >&2
   exit 1

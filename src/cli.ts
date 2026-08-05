@@ -13,14 +13,8 @@ import { cliLayer } from "./live.js";
 import type { CheckReport } from "./payload/types.js";
 import { locateErrorMessage, PrLocator } from "./pr/locate.js";
 import { parseOpenTarget, type PrTarget } from "./pr/target.js";
-import { launchBrowser } from "./server/browser.js";
-import {
-  browserLaunchWarningText,
-  reviewSessionStartedText,
-  serveReviewSession,
-} from "./server/review.js";
-import { findAppBundle } from "./server/serve.js";
-import { prepareSession, sessionErrorMessage, type Selection } from "./server/session.js";
+import { runReviewSession } from "./server/review.js";
+import type { Selection } from "./server/session.js";
 
 const VERSION = "0.1.0";
 
@@ -92,15 +86,6 @@ const open = Command.make(
   { files: openTargets, lang: langFlag, port: portFlag, noBrowser: noBrowserFlag },
   (config) =>
     Effect.gen(function* () {
-      const appDir = yield* findAppBundle().pipe(
-        Effect.map(Option.some),
-        Effect.catchTags({
-          AppBundleMissing: appBundleUnavailable,
-          AppBundleReadFailed: appBundleUnavailable,
-        }),
-      );
-      if (Option.isNone(appDir)) return;
-
       const target = parseOpenTarget(config.files);
       if (target.kind === "invalid") {
         stopMessage(target.message);
@@ -119,51 +104,14 @@ const open = Command.make(
             )
           : Option.some<Selection>(target);
       if (Option.isNone(selection)) return;
-
-      const prepared = yield* prepareSession({
-        cwd: process.cwd(),
-        selection: selection.value,
-        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-      }).pipe(
-        Effect.map(Option.some),
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            stopMessage(sessionErrorMessage(error));
-            return Option.none();
-          }),
-        ),
-      );
-      if (Option.isNone(prepared)) return;
-      const review = yield* serveReviewSession(prepared.value, {
-        appDir: appDir.value,
+      return yield* runReviewSession({
+        session: {
+          cwd: process.cwd(),
+          selection: selection.value,
+          ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+        },
         port: config.port,
-      }).pipe(
-        Effect.map(Option.some),
-        Effect.catchTag("ReviewServerFailed", (error) =>
-          Effect.sync(() => {
-            stopMessage(error.note);
-            return Option.none();
-          }),
-        ),
-      );
-      if (Option.isNone(review)) return;
-      return yield* Match.valueTags(review.value, {
-        ReviewSessionStarted: (started) =>
-          Effect.gen(function* () {
-            printSoft(started.session.reports);
-            process.stdout.write(reviewSessionStartedText(started));
-            /* A launch failure is a notice, not a failure: the session stays served. */
-            yield* launchBrowser(config.noBrowser ? "headless" : "launch", started.url).pipe(
-              Effect.catchTag("BrowserLaunchFailed", (error) =>
-                Effect.sync(() => {
-                  process.stderr.write(browserLaunchWarningText(error));
-                }),
-              ),
-            );
-            return yield* Effect.never;
-          }),
-        SessionNotStarted: ({ message }) => Effect.sync(() => stopMessage(message)),
-        SessionFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
+        browserMode: config.noBrowser ? "headless" : "launch",
       });
     }).pipe(Effect.scoped),
 ).pipe(Command.withDescription("Serve a live review session and open it in your default browser"));
@@ -181,12 +129,6 @@ const stopMessage = (message: string): void => {
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 };
-
-const appBundleUnavailable = (error: { readonly note: string }) =>
-  Effect.sync(() => {
-    stopMessage(error.note);
-    return Option.none<string>();
-  });
 
 /** Soft commands: what did not resolve is printed here and rides on as error cards. */
 const printSoft = (reports: readonly CheckReport[]): void => {

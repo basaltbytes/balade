@@ -1,21 +1,12 @@
 /** Interactive command boundary for provider login, model choice and draft reporting. */
 
-import { Context, Effect, Match, Option, Terminal } from "effect";
+import { Context, Effect, Option, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
-import { stripVTControlCharacters } from "node:util";
 import { formatText } from "../check/report.js";
-import type { CheckReport } from "../payload/types.js";
 import { parsePrTarget } from "../pr/target.js";
 import { resolvePullHead } from "../resolve/git.js";
-import { launchBrowser } from "../server/browser.js";
-import {
-  browserLaunchWarningText,
-  reviewSessionStartedText,
-  serveReviewSession,
-  type ReviewServerFailed,
-} from "../server/review.js";
-import { findAppBundle } from "../server/serve.js";
-import { prepareSession, sessionErrorMessage } from "../server/session.js";
+import { runReviewSession } from "../server/review.js";
+import { sanitizeTerminalText } from "../terminal.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
@@ -117,52 +108,13 @@ export const generateCommand = Command.make(
           return;
         }
         writeStdout(generationSummaryText(summary));
-
-        const appDir = yield* findAppBundle().pipe(
-          Effect.map(Option.some),
-          Effect.catchTags({
-            AppBundleMissing: appBundleUnavailable,
-            AppBundleReadFailed: appBundleUnavailable,
-          }),
-        );
-        if (Option.isNone(appDir)) return;
-
-        const prepared = yield* prepareSession({
-          cwd: source.root,
-          selection: { kind: "files", paths: [result.file] },
-        }).pipe(
-          Effect.map(Option.some),
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              stopMessage(sessionErrorMessage(error));
-              return Option.none();
-            }),
-          ),
-        );
-        if (Option.isNone(prepared)) return;
-
-        const review = yield* serveReviewSession(prepared.value, {
-          appDir: appDir.value,
+        return yield* runReviewSession({
+          session: {
+            cwd: source.root,
+            selection: { kind: "files", paths: [result.file] },
+          },
           port: config.port,
-        });
-        return yield* Match.valueTags(review, {
-          ReviewSessionStarted: (started) =>
-            Effect.gen(function* () {
-              printSoft(started.session.reports);
-              writeStdout(reviewSessionStartedText(started));
-              yield* launchBrowser(config.noBrowser ? "headless" : "launch", started.url).pipe(
-                Effect.catchTag("BrowserLaunchFailed", (error) =>
-                  Effect.sync(() => writeStderr(browserLaunchWarningText(error))),
-                ),
-              );
-              return yield* Effect.never;
-            }),
-          SessionNotStarted: ({ message }) => Effect.sync(() => stopMessage(message)),
-          SessionFailed: ({ reports }) =>
-            Effect.sync(() => {
-              writeStdout(formatText({ reports: diagnosticsOnly(reports) }));
-              process.exitCode = 1;
-            }),
+          browserMode: config.noBrowser ? "headless" : "launch",
         });
       } else {
         writeStdout(formatText({ reports: [result.report] }));
@@ -455,19 +407,8 @@ export function generationSummaryText(result: {
   );
 }
 
-const diagnosticsOnly = (reports: readonly CheckReport[]): readonly CheckReport[] =>
-  reports.map((report) => ({ ...report, ranges: [] }));
-
-const printSoft = (reports: readonly CheckReport[]): void => {
-  const diagnostics = diagnosticsOnly(reports);
-  if (diagnostics.some((report) => report.diagnostics.length > 0)) {
-    writeStdout(formatText({ reports: diagnostics }));
-  }
-};
-
 type GenerationCliError =
   | GenerateError
-  | ReviewServerFailed
   | AuthorDiscoveryFailed
   | LoginFailed
   | LoginCancelled
@@ -476,8 +417,6 @@ type GenerationCliError =
 
 function generationCliErrorMessage(error: GenerationCliError): string {
   switch (error._tag) {
-    case "ReviewServerFailed":
-      return error.note;
     case "LoginFailed":
       return loginErrorMessage(error);
     case "AuthorDiscoveryFailed":
@@ -510,29 +449,6 @@ const stopMessage = (message: string): void => {
   writeStderr(`${message}\n`);
   process.exitCode = 1;
 };
-
-const appBundleUnavailable = (error: { readonly note: string }) =>
-  Effect.sync(() => {
-    stopMessage(error.note);
-    return Option.none<string>();
-  });
-
-export function sanitizeTerminalText(value: string): string {
-  let safe = "";
-  for (const character of stripVTControlCharacters(value)) {
-    const point = character.codePointAt(0);
-    if (
-      point === undefined ||
-      point === 9 ||
-      point === 10 ||
-      point === 13 ||
-      (point >= 32 && (point < 127 || point > 159))
-    ) {
-      safe += character;
-    }
-  }
-  return safe;
-}
 
 const writeStdout = (value: string): void => {
   process.stdout.write(sanitizeTerminalText(value));

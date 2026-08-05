@@ -428,10 +428,10 @@ terminal string has control sequences removed. By default, tool events collapse
 to one message per inspection phase, and detailed tool results are not
 materialized across the adapter boundary. `--verbose` opts into assistant-visible
 text, every allowlisted tool input and result, and the successful range report;
-provider-hidden reasoning remains hidden. A normal successful check prints only
-the verified range count, generated path, and the next `balade open` command;
-full diagnostics remain visible when the generated draft still needs manual
-repair.
+provider-hidden reasoning remains hidden. A normal successful generation prints
+the verified range count and generated path before entering the live review
+session. `--no-open` additionally prints the next `balade open` command and exits;
+full diagnostics remain visible when the generated draft still needs manual repair.
 
 ## Balade owns the versioned authoring package
 
