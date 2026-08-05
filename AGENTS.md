@@ -18,9 +18,11 @@ When working on a feature/bugfix/refactoring you need to do the following before
 
 ## Rules
 
-- Read [guidelines/CODING_GUIDELINES.md](guidelines/CODING_GUIDELINES.md)
-  before writing code, and [guidelines/TYPESCRIPT.md](guidelines/TYPESCRIPT.md)
-  for the language mapping. Reviews hunt violations against it.
+- Read [the coding-guidelines charter](.agents/skills/coding-guidelines/CODING_GUIDELINES.md)
+  before writing code, and its
+  [TypeScript mapping](.agents/skills/coding-guidelines/TYPESCRIPT.md) for the
+  language rules. Reviews hunt violations against it. The charter is vendored
+  from `basaltbytes/skills` — edit it there, not here.
 - When writing Effect TypeScript code ALWAYS refer to the `/effect-ts` skill
 - **`src/contract/types.ts` is the contract** between the CLI and every renderer
   (derived from `src/contract/schema.ts`). It changes only with a deliberate
