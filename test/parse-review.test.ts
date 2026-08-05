@@ -3,7 +3,7 @@
 
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { parseReviewJson, parseReviewState } from "../src/contract/parse-review.js";
+import { parseReviewJson, parseReviewState } from "../src/contract/review-parser.js";
 import { ReviewState as ReviewStateSchema } from "../src/contract/schema.js";
 import type { ReviewState } from "../src/contract/types.js";
 

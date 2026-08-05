@@ -3,7 +3,7 @@
 import { Effect } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { formatJson, formatText, writeStdout } from "../../terminal.js";
-import { runCheck } from "../../walkthrough/validate.js";
+import { runCheck } from "../../walkthrough/checker.js";
 
 const jsonFlag = Flag.boolean("json").pipe(Flag.withDescription("Emit the report as JSON"));
 

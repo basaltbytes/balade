@@ -7,7 +7,7 @@
  */
 
 import { Context, Effect, Layer, Option } from "effect";
-import type { LoadError, LoadResult } from "../walkthrough/load.js";
+import type { LoadError, LoadResult } from "../walkthrough/pipeline.js";
 import { ServerRepo, type ServerRepoError, type ServerRepoShape } from "./repo.js";
 
 export interface PayloadCacheShape {

@@ -7,7 +7,7 @@ import { Effect, FileSystem, Match, Path, Schema } from "effect";
 import type { CheckDiagnostic, Payload, RangeEcho } from "../contract/types.js";
 import { ContextResolver, type CommandFailed, type ResolveError } from "../contract/context.js";
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
-import { compileDocument, referencedFiles } from "./compile.js";
+import { compileDocument, referencedFiles } from "./compiler.js";
 import { parseDocument, type ValidDocument } from "./document.js";
 
 export interface LoadOptions {

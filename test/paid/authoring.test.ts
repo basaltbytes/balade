@@ -6,7 +6,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { AUTHORING_PACKAGE_VERSION } from "../../src/pi/authoring.js";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLive } from "../../src/pi/client.js";
-import { runGeneration } from "../../src/commands/generate/run.js";
+import { runGeneration } from "../../src/commands/generate/pipeline.js";
 import { shellLayer } from "../support/effect.js";
 import { AUTHORING_EVAL_CASES } from "../fixtures/authoring.js";
 import {

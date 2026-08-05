@@ -4,7 +4,7 @@ import { NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLive } from "../../src/pi/client.js";
-import { PrLocator } from "../../src/commands/open/locate.js";
+import { PrLocator } from "../../src/commands/open/locator.js";
 import { BrowserLauncher } from "../../src/server/browser.js";
 import { CommandExecutor } from "../../src/shell.js";
 

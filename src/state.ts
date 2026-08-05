@@ -14,7 +14,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { parseReviewJson } from "./contract/parse-review.js";
+import { parseReviewJson } from "./contract/review-parser.js";
 import type { ReviewState } from "./contract/types.js";
 
 /* ------------------------------------------------------------------ */

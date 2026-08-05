@@ -11,9 +11,9 @@ import {
   NO_WALKTHROUGH,
   NOT_A_REPO,
   type DiscoveryError,
-} from "../../walkthrough/discover.js";
-import { softReport } from "../../walkthrough/validate.js";
-import { loadWalkthrough, type LoadError } from "../../walkthrough/load.js";
+} from "../../walkthrough/discovery.js";
+import { softReport } from "../../walkthrough/checker.js";
+import { loadWalkthrough, type LoadError } from "../../walkthrough/pipeline.js";
 import { describeFailure } from "../../failure.js";
 import type { CheckReport } from "../../contract/types.js";
 import { exportHtml, type ExportAssets } from "./html.js";

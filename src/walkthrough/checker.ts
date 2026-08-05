@@ -5,9 +5,9 @@
  */
 
 import { Effect, Path, Result } from "effect";
-import { loadErrorDiagnostic, loadWalkthrough, type LoadResult } from "./load.js";
+import { loadErrorDiagnostic, loadWalkthrough, type LoadResult } from "./pipeline.js";
 import type { CheckReport } from "../contract/types.js";
-import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discover.js";
+import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discovery.js";
 
 export interface CheckFileOptions {
   cwd: string;

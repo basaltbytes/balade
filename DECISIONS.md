@@ -36,11 +36,15 @@ shell.ts  state.ts  terminal.ts  failure.ts                  root ports & utils 
    `preset/` — the tag catalog is an extension of the format). Concepts compose
    only in `commands/` and `server/`, plus layer wiring in `cli.ts`.
 4. Outside `commands/`, a concept with one file is a root file, not a folder.
+5. Module files are nouns; verbs live in exports. The thing, not the action:
+   `compiler.ts` exports `compileDocument`, `pipeline.ts` exports
+   `loadWalkthrough`, `locator.ts` holds `PrLocator`. A file named after a
+   phase (`load.ts`, `compile.ts`, `serve.ts`) misstates what it is.
 
 The one seam that makes rule 3 hold: `contract/context.ts` owns the resolution
 contract — `ResolveContext`, `ResolveOptions`, `ResolveResult`, a
 `ContextResolver` service tag, and the process-port failure vocabulary
-(`CommandFailed`, `NotARepository`, `CommitUnresolvable`). `walkthrough/load.ts`
+(`CommandFailed`, `NotARepository`, `CommitUnresolvable`). `walkthrough/pipeline.ts`
 yields the service; `git/git.ts` provides the live layer wrapping the unchanged
 `resolveContext`. The failure classes sit in the contract rather than `shell.ts`
 because they cross every module boundary — `shell.ts` produces them, boundaries
@@ -79,7 +83,7 @@ gzip 487.21 to 508.51 kB), and the single-file export JS from 3,971,906 to
 4,037,646 bytes (+65,740; gzip 762.81 to 783.96 kB). That fixed cost buys one
 contract and deep validation at both baked and served edges.
 
-`src/contract/schema.ts` and `src/contract/parse-review.ts` are the pure shared
+`src/contract/schema.ts` and `src/contract/review-parser.ts` are the pure shared
 exceptions to "app imports the CLI as types only": the server and SPA guard the
 same JSON. What stays forbidden is CLI *runtime* — git, fs, process — reaching
 `app/`.
@@ -242,7 +246,7 @@ of `HEAD`; and the fetch requires a GitHub origin — `pull/<n>/head` is a GitHu
 refspec, and a failed fetch stops with a note. Review state is unaffected:
 `.balade/` is keyed by walkthrough path, so marks made against a fetched ref
 reappear when the branch is eventually checked out. The locator is an Effect
-service (`src/commands/open/locate.ts`) with typed errors and captures the same filesystem,
+service (`src/commands/open/locator.ts`) with typed errors and captures the same filesystem,
 path and command services as the rest of the shell.
 
 ## Resolution shells out through the `CommandExecutor` layer

@@ -13,7 +13,7 @@ import {
   writeStdout,
 } from "../terminal.js";
 import { launchBrowser, type BrowserMode } from "./browser.js";
-import { findAppBundle, serve, type AppBundleMissing, type AppBundleReadFailed } from "./serve.js";
+import { findAppBundle, serve, type AppBundleMissing, type AppBundleReadFailed } from "./http.js";
 import {
   prepareSession,
   sessionErrorMessage,

@@ -62,7 +62,7 @@ describe("the src/ dependency law", () => {
 
   it("finds the modules it polices", () => {
     expect(files).toContain("cli.ts");
-    expect(files).toContain("walkthrough/load.ts");
+    expect(files).toContain("walkthrough/pipeline.ts");
     expect(edges.length).toBeGreaterThan(50);
   });
 

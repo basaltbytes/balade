@@ -16,13 +16,13 @@ import {
 } from "../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
 import { AUTHORING_SYSTEM_PROMPT } from "../src/pi/authoring.js";
-import { renderDraft, runGeneration, slugifyTitle } from "../src/commands/generate/run.js";
+import { renderDraft, runGeneration, slugifyTitle } from "../src/commands/generate/pipeline.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
   modelsForPicker,
   preferredModel,
-} from "../src/commands/generate/select.js";
+} from "../src/commands/generate/selection.js";
 import { shellLayer } from "./support/effect.js";
 import { contextResolverLive } from "../src/git/git.js";
 import type { PullSnapshot } from "../src/git/pr.js";

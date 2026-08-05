@@ -12,7 +12,7 @@ import {
   discoverWalkthroughsAt,
   type DiscoveryError,
   walkthroughPr,
-} from "../../walkthrough/discover.js";
+} from "../../walkthrough/discovery.js";
 import { CommandExecutor, gitOut } from "../../shell.js";
 import {
   fetchPullHead,

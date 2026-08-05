@@ -10,7 +10,7 @@ import { generateCommand } from "./commands/generate/index.js";
 import { openCommand } from "./commands/open/index.js";
 import { contextResolverLive } from "./git/git.js";
 import { piWalkthroughAuthorLive } from "./pi/client.js";
-import { PrLocator } from "./commands/open/locate.js";
+import { PrLocator } from "./commands/open/locator.js";
 import { BrowserLauncher } from "./server/browser.js";
 import { CommandExecutor } from "./shell.js";
 

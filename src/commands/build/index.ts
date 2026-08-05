@@ -3,7 +3,7 @@
 import { Effect, Match, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { printSoft, size, stopMessage, stopReports, writeStdout } from "../../terminal.js";
-import { buildErrorMessage, runBuild } from "./run.js";
+import { buildErrorMessage, runBuild } from "./pipeline.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
   Flag.withDescription("Chrome language; overrides meta.lang"),

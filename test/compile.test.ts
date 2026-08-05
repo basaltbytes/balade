@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { loadWalkthrough, type LoadResult } from "../src/walkthrough/load.js";
+import { loadWalkthrough, type LoadResult } from "../src/walkthrough/pipeline.js";
 import type { Payload } from "../src/contract/types.js";
 import { sha256 } from "../src/contract/hash.js";
 import { firstBlock } from "./support/blocks.js";

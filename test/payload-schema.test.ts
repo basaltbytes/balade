@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { loadWalkthrough } from "../src/walkthrough/load.js";
+import { loadWalkthrough } from "../src/walkthrough/pipeline.js";
 import {
   Block,
   Payload as PayloadSchema,

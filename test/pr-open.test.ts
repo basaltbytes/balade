@@ -10,7 +10,7 @@ import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { Payload } from "../src/contract/types.js";
-import { locateErrorMessage, PrLocator } from "../src/commands/open/locate.js";
+import { locateErrorMessage, PrLocator } from "../src/commands/open/locator.js";
 import { PULL_COMMIT_SUBJECT_LIMIT } from "../src/git/intent.js";
 import { parseOpenTarget, parsePrTarget } from "../src/git/pr.js";
 import { CommandFailed } from "../src/contract/context.js";

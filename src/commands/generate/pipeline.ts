@@ -3,8 +3,8 @@
 import { Effect, FileSystem, Path, Result, Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
 import { formatText } from "../../terminal.js";
-import { runCheck } from "../../walkthrough/validate.js";
-import { discoveryErrorMessage } from "../../walkthrough/discover.js";
+import { runCheck } from "../../walkthrough/checker.js";
+import { discoveryErrorMessage } from "../../walkthrough/discovery.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
 import type { CheckReport } from "../../contract/types.js";
 import type { PullHeadError, PullSnapshot } from "../../git/pr.js";

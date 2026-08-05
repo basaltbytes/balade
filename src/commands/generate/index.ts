@@ -20,7 +20,7 @@ import {
   type LoginPrompt,
   type LoginSecretPrompt,
 } from "../../pi/author.js";
-import { generateErrorMessage, runGeneration, type GenerateError } from "./run.js";
+import { generateErrorMessage, runGeneration, type GenerateError } from "./pipeline.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -31,7 +31,7 @@ import {
   preferredModel,
   type ModelFilter,
   type ModelSelection,
-} from "./select.js";
+} from "./selection.js";
 
 const target = Argument.string("pr").pipe(
   Argument.withDescription("Pull request URL, #number, or bare number"),

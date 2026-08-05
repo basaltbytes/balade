@@ -1,6 +1,6 @@
 /**
  * What the four served endpoints answer. Successes and typed `ApiError`
- * failures stay independent of HTTP; `serve.ts` maps them to JSON and status
+ * failures stay independent of HTTP; `http.ts` maps them to JSON and status
  * codes. Tests drive these ports without a socket.
  *
  * `?path=` is untrusted input: it names a walkthrough this run serves or it
@@ -10,7 +10,7 @@
 
 import { Effect, Match, Option, Schema } from "effect";
 import { describeFailure } from "../failure.js";
-import { parseReviewState } from "../contract/parse-review.js";
+import { parseReviewState } from "../contract/review-parser.js";
 import type {
   CheckDiagnostic,
   IndexEntry,
