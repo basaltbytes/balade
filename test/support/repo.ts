@@ -21,7 +21,7 @@ export interface FixtureRepo {
   commit(message: string): string;
   commitEmpty(message: string): void;
   /** Writes a fixture walkthrough with `__COMMIT__` replaced, and commits it. */
-  addWalkthrough(name: string, fixture: string): string;
+  addWalkthrough(name: string, fixture: string, directory?: string): string;
   cleanup(): void;
 }
 
@@ -230,9 +230,9 @@ export function createFixtureRepo(): FixtureRepo {
   write("utils/planning_helper.py", PIN_HELPER);
   const pin = commit("feat: live planning pool items");
 
-  const addWalkthrough = (name: string, fixture: string): string => {
+  const addWalkthrough = (name: string, fixture: string, directory = "walkthroughs"): string => {
     const template = readFileSync(join(FIXTURES, fixture), "utf8");
-    const path = `walkthroughs/${name}`;
+    const path = `${directory}/${name}`;
     write(path, template.replaceAll("__COMMIT__", pin));
     commit(`docs: walkthrough ${name}`);
     return path;

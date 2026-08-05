@@ -14,10 +14,10 @@ No install needed; the package ships the app bundle.
 
 ```sh
 npx balade generate https://github.com/acme/tools/pull/96 # draft, check and open a live review
-npx balade open   walkthroughs/pr-96-loan-refactor.md   # review in your browser, live
+npx balade open   .agents/walkthroughs/pr-96-loan-refactor.md   # review in your browser, live
 npx balade open   https://github.com/acme/tools/pull/96 # review a PR's walkthrough — no checkout needed
-npx balade build  walkthroughs/pr-96-loan-refactor.md   # write one self-contained HTML file
-npx balade check  walkthroughs/pr-96-loan-refactor.md   # validate; exit code is the contract
+npx balade build  .agents/walkthroughs/pr-96-loan-refactor.md   # write one self-contained HTML file
+npx balade check  .agents/walkthroughs/pr-96-loan-refactor.md   # validate; exit code is the contract
 ```
 
 - `generate` takes a pull-request URL, `#96`, or `96`. It reads the PR at an
@@ -44,7 +44,8 @@ npx balade check  walkthroughs/pr-96-loan-refactor.md   # validate; exit code is
   the report as JSON.
 
 Discovery is git-tracked files matching `**/walkthroughs/*.md` whose
-frontmatter holds the `walkthrough` key.
+frontmatter holds the `walkthrough` key — including the default
+`.agents/walkthroughs/`, since the pattern matches at any depth.
 
 `balade` requires Node 22.22.2+, 24.15.0+, or 26+.
 
@@ -101,7 +102,7 @@ saves that model without prompts. A partial, empty, or unavailable value opens
 the picker, narrowed to matching models when possible; `--model ""` opens the
 full available list.
 
-The default output is `walkthroughs/pr-96-<title>.md`. Balade stamps the PR
+The default output is `.agents/walkthroughs/pr-96-<title>.md`. Balade stamps the PR
 number and commit itself, reports each inspection phase once, reports cumulative
 token usage and cost after every model turn, and won't overwrite a file with the
 same name. The author works within bounded diff and source inspection budgets so
@@ -131,7 +132,7 @@ still fails validation, balade keeps the file, never starts a server, and exits
 with status 1; edit the reported lines, then check it again:
 
 ```sh
-npx balade check walkthroughs/pr-96-loan-refactor.md
+npx balade check .agents/walkthroughs/pr-96-loan-refactor.md
 ```
 
 ## The walkthrough file

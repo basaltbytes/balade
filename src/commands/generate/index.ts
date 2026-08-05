@@ -49,7 +49,7 @@ const model = Flag.string("model").pipe(
 
 const directory = Flag.string("dir").pipe(
   Flag.withDescription("Repository-relative directory for the generated walkthrough"),
-  Flag.withDefault("walkthroughs"),
+  Flag.withDefault(".agents/walkthroughs"),
 );
 
 const verbose = Flag.boolean("verbose").pipe(
