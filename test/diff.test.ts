@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { FastCheck } from "effect/testing";
-import { changedLines, splitDiff } from "../src/resolve/diff.js";
+import { changedLines, splitDiff } from "../src/git/diff.js";
 
 const DIFF = `diff --git a/models/pool.py b/models/pool.py
 index 1111111..2222222 100644

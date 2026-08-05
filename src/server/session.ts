@@ -14,14 +14,14 @@ import {
   NO_WALKTHROUGH,
   NOT_A_REPO,
   type DiscoveryError,
-} from "../check/discover.js";
-import { softReport } from "../check/run.js";
-import type { LoadError } from "../compile/load.js";
+} from "../walkthrough/discovery.js";
+import { softReport } from "../walkthrough/checker.js";
+import type { LoadError } from "../walkthrough/pipeline.js";
 import { describeFailure } from "../failure.js";
-import type { CheckReport } from "../payload/types.js";
-import { gitToplevel } from "../resolve/exec.js";
-import { repoRelative, type PathResolutionFailed } from "../resolve/paths.js";
-import { ReviewStateStore } from "../state/store.js";
+import type { CheckReport } from "../contract/types.js";
+import { gitToplevel } from "../shell.js";
+import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
+import { ReviewStateStore } from "../state.js";
 import { createApi, type Api } from "./api.js";
 import { PayloadCache } from "./cache.js";
 import { ServerRepo, type ServerRepoError } from "./repo.js";

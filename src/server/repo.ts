@@ -12,10 +12,15 @@
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { loadWalkthrough, type LoadError, type LoadResult } from "../compile/load.js";
-import { CommandExecutor, gitOut, type CommandFailed } from "../resolve/exec.js";
-import { repoSlug, resolveCommit } from "../resolve/git.js";
-import { frontmatterBlock, parseFrontmatter, type Frontmatter } from "../schema/frontmatter.js";
+import { loadWalkthrough, type LoadError, type LoadResult } from "../walkthrough/pipeline.js";
+import { ContextResolver, type CommandFailed } from "../contract/context.js";
+import { CommandExecutor, gitOut } from "../shell.js";
+import { repoSlug, resolveCommit } from "../git/git.js";
+import {
+  frontmatterBlock,
+  parseFrontmatter,
+  type Frontmatter,
+} from "../walkthrough/frontmatter.js";
 
 /** What one index row needs, read straight from the file and from git. */
 export interface IndexRow {
@@ -62,7 +67,7 @@ export interface RepoOptions {
   useGh?: boolean;
 }
 
-type RepoDependencies = FileSystem.FileSystem | Path.Path | CommandExecutor;
+type RepoDependencies = FileSystem.FileSystem | Path.Path | CommandExecutor | ContextResolver;
 
 export class ServerRepo extends Context.Service<ServerRepo, ServerRepoShape>()(
   "@balade/ServerRepo",
@@ -77,6 +82,7 @@ export class ServerRepo extends Context.Service<ServerRepo, ServerRepoShape>()(
           FileSystem.FileSystem,
           Path.Path,
           CommandExecutor,
+          ContextResolver,
         )(yield* Effect.context<RepoDependencies>());
         return yield* makeServerRepo(options, fs, path, dependencies);
       }),

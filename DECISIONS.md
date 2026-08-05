@@ -3,10 +3,62 @@
 Trade-offs this package has already weighed. Each entry states what holds today
 and what would move it.
 
+## The src/ layout is a folder-per-verb boundary over autonomous concept modules
+
+Decided on [#37](https://github.com/basaltbytes/balade/issues/37). `src/` holds
+one folder per CLI verb under `commands/`, five concept folders — `walkthrough/`
+(the document, bytes to contract), `git/` (facts from the repository and forge),
+`contract/` (shared vocabulary: shapes that cross module boundaries), `preset/`,
+`pi/` (the generation engine), `server/` (live session runtime) — and the root
+files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`.
+
+All imports flow one direction; peers never import each other:
+
+```
+cli.ts                      entry + layer wiring
+commands/    server/        orchestrators — the ONLY places concepts compose
+pi/                         → git (type imports), contract, shell
+walkthrough/                → preset, contract, shell        (never git/)
+git/                        → contract, shell                (never walkthrough/)
+preset/                     → contract
+contract/                   → nothing internal
+shell.ts  state.ts  terminal.ts  failure.ts                  root ports & utils → contract
+```
+
+1. `Command.make` appears only in `commands/<verb>/index.ts` (plus the root
+   `balade` command in `cli.ts`). `ls src/commands` **is** the CLI surface.
+2. A file lives in `commands/<verb>/` only if that verb is its sole importer.
+   Nothing outside `commands/` may import from `commands/` (except `cli.ts`).
+   The review lifecycle shared by `open` and a successful generation therefore
+   lives in `server/review.ts`, not under either verb.
+3. `walkthrough/`, `git/`, `preset/` are autonomous: they import only
+   `contract/` and root ports (`walkthrough/` may additionally import
+   `preset/` — the tag catalog is an extension of the format). Concepts compose
+   only in `commands/` and `server/`, plus layer wiring in `cli.ts`.
+4. Outside `commands/`, a concept with one file is a root file, not a folder.
+5. Module files are nouns; verbs live in exports. The thing, not the action:
+   `compiler.ts` exports `compileDocument`, `pipeline.ts` exports
+   `loadWalkthrough`, `locator.ts` holds `PrLocator`. A file named after a
+   phase (`load.ts`, `compile.ts`, `serve.ts`) misstates what it is.
+
+The one seam that makes rule 3 hold: `contract/context.ts` owns the resolution
+contract — `ResolveContext`, `ResolveOptions`, `ResolveResult`, a
+`ContextResolver` service tag, and the process-port failure vocabulary
+(`CommandFailed`, `NotARepository`, `CommitUnresolvable`). `walkthrough/pipeline.ts`
+yields the service; `git/git.ts` provides the live layer wrapping the unchanged
+`resolveContext`. The failure classes sit in the contract rather than `shell.ts`
+because they cross every module boundary — `shell.ts` produces them, boundaries
+translate them, and `contract/` must import nothing internal, in that order.
+
+Enforced two ways: oxlint's `import/no-cycle` (import plugin, `.oxlintrc.json`)
+rejects file cycles, and `test/architecture.test.ts` walks the real `src/`
+import graph and asserts the rules above. What would move this: a second
+renderer or a published API, which would force `contract/` to version.
+
 ## The payload contract is Effect Schema
 
 Supersedes "the payload contract stays plain interfaces" (2026-08-02). The
-source of truth is `src/payload/schema.ts`, with `src/payload/types.ts` derived
+source of truth is `src/contract/schema.ts`, with `src/contract/types.ts` derived
 from it (`typeof X.Type`) — still the type-only entry the SPA imports through
 `app/src/contract.ts`. Every JSON edge decodes deeply and rejects excess
 properties; the deliberate exception is a namespaced preset block, whose open
@@ -31,7 +83,7 @@ gzip 487.21 to 508.51 kB), and the single-file export JS from 3,971,906 to
 4,037,646 bytes (+65,740; gzip 762.81 to 783.96 kB). That fixed cost buys one
 contract and deep validation at both baked and served edges.
 
-`src/payload/schema.ts` and `src/payload/parse-review.ts` are the pure shared
+`src/contract/schema.ts` and `src/contract/review-parser.ts` are the pure shared
 exceptions to "app imports the CLI as types only": the server and SPA guard the
 same JSON. What stays forbidden is CLI *runtime* — git, fs, process — reaching
 `app/`.
@@ -85,8 +137,12 @@ state to a second state system.
 
 ## The effectful shell has shared and session-scoped layer stacks
 
-The CLI provides `cliLayer` once at its entry point. That layer holds Effect's
-Node `FileSystem`/`Path` services, `CommandExecutor`, and `PrLocator`.
+The CLI provides `cliLayer` once at its entry point (`src/cli.ts`, where the
+former `live.ts` wiring now lives; `test/support/effect.ts` mirrors the same
+stack explicitly so tests never import the executable entry). That layer holds
+Effect's Node `FileSystem`/`Path` services, `CommandExecutor`,
+`BrowserLauncher`, `PrLocator`, the Pi author adapter, and the live
+`ContextResolver`.
 `CommandExecutor` deliberately still wraps `spawnSync`; process behavior and the
 served payload-cache cost model stay unchanged. The resolver depends on that
 process boundary rather than on Node's child-process API.
@@ -190,7 +246,7 @@ of `HEAD`; and the fetch requires a GitHub origin — `pull/<n>/head` is a GitHu
 refspec, and a failed fetch stops with a note. Review state is unaffected:
 `.balade/` is keyed by walkthrough path, so marks made against a fetched ref
 reappear when the branch is eventually checked out. The locator is an Effect
-service (`src/pr/locate.ts`) with typed errors and captures the same filesystem,
+service (`src/commands/open/locator.ts`) with typed errors and captures the same filesystem,
 path and command services as the rest of the shell.
 
 ## Resolution shells out through the `CommandExecutor` layer
@@ -200,7 +256,7 @@ processes — fine for `check`, too slow to repeat per request. The decided path
 is the synchronous adapter plus a
 served-mode payload cache keyed `(sourcePath, pin, head)`, which turns repeat
 requests into a map lookup. If the cache falls short, `execAsync` goes in beside
-the synchronous implementation in `src/resolve/exec.ts`, behind the same
+the synchronous implementation in `src/shell.ts`, behind the same
 service.
 
 `src/server/cache.ts` keeps one slot per walkthrough rather than one per key: a
@@ -264,7 +320,7 @@ Both scripts in the export sit in HTML script data, where `</script` ends the
 element and `<!--` opens an escaped state in which a later `<script>` makes the
 closing tag stop closing. The payload is data: every `<` leaves as `\u003c`,
 which is a JSON escape, so no walkthrough can end its own payload — prose about
-HTML included. The bundle is code and cannot be re-encoded, so `src/build/html.ts`
+HTML included. The bundle is code and cannot be re-encoded, so `src/commands/build/html.ts`
 inserts a backslash the JavaScript grammar ignores: `<\/script` and `<\!--`.
 Both sequences can only occur inside a string, a template or a comment (an
 unescaped `/` would close a regular expression literal), and `\!` under a `/u`
@@ -316,9 +372,10 @@ anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
 Codex-SDK-plus-API-key pair of adapters instead.
 
-The adapter itself is split at the session boundary: `pi.ts` owns account,
-authentication and global settings, while `pi-session.ts` owns the scoped
-authoring session, its read-only tool policy and provider-event forwarding.
+The adapter itself is split at the session boundary: `pi/client.ts` owns
+account, authentication and global settings, while `pi/session.ts` owns the
+scoped authoring session, its read-only tool policy and provider-event
+forwarding.
 This keeps preference durability independent from the security-sensitive tool
 sandbox and session lifecycle.
 
@@ -436,7 +493,7 @@ full diagnostics remain visible when the generated draft still needs manual repa
 ## Balade owns the versioned authoring package
 
 The programmatic system prompt, section templates, rubric and inspection limits
-ship in `src/generate/authoring.ts`. Balade is their single source because
+ship in `src/pi/authoring.ts`. Balade is their single source because
 `generate` must work from a bare npm install. The `code-walkthrough` skill is an
 interactive wrapper: it points to the package contract and adds its human-agent
 workflow, writing-skill review and visual diagram pass. It does not vendor a

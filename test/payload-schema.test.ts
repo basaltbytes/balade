@@ -1,13 +1,13 @@
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { loadWalkthrough } from "../src/compile/load.js";
+import { loadWalkthrough } from "../src/walkthrough/pipeline.js";
 import {
   Block,
   Payload as PayloadSchema,
   ReviewState as ReviewStateSchema,
-} from "../src/payload/schema.js";
-import type { Payload, ReviewState } from "../src/payload/types.js";
+} from "../src/contract/schema.js";
+import type { Payload, ReviewState } from "../src/contract/types.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 

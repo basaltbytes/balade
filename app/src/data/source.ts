@@ -5,7 +5,7 @@ import { Effect, Option, Schema } from "effect";
 import {
   IndexPayload as IndexPayloadSchema,
   Payload as PayloadSchema,
-} from "../../../src/payload/schema";
+} from "../../../src/contract/schema";
 import type { IndexPayload, Payload } from "../contract";
 import { BrowserFetch } from "./browser";
 

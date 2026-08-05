@@ -1,9 +1,9 @@
 import { join } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { checkOne } from "../src/check/run.js";
-import { loadWalkthrough } from "../src/compile/load.js";
-import type { Payload } from "../src/payload/types.js";
+import { checkOne } from "../src/walkthrough/checker.js";
+import { loadWalkthrough } from "../src/walkthrough/pipeline.js";
+import type { Payload } from "../src/contract/types.js";
 import { getPreset, presetNames, presetOfTag } from "../src/preset/registry.js";
 import { firstBlock } from "./support/blocks.js";
 import { provideLive } from "./support/effect.js";

@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Layer, Option, Path } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { repoRelative } from "../src/resolve/paths.js";
+import { repoRelative } from "../src/contract/paths.js";
 
 const longRoot = "/Users/runneradmin/work/balade";
 const shortRoot = "/Users/RUNNER~1/work/balade";

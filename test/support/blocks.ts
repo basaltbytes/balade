@@ -1,6 +1,6 @@
 /* Payload block lookups shared by the compile and preset suites. */
 
-import type { Block, Payload } from "../../src/payload/types.js";
+import type { Block, Payload } from "../../src/contract/types.js";
 
 export function firstBlock<K extends Block["b"]>(
   payload: Payload,

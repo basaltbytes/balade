@@ -1,8 +1,26 @@
-/** The transition from a walkthrough selection to a running review server. */
+/**
+ * The transition from a walkthrough selection to a running review server, and
+ * the complete CLI review lifecycle shared by `open` and successful generation.
+ */
 
 import { Effect, Match, Schema } from "effect";
-import { serve } from "./serve.js";
-import { prepareSession, type Session, type SessionOptions } from "./session.js";
+import {
+  printSoft,
+  served,
+  stopMessage,
+  stopReports,
+  writeStderr,
+  writeStdout,
+} from "../terminal.js";
+import { launchBrowser, type BrowserMode } from "./browser.js";
+import { findAppBundle, serve, type AppBundleMissing, type AppBundleReadFailed } from "./http.js";
+import {
+  prepareSession,
+  sessionErrorMessage,
+  type Session,
+  type SessionError,
+  type SessionOptions,
+} from "./session.js";
 
 interface ReviewSessionStarted {
   readonly _tag: "ReviewSessionStarted";
@@ -36,3 +54,67 @@ export const startReviewSession = Effect.fn("startReviewSession")(function* (
     SessionFailed: (result) => Effect.succeed(result),
   });
 });
+
+interface RunReviewSessionOptions {
+  readonly session: SessionOptions;
+  readonly port: number;
+  readonly browserMode: BrowserMode;
+}
+
+type ReviewSessionError =
+  | AppBundleMissing
+  | AppBundleReadFailed
+  | SessionError
+  | ReviewServerFailed;
+
+/** Present one live session at the CLI boundary and own it until interruption. */
+export const runReviewSession = Effect.fn("runReviewSession")((options: RunReviewSessionOptions) =>
+  Effect.gen(function* () {
+    const appDir = yield* findAppBundle();
+    const result = yield* startReviewSession({
+      session: options.session,
+      port: options.port,
+      appDir,
+    });
+    return yield* Match.valueTags(result, {
+      ReviewSessionStarted: (started) =>
+        Effect.gen(function* () {
+          printSoft(started.session.reports);
+          writeStdout(`balade is serving ${served(started.session.paths)} at ${started.url}\n`);
+          /* Launch failure is a notice: the scoped server remains available. */
+          yield* launchBrowser(options.browserMode, started.url).pipe(
+            Effect.catchTag("BrowserLaunchFailed", (error) =>
+              Effect.sync(() => {
+                writeStderr(
+                  `warning your browser did not open (${error.reason})\n` +
+                    `  fix Open ${error.url} yourself, or pass --no-browser.\n`,
+                );
+              }),
+            ),
+          );
+          return yield* Effect.never;
+        }),
+      SessionNotStarted: ({ message }) => Effect.sync(() => stopMessage(message)),
+      SessionFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
+    });
+  }).pipe(
+    Effect.catch((error) => Effect.sync(() => stopMessage(reviewSessionErrorMessage(error)))),
+  ),
+);
+
+const reviewSessionErrorMessage = (error: ReviewSessionError): string =>
+  Match.valueTags(error, {
+    AppBundleMissing: ({ note }) => note,
+    AppBundleReadFailed: ({ note }) => note,
+    ReviewServerFailed: ({ port }) =>
+      port === 0
+        ? "Could not start the live review server on a free local port."
+        : `Could not start the live review server on port ${port}; choose another --port.`,
+    NotARepository: sessionErrorMessage,
+    CommandFailed: sessionErrorMessage,
+    WalkthroughReadFailed: sessionErrorMessage,
+    WalkthroughFileReadFailed: sessionErrorMessage,
+    ServerSourceReadFailed: sessionErrorMessage,
+    CommitUnresolvable: sessionErrorMessage,
+    PathResolutionFailed: sessionErrorMessage,
+  });

@@ -13,18 +13,19 @@ import {
   WalkthroughAuthor,
   type AuthorModel,
   type AuthorProgress,
-} from "../src/generate/author.js";
-import { piWalkthroughAuthorLayer } from "../src/generate/pi.js";
-import { AUTHORING_SYSTEM_PROMPT } from "../src/generate/authoring.js";
-import { renderDraft, runGeneration, slugifyTitle } from "../src/generate/run.js";
+} from "../src/pi/author.js";
+import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
+import { AUTHORING_SYSTEM_PROMPT } from "../src/pi/authoring.js";
+import { renderDraft, runGeneration, slugifyTitle } from "../src/commands/generate/pipeline.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
   modelsForPicker,
   preferredModel,
-} from "../src/generate/select.js";
-import { shellLayer } from "../src/live.js";
-import type { PullSnapshot } from "../src/resolve/git.js";
+} from "../src/commands/generate/selection.js";
+import { shellLayer } from "./support/effect.js";
+import { contextResolverLive } from "../src/git/git.js";
+import type { PullSnapshot } from "../src/git/pr.js";
 import { createFixtureRepo } from "./support/repo.js";
 
 const PINNED_LINE = "from odoo import api, fields, models";
@@ -51,10 +52,13 @@ async function piHarness(registerFaux = true, settingsManager = coding.SettingsM
     modelRuntime.registerNativeProvider(faux.provider);
     await modelRuntime.refresh({ allowNetwork: false });
   }
-  const layer = piWalkthroughAuthorLayer({
-    snapshotCacheRoot,
-    load: async () => ({ coding, ai, modelRuntime, settingsManager }),
-  }).pipe(Layer.provideMerge(shellLayer));
+  const layer = Layer.mergeAll(
+    piWalkthroughAuthorLayer({
+      snapshotCacheRoot,
+      load: async () => ({ coding, ai, modelRuntime, settingsManager }),
+    }),
+    contextResolverLive,
+  ).pipe(Layer.provideMerge(shellLayer));
   return { credentials, faux, layer, modelRuntime, settingsManager };
 }
 

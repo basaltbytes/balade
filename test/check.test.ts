@@ -4,12 +4,13 @@ import { join } from "node:path";
 import { NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { runBuild } from "../src/build/run.js";
-import { formatJson, formatText } from "../src/check/report.js";
-import { checkOne, outcomeFromReports, runCheck } from "../src/check/run.js";
-import { loadWalkthrough } from "../src/compile/load.js";
-import type { CheckDiagnostic, CheckReport } from "../src/payload/types.js";
+import { runBuild } from "../src/commands/build/pipeline.js";
+import { formatJson, formatText } from "../src/terminal.js";
+import { checkOne, outcomeFromReports, runCheck } from "../src/walkthrough/checker.js";
+import { loadWalkthrough } from "../src/walkthrough/pipeline.js";
+import type { CheckDiagnostic, CheckReport } from "../src/contract/types.js";
 import { prepareSession } from "../src/server/session.js";
+import { contextResolverLive } from "../src/git/git.js";
 import { unavailableGhLayer } from "./support/command.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
@@ -25,7 +26,11 @@ function find(report: CheckReport, code: string): CheckDiagnostic {
   return diagnostic;
 }
 
-const resolverWithoutGh = Layer.mergeAll(NodeServices.layer, unavailableGhLayer);
+const resolverWithoutGh = Layer.mergeAll(
+  NodeServices.layer,
+  unavailableGhLayer,
+  contextResolverLive.pipe(Layer.provide(unavailableGhLayer)),
+);
 
 describe("check", () => {
   let repo: FixtureRepo;

@@ -5,7 +5,7 @@ import {
   generationSummaryText,
   generationSuccessText,
   makeGenerationProgress,
-} from "../src/generate/command.js";
+} from "../src/commands/generate/index.js";
 import { sanitizeTerminalText } from "../src/terminal.js";
 
 describe("generation command output", () => {

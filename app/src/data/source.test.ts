@@ -5,7 +5,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   IndexPayload as IndexPayloadSchema,
   Payload as PayloadSchema,
-} from "../../../src/payload/schema";
+} from "../../../src/contract/schema";
 import { fetchLayer, type BrowserFetch, type FetchLike } from "./browser";
 import { fetchHeadDistance, loadPayload, type RouteLocation } from "./source";
 

@@ -22,8 +22,12 @@ When working on a feature/bugfix/refactoring you need to do the following before
   before writing code, and [guidelines/TYPESCRIPT.md](guidelines/TYPESCRIPT.md)
   for the language mapping. Reviews hunt violations against it.
 - When writing Effect TypeScript code ALWAYS refer to the `/effect-ts` skill
-- **`src/payload/types.ts` is the contract** between the CLI and every renderer.
-  It stays plain interfaces and changes only with a deliberate decision.
+- **`src/contract/types.ts` is the contract** between the CLI and every renderer
+  (derived from `src/contract/schema.ts`). It changes only with a deliberate
+  decision.
+- `src/` follows a one-directional dependency law — folder-per-verb `commands/`
+  boundary, autonomous concept modules. See the "src/ layout" entry in
+  [DECISIONS.md](DECISIONS.md) before adding a file or an import.
 - Chrome strings ship in `en` and `fr` (`app/src/i18n.ts`); never hardcode
   user-visible English in a component.
 - Effect v4 beta APIs differ from v3 and from most published docs: verify

@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
-import { loadLiveDependencies } from "../src/generate/pi.js";
+import { loadLiveDependencies } from "../src/pi/client.js";
 
 const SavedDefaults = Schema.Struct({
   defaultProvider: Schema.String,

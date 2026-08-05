@@ -1,14 +1,14 @@
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { compileBlocks, parseMark, type CompileEnv } from "../src/compile/blocks.js";
-import { diagramNodes } from "../src/compile/diagram.js";
-import { inlineOf, mdNodesOf, plainText } from "../src/compile/inline.js";
-import { parseDocument } from "../src/compile/document.js";
-import type { Block, CheckDiagnostic } from "../src/payload/types.js";
-import type { ResolveContext } from "../src/resolve/context.js";
-import { matchesGlob } from "../src/resolve/glob.js";
-import { sha256 } from "../src/resolve/hash.js";
-import { langOf } from "../src/resolve/lang.js";
+import { compileBlocks, parseMark, type CompileEnv } from "../src/walkthrough/blocks.js";
+import { diagramNodes } from "../src/contract/diagram.js";
+import { inlineOf, mdNodesOf, plainText } from "../src/walkthrough/inline.js";
+import { parseDocument } from "../src/walkthrough/document.js";
+import type { Block, CheckDiagnostic } from "../src/contract/types.js";
+import type { ResolveContext } from "../src/contract/context.js";
+import { matchesGlob } from "../src/walkthrough/glob.js";
+import { sha256 } from "../src/contract/hash.js";
+import { langOf } from "../src/contract/lang.js";
 
 describe("small pure helpers", () => {
   it("matches path globs", () => {
