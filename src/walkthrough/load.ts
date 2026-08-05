@@ -5,8 +5,7 @@
 
 import { Effect, FileSystem, Match, Path, Schema } from "effect";
 import type { CheckDiagnostic, Payload, RangeEcho } from "../contract/types.js";
-import type { CommandFailed } from "../shell.js";
-import { resolveContext, type ResolveError } from "../git/git.js";
+import { ContextResolver, type CommandFailed, type ResolveError } from "../contract/context.js";
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
 import { compileDocument, referencedFiles } from "./compile.js";
 import { parseDocument, type ValidDocument } from "./document.js";
@@ -69,7 +68,8 @@ export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: 
 
   /* Ref mode: the walkthrough's directory may not exist on disk, so git runs
      from `cwd` — the repository root the server resolved. */
-  const resolved = yield* resolveContext({
+  const resolver = yield* ContextResolver;
+  const resolved = yield* resolver.resolve({
     cwd: options.source === undefined ? path.dirname(absolute) : options.cwd,
     pr: frontmatter.pr,
     commit: frontmatter.commit,

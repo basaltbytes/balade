@@ -8,8 +8,9 @@ import { buildCommand } from "./commands/build/index.js";
 import { checkCommand } from "./commands/check/index.js";
 import { generateCommand } from "./commands/generate/index.js";
 import { openCommand } from "./commands/open/index.js";
+import { contextResolverLive } from "./git/git.js";
 import { piWalkthroughAuthorLive } from "./pi/client.js";
-import { PrLocator } from "./pr/locate.js";
+import { PrLocator } from "./commands/open/locate.js";
 import { BrowserLauncher } from "./server/browser.js";
 import { CommandExecutor } from "./shell.js";
 
@@ -19,7 +20,7 @@ const VERSION = "0.1.0";
 const shellLayer = Layer.mergeAll(NodeServices.layer, CommandExecutor.layer, BrowserLauncher.layer);
 
 /** The complete command-line layer, provided once. */
-const cliLayer = Layer.mergeAll(PrLocator.layer, piWalkthroughAuthorLive).pipe(
+const cliLayer = Layer.mergeAll(PrLocator.layer, piWalkthroughAuthorLive, contextResolverLive).pipe(
   Layer.provideMerge(shellLayer),
 );
 

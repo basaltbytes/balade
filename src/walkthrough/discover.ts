@@ -5,7 +5,8 @@
  */
 
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
-import { gitOut, gitToplevel, type CommandFailed, type NotARepository } from "../shell.js";
+import type { CommandFailed, NotARepository } from "../contract/context.js";
+import { gitOut, gitToplevel } from "../shell.js";
 import { frontmatterBlock } from "./frontmatter.js";
 
 const WALKTHROUGH_PATH = /(?:^|\/)walkthroughs\/[^/]+\.md$/;

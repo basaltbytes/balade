@@ -7,7 +7,7 @@ import { runCheck } from "../../walkthrough/validate.js";
 import { discoveryErrorMessage } from "../../walkthrough/discover.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
 import type { CheckReport } from "../../contract/types.js";
-import type { PullHeadError, PullSnapshot } from "../../git/git.js";
+import type { PullHeadError, PullSnapshot } from "../../git/pr.js";
 import { escapesRoot } from "../../contract/paths.js";
 import {
   AuthorSessionStartFailed,

@@ -10,7 +10,7 @@ import {
   initialAuthoringPrompt,
 } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/run.js";
-import type { PullSnapshot } from "../src/git/git.js";
+import type { PullSnapshot } from "../src/git/pr.js";
 
 const source: PullSnapshot = {
   root: "/fixture",

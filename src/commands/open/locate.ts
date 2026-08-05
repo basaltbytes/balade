@@ -12,17 +12,15 @@ import {
   discoverWalkthroughsAt,
   type DiscoveryError,
   walkthroughPr,
-} from "../walkthrough/discover.js";
-import { CommandExecutor, gitOut } from "../shell.js";
+} from "../../walkthrough/discover.js";
+import { CommandExecutor, gitOut } from "../../shell.js";
 import {
   fetchPullHead,
   PullFetchFailed,
   repositoryRootForTarget,
   WrongRepository,
-} from "../git/git.js";
-import type { PrTarget } from "../git/pr.js";
-
-export { NotARepository } from "../shell.js";
+  type PrTarget,
+} from "../../git/pr.js";
 
 export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughForPull>()(
   "NoWalkthroughForPull",

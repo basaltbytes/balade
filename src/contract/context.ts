@@ -1,11 +1,12 @@
 /**
- * The resolved PR context: everything the compiler and the preset macros read
- * from git. Built by `resolve/git.ts`; a test or a future adapter can supply
- * any object with this shape.
+ * The resolution contract: everything the compiler and the preset macros read
+ * from git, and the service that answers it. `git/git.ts` provides the live
+ * resolver; a test or a future adapter can supply any object with this shape,
+ * which is how `walkthrough/` compiles without ever importing `git/`.
  */
 
-import type { Option } from "effect";
-import type { FileEntry, Payload } from "./types.js";
+import { Context, Schema, type Effect, type Option } from "effect";
+import type { CheckDiagnostic, FileEntry, Payload } from "./types.js";
 
 export interface ResolveContext {
   /** Absolute path of the repository root. */
@@ -30,3 +31,60 @@ export interface ResolveContext {
   /** Source lines of a file at the pinned commit; `None` when it does not exist. */
   blob(path: string): Option.Option<readonly string[]>;
 }
+
+/* The process-port failure vocabulary. Produced by `shell.ts`, carried across
+   module boundaries by resolution and discovery, translated at the command
+   boundaries that can explain them. */
+
+export class CommandFailed extends Schema.TaggedErrorClass<CommandFailed>()("CommandFailed", {
+  file: Schema.String,
+  args: Schema.Array(Schema.String),
+  cwd: Schema.String,
+  stderr: Schema.String,
+  code: Schema.Finite,
+}) {}
+
+export class NotARepository extends Schema.TaggedErrorClass<NotARepository>()("NotARepository", {
+  cwd: Schema.String,
+}) {
+  get note(): string {
+    return "Not inside a git repository — run balade from the repository that holds the walkthrough.";
+  }
+}
+
+export class CommitUnresolvable extends Schema.TaggedErrorClass<CommitUnresolvable>()(
+  "CommitUnresolvable",
+  { commit: Schema.String, file: Schema.String },
+) {}
+
+export interface ResolveOptions {
+  /** Any directory inside the repository. */
+  cwd: string;
+  pr: number;
+  /** The stamped commit SHA from the frontmatter. */
+  commit: string;
+  /** Repo-relative path of the walkthrough file, for diagnostics. */
+  file: string;
+  /** Stamped blobs the pure compiler may inspect. */
+  references: readonly string[];
+  /** Fetched commit served without a checkout; tried as the head before local fallbacks. */
+  at?: string;
+  /** `false` skips gh entirely — CI without auth, and the test fixtures. */
+  useGh?: boolean;
+}
+
+export interface ResolveResult {
+  ctx: ResolveContext;
+  diagnostics: CheckDiagnostic[];
+}
+
+export type ResolveError = NotARepository | CommandFailed | CommitUnresolvable;
+
+export interface ContextResolverShape {
+  readonly resolve: (options: ResolveOptions) => Effect.Effect<ResolveResult, ResolveError>;
+}
+
+/** The one resolution port the compiler pipeline reads a repository through. */
+export class ContextResolver extends Context.Service<ContextResolver, ContextResolverShape>()(
+  "@balade/ContextResolver",
+) {}

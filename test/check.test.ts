@@ -10,6 +10,7 @@ import { checkOne, outcomeFromReports, runCheck } from "../src/walkthrough/valid
 import { loadWalkthrough } from "../src/walkthrough/load.js";
 import type { CheckDiagnostic, CheckReport } from "../src/contract/types.js";
 import { prepareSession } from "../src/server/session.js";
+import { contextResolverLive } from "../src/git/git.js";
 import { unavailableGhLayer } from "./support/command.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
@@ -25,7 +26,11 @@ function find(report: CheckReport, code: string): CheckDiagnostic {
   return diagnostic;
 }
 
-const resolverWithoutGh = Layer.mergeAll(NodeServices.layer, unavailableGhLayer);
+const resolverWithoutGh = Layer.mergeAll(
+  NodeServices.layer,
+  unavailableGhLayer,
+  contextResolverLive.pipe(Layer.provide(unavailableGhLayer)),
+);
 
 describe("check", () => {
   let repo: FixtureRepo;

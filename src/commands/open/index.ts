@@ -3,7 +3,7 @@
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { parseOpenTarget, type PrTarget } from "../../git/pr.js";
-import { locateErrorMessage, PrLocator } from "../../pr/locate.js";
+import { locateErrorMessage, PrLocator } from "./locate.js";
 import { runReviewSession } from "../../server/review.js";
 import type { Selection } from "../../server/session.js";
 import { stopMessage } from "../../terminal.js";

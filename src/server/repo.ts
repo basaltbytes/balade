@@ -13,7 +13,8 @@ import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { loadWalkthrough, type LoadError, type LoadResult } from "../walkthrough/load.js";
-import { CommandExecutor, gitOut, type CommandFailed } from "../shell.js";
+import { ContextResolver, type CommandFailed } from "../contract/context.js";
+import { CommandExecutor, gitOut } from "../shell.js";
 import { repoSlug, resolveCommit } from "../git/git.js";
 import {
   frontmatterBlock,
@@ -66,7 +67,7 @@ export interface RepoOptions {
   useGh?: boolean;
 }
 
-type RepoDependencies = FileSystem.FileSystem | Path.Path | CommandExecutor;
+type RepoDependencies = FileSystem.FileSystem | Path.Path | CommandExecutor | ContextResolver;
 
 export class ServerRepo extends Context.Service<ServerRepo, ServerRepoShape>()(
   "@balade/ServerRepo",
@@ -81,6 +82,7 @@ export class ServerRepo extends Context.Service<ServerRepo, ServerRepoShape>()(
           FileSystem.FileSystem,
           Path.Path,
           CommandExecutor,
+          ContextResolver,
         )(yield* Effect.context<RepoDependencies>());
         return yield* makeServerRepo(options, fs, path, dependencies);
       }),

@@ -8,9 +8,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { WalkthroughAuthor } from "../../src/pi/author.js";
+import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLayer } from "../../src/pi/client.js";
 import { shellLayer } from "./effect.js";
-import type { PullSnapshot } from "../../src/git/git.js";
+import type { PullSnapshot } from "../../src/git/pr.js";
 import type {
   AuthoringDecisionExpectation,
   AuthoringEvalCase,
@@ -142,15 +143,18 @@ export async function createAuthoringFauxHarness(
   const repairResponses =
     final?._tag === "Submit" ? [fauxResponse(final), fauxResponse(final)] : [];
   faux.setResponses([...transcript.map(fauxResponse), ...repairResponses]);
-  const layer = piWalkthroughAuthorLayer({
-    snapshotCacheRoot,
-    load: async () => ({
-      coding,
-      ai,
-      modelRuntime,
-      settingsManager: coding.SettingsManager.inMemory(),
+  const layer = Layer.mergeAll(
+    piWalkthroughAuthorLayer({
+      snapshotCacheRoot,
+      load: async () => ({
+        coding,
+        ai,
+        modelRuntime,
+        settingsManager: coding.SettingsManager.inMemory(),
+      }),
     }),
-  }).pipe(Layer.provideMerge(shellLayer));
+    contextResolverLive,
+  ).pipe(Layer.provideMerge(shellLayer));
   return { faux, layer, modelRuntime };
 }
 

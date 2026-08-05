@@ -4,6 +4,7 @@ import { Effect, Layer, Schema } from "effect";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "@effect/vitest";
 import { AUTHORING_PACKAGE_VERSION } from "../../src/pi/authoring.js";
+import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLive } from "../../src/pi/client.js";
 import { runGeneration } from "../../src/commands/generate/run.js";
 import { shellLayer } from "../support/effect.js";
@@ -26,7 +27,9 @@ const readPaidEvalConfig = Schema.decodeUnknownEffect(PaidEvalConfig, {
   modelId: process.env["BALADE_EVAL_MODEL"],
 });
 
-const paidLayer = piWalkthroughAuthorLive.pipe(Layer.provideMerge(shellLayer));
+const paidLayer = Layer.mergeAll(piWalkthroughAuthorLive, contextResolverLive).pipe(
+  Layer.provideMerge(shellLayer),
+);
 
 describe(`authoring package ${AUTHORING_PACKAGE_VERSION} paid evaluation`, () => {
   for (const fixture of AUTHORING_EVAL_CASES) {

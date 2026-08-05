@@ -4,77 +4,21 @@
  * enriches the PR header when it is there and authenticated.
  */
 
-import { Effect, Option, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import { basename, win32 } from "node:path";
-import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../contract/types.js";
 import {
-  readPullIntentClaims,
-  type PullIntentClaims,
-  type PullNotice,
-  type PullRequestClaimsSource,
-} from "./intent.js";
-import type { PrTarget } from "./pr.js";
-import type { ResolveContext } from "../contract/context.js";
-import { changedLines, splitDiff } from "./diff.js";
-import {
-  firstLine,
-  gh,
-  gitOut,
-  gitToplevel,
+  CommitUnresolvable,
+  ContextResolver,
   type CommandFailed,
-  type NotARepository,
-} from "../shell.js";
+  type ResolveContext,
+  type ResolveOptions,
+} from "../contract/context.js";
 import { sha256 } from "../contract/hash.js";
 import { langOf } from "../contract/lang.js";
-
-export interface ResolveOptions {
-  /** Any directory inside the repository. */
-  cwd: string;
-  pr: number;
-  /** The stamped commit SHA from the frontmatter. */
-  commit: string;
-  /** Repo-relative path of the walkthrough file, for diagnostics. */
-  file: string;
-  /** Stamped blobs the pure compiler may inspect. */
-  references: readonly string[];
-  /** Fetched commit served without a checkout; tried as the head before local fallbacks. */
-  at?: string;
-  /** `false` skips gh entirely — CI without auth, and the test fixtures. */
-  useGh?: boolean;
-}
-
-export interface ResolveResult {
-  ctx: ResolveContext;
-  diagnostics: CheckDiagnostic[];
-}
-
-export class CommitUnresolvable extends Schema.TaggedErrorClass<CommitUnresolvable>()(
-  "CommitUnresolvable",
-  { commit: Schema.String, file: Schema.String },
-) {}
-
-export class WrongRepository extends Schema.TaggedErrorClass<WrongRepository>()("WrongRepository", {
-  wanted: Schema.String,
-  found: Schema.String,
-}) {
-  get note(): string {
-    return `The pull request lives in ${this.wanted}, but this repository's origin is ${this.found}.`;
-  }
-}
-
-export class PullFetchFailed extends Schema.TaggedErrorClass<PullFetchFailed>()("PullFetchFailed", {
-  number: Schema.Finite,
-}) {
-  get note(): string {
-    return (
-      `Could not fetch pull/${this.number}/head from origin. ` +
-      "Reading a pull request needs a GitHub origin and network access when its head is not checked out."
-    );
-  }
-}
-
-export type ResolveError = NotARepository | CommandFailed | CommitUnresolvable;
-export type PullHeadError = NotARepository | CommandFailed | WrongRepository | PullFetchFailed;
+import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../contract/types.js";
+import { CommandExecutor, firstLine, gh, gitOut, gitToplevel } from "../shell.js";
+import { changedLines, splitDiff } from "./diff.js";
+import type { PullNotice, PullRequestClaimsSource } from "./intent.js";
 
 export interface PullFile {
   readonly path: string;
@@ -85,7 +29,7 @@ export interface PullFile {
   readonly oldPath?: string;
 }
 
-interface ResolvedPull {
+export interface ResolvedPull {
   readonly root: string;
   readonly repoSlug: string;
   readonly pin: string;
@@ -96,18 +40,8 @@ interface ResolvedPull {
   readonly notices: readonly PullNotice[];
 }
 
-export interface PullSnapshot extends ResolvedPull {
-  readonly claims: PullIntentClaims;
-}
-
-export interface ResolvePullHeadOptions {
-  readonly cwd: string;
-  readonly target: PrTarget;
-  readonly useGh?: boolean;
-}
-
 /** What the resolver keeps of `gh pr view`, once every field has been checked. */
-interface PullRequest extends PullRequestClaimsSource {
+export interface PullRequest extends PullRequestClaimsSource {
   readonly url: string;
   readonly state: string;
   readonly author: string | undefined;
@@ -118,7 +52,7 @@ interface PullRequest extends PullRequestClaimsSource {
   readonly commits: number;
 }
 
-interface PullRequestResult {
+export interface PullRequestResult {
   readonly pull: Option.Option<PullRequest>;
   readonly notices: readonly PullNotice[];
 }
@@ -242,53 +176,7 @@ export const resolveContext = Effect.fn("resolveContext")(function* (options: Re
   return { ctx, diagnostics };
 });
 
-/** Resolve the exact PR head and its lightweight metadata in one GitHub snapshot. */
-export const resolvePullHead = Effect.fn("resolvePullHead")(function* (
-  options: ResolvePullHeadOptions,
-) {
-  const root = yield* repositoryRootForTarget(options.cwd, options.target);
-  const requested =
-    options.useGh === false ? undefined : yield* readPullRequest(root, options.target.number);
-  const pullOption = requested?.pull ?? Option.none<PullRequest>();
-  const pull = Option.getOrUndefined(pullOption);
-  const localHead = yield* resolveCommit(root, "HEAD");
-  const pin =
-    pull !== undefined && Option.isSome(localHead) && localHead.value === pull.headRefOid
-      ? localHead.value
-      : yield* fetchPullHead(root, options.target.number);
-  const resolved = yield* makeResolvedPull({
-    root,
-    number: options.target.number,
-    pin,
-    at: pin,
-    requested,
-  });
-  const claims = yield* readPullIntentClaims({
-    root: resolved.root,
-    base: resolved.base,
-    pin: resolved.pin,
-    github: pullOption,
-  });
-  return {
-    ...resolved,
-    claims: claims.claims,
-    notices: [...resolved.notices, ...claims.notices],
-  } satisfies PullSnapshot;
-});
-
-export const repositoryRootForTarget = Effect.fn("repositoryRootForTarget")(function* (
-  cwd: string,
-  target: PrTarget,
-) {
-  const root = yield* gitToplevel(cwd);
-  const slug = yield* repoSlug(root);
-  if (target.slug !== null && target.slug.toLowerCase() !== slug.toLowerCase()) {
-    return yield* new WrongRepository({ wanted: target.slug, found: slug });
-  }
-  return root;
-});
-
-interface MakeResolvedPullOptions {
+export interface MakeResolvedPullOptions {
   readonly root: string;
   readonly number: number;
   readonly pin: string;
@@ -296,7 +184,7 @@ interface MakeResolvedPullOptions {
   readonly requested: PullRequestResult | undefined;
 }
 
-const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
+export const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
   options: MakeResolvedPullOptions,
 ) {
   let probedDefault: string | undefined;
@@ -477,7 +365,7 @@ function prState(state: string | undefined): "open" | "closed" | "merged" {
  * that is missing, unauthenticated or offline is a warning the report carries,
  * never a silent downgrade of the PR header.
  */
-const readPullRequest = (root: string, number: number) =>
+export const readPullRequest = (root: string, number: number) =>
   gh(
     [
       "pr",
@@ -578,24 +466,6 @@ interface NumStat {
   deletions: number;
   binary: boolean;
 }
-
-/** Fetch one advertised SHA without reading or writing process-global FETCH_HEAD. */
-export const fetchPullHead = Effect.fn("fetchPullHead")(function* (root: string, number: number) {
-  return yield* Effect.gen(function* () {
-    const advertised = yield* gitOut(
-      ["ls-remote", "--refs", "origin", `refs/pull/${number}/head`],
-      root,
-    );
-    const pin = advertised.trim().split(/\s/u)[0] ?? "";
-    if (!/^[0-9a-f]{40,64}$/u.test(pin)) return yield* new PullFetchFailed({ number });
-    yield* gitOut(["fetch", "--quiet", "--no-write-fetch-head", "origin", pin], root);
-    const resolved = yield* resolveCommit(root, pin);
-    if (Option.isNone(resolved) || resolved.value !== pin) {
-      return yield* new PullFetchFailed({ number });
-    }
-    return pin;
-  }).pipe(Effect.mapError(() => new PullFetchFailed({ number })));
-});
 
 function parseNumStat(out: string): Map<string, NumStat> {
   const stats = new Map<string, NumStat>();
@@ -713,3 +583,16 @@ const readOverlay = Effect.fn("readOverlay")(function* (root: string, base: stri
   }
   return overlay;
 });
+
+/** The live resolution port: `resolveContext` behind the `ContextResolver` seam. */
+export const contextResolverLive = Layer.effect(
+  ContextResolver,
+  Effect.gen(function* () {
+    const dependencies = Context.pick(CommandExecutor)(yield* Effect.context<CommandExecutor>());
+    return {
+      resolve: Effect.fn("ContextResolver.resolve")((options: ResolveOptions) =>
+        resolveContext(options).pipe(Effect.provide(dependencies)),
+      ),
+    };
+  }),
+);

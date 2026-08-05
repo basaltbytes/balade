@@ -4,25 +4,10 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer } from "effect";
+import { CommandFailed, NotARepository } from "./contract/context.js";
 
-export class CommandFailed extends Schema.TaggedErrorClass<CommandFailed>()("CommandFailed", {
-  file: Schema.String,
-  args: Schema.Array(Schema.String),
-  cwd: Schema.String,
-  stderr: Schema.String,
-  code: Schema.Finite,
-}) {}
-
-export class NotARepository extends Schema.TaggedErrorClass<NotARepository>()("NotARepository", {
-  cwd: Schema.String,
-}) {
-  get note(): string {
-    return "Not inside a git repository — run balade from the repository that holds the walkthrough.";
-  }
-}
-
-export type ExecError = CommandFailed | NotARepository;
+type ExecError = CommandFailed | NotARepository;
 
 /* Diffs of large PRs and whole-file blobs pass through stdout. */
 const MAX_BUFFER = 256 * 1024 * 1024;

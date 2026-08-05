@@ -3,7 +3,7 @@
 import { Context, Effect, Option, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { parsePrTarget } from "../../git/pr.js";
-import { resolvePullHead } from "../../git/git.js";
+import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
 import { formatText, stopMessage, writeStderr, writeStdout } from "../../terminal.js";
 import {

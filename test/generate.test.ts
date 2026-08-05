@@ -24,7 +24,8 @@ import {
   preferredModel,
 } from "../src/commands/generate/select.js";
 import { shellLayer } from "./support/effect.js";
-import type { PullSnapshot } from "../src/git/git.js";
+import { contextResolverLive } from "../src/git/git.js";
+import type { PullSnapshot } from "../src/git/pr.js";
 import { createFixtureRepo } from "./support/repo.js";
 
 const PINNED_LINE = "from odoo import api, fields, models";
@@ -51,10 +52,13 @@ async function piHarness(registerFaux = true, settingsManager = coding.SettingsM
     modelRuntime.registerNativeProvider(faux.provider);
     await modelRuntime.refresh({ allowNetwork: false });
   }
-  const layer = piWalkthroughAuthorLayer({
-    snapshotCacheRoot,
-    load: async () => ({ coding, ai, modelRuntime, settingsManager }),
-  }).pipe(Layer.provideMerge(shellLayer));
+  const layer = Layer.mergeAll(
+    piWalkthroughAuthorLayer({
+      snapshotCacheRoot,
+      load: async () => ({ coding, ai, modelRuntime, settingsManager }),
+    }),
+    contextResolverLive,
+  ).pipe(Layer.provideMerge(shellLayer));
   return { credentials, faux, layer, modelRuntime, settingsManager };
 }
 
