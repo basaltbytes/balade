@@ -107,7 +107,7 @@ function summary(report: CheckReport): string {
 }
 
 /** The boundary echo is a `check` affordance for the author; soft commands show diagnostics only. */
-export const diagnosticsOnly = (reports: readonly CheckReport[]): readonly CheckReport[] =>
+const diagnosticsOnly = (reports: readonly CheckReport[]): readonly CheckReport[] =>
   reports.map((report) => ({ ...report, ranges: [] }));
 
 export const stopReports = (reports: readonly CheckReport[]): void => {

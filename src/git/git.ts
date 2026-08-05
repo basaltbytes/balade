@@ -52,7 +52,7 @@ export interface PullRequest extends PullRequestClaimsSource {
   readonly commits: number;
 }
 
-export interface PullRequestResult {
+interface PullRequestResult {
   readonly pull: Option.Option<PullRequest>;
   readonly notices: readonly PullNotice[];
 }
@@ -83,7 +83,7 @@ const decodePullRequest = Schema.decodeUnknownEffect(PullRequestResponse, {
   onExcessProperty: "error",
 });
 
-export const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOptions) {
+const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOptions) {
   const root = yield* gitToplevel(options.cwd);
 
   const pinProbe = yield* resolveCommit(root, options.commit);
@@ -176,7 +176,7 @@ export const resolveContext = Effect.fn("resolveContext")(function* (options: Re
   return { ctx, diagnostics };
 });
 
-export interface MakeResolvedPullOptions {
+interface MakeResolvedPullOptions {
   readonly root: string;
   readonly number: number;
   readonly pin: string;
