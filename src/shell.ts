@@ -1,6 +1,6 @@
 /**
- * Process adapter. Every git/gh call in the CLI goes through here, so the
- * rest of the resolver stays a pure function of the strings it returns.
+ * Process adapter. Every git/gh call in the CLI goes through here, so
+ * resolution stays a pure function of the strings it returns.
  */
 
 import { spawnSync } from "node:child_process";

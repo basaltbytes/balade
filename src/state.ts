@@ -1,9 +1,10 @@
 /**
- * Review state on disk (#14): one JSON file per walkthrough under `.balade/`
- * at the repository root, named after the walkthrough file
+ * Balade-owned state on disk: the predictable `~/.balade` home directories,
+ * and the review-state store (#14) — one JSON file per walkthrough under
+ * `.balade/` at the repository root, named after the walkthrough file
  * (`pr-96-loan-refactor.md` → `pr-96-loan-refactor.review.json`).
  *
- * The directory is excluded through `.git/info/exclude` rather than the
+ * The state directory is excluded through `.git/info/exclude` rather than the
  * committed `.gitignore`, so a reviewer's marks never touch the repository.
  * A missing or mismatched file is legitimate absence. Unreadable, corrupt and
  * unwritable state stays in the typed error channel for the server boundary to
