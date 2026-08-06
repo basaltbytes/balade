@@ -336,6 +336,30 @@ type. The casts bridge two structurally identical declarations; no unchecked
 runtime value passes through them. They stay until the two packages agree on one
 `hast` version.
 
+## A preset is activated explicitly, and owns the prose that teaches it
+
+`generate --preset <name>` is the only way generation activates a preset
+(2026-08-05). Two things follow from the flag: the preset's own authoring text
+goes into the system prompt, and the CLI stamps `preset:` in the frontmatter so
+the tags are active when `check` reads the draft. An explicit flag outranks any
+`preset` the model returned, and without the flag the prompt tells the model not
+to set one — before this, the prompt mentioned "an optional preset" without ever
+naming a preset or its tags, so `generate` could not realistically produce one.
+
+Each `Preset` carries its own `authoring` string. That keeps preset knowledge in
+`preset/`, which the dependency law forbids `pi/` from importing: the command
+boundary reads the registry and passes `{ name, authoring }` through the
+`AuthoringPreset` boundary type, so the generation engine stays preset-agnostic.
+The cost is that the guidance is hand-written prose rather than derived from the
+Markdoc schemas — the schemas carry attribute names and types but not when a tag
+earns its place, which is the part a model gets wrong. Adding preset guidance is
+a minor authoring-package bump (1.4.0): a new authoring decision, no change to
+the input contract, and fixtures that name no preset are unaffected.
+
+Detection is deliberately not done. Sniffing `__manifest__.py` to auto-activate
+`odoo` would guess at a repository-wide choice from one file; what would move
+this is a preset the author would always want, where the flag becomes friction.
+
 ## The odoo preset ships `o-field`; `o-security` enrichment is open
 
 `o-field` and the decorator chips are live. `o-security` passes explicit `rows`

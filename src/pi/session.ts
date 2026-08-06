@@ -12,7 +12,7 @@ import type { Node } from "@markdoc/markdoc";
 import { Effect, FileSystem, Option, Path, Result } from "effect";
 import { CommandExecutor, gitOut } from "../shell.js";
 import type { AuthoringRequest } from "./author.js";
-import { AUTHORING_LIMITS, AUTHORING_SYSTEM_PROMPT } from "./authoring.js";
+import { AUTHORING_LIMITS, authoringSystemPrompt } from "./authoring.js";
 import {
   openPinnedRepositorySnapshot,
   type PinnedRepositorySnapshot,
@@ -293,7 +293,11 @@ export async function createPiSession(
     cwd: snapshot.root,
     model,
     modelRuntime: pi.modelRuntime,
-    resourceLoader: minimalResourceLoader(pi.coding, AUTHORING_SYSTEM_PROMPT, projectContextFiles),
+    resourceLoader: minimalResourceLoader(
+      pi.coding,
+      authoringSystemPrompt(request.preset),
+      projectContextFiles,
+    ),
     tools: [
       "list_pr_changes",
       "list_source_files",

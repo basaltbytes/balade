@@ -6,9 +6,9 @@
  */
 
 import { Option } from "effect";
-import type { AuthoringRequest } from "./author.js";
+import type { AuthoringPreset, AuthoringRequest } from "./author.js";
 
-export const AUTHORING_PACKAGE_VERSION = "1.3.0";
+export const AUTHORING_PACKAGE_VERSION = "1.4.0";
 export const AUTHORING_WALKTHROUGH_SCHEMA_VERSION = 1;
 export const AUTHORING_META_KEY = "balade-authoring";
 
@@ -129,14 +129,14 @@ const rubricPrompt = AUTHORING_RUBRIC.map(
   ({ question, pass, reject }) => `- ${question}\n  Pass: ${pass}\n  Reject: ${reject}`,
 ).join("\n");
 
-export const AUTHORING_SYSTEM_PROMPT = `You author thin, committed balade walkthroughs for pull-request review.
+const BASE_SYSTEM_PROMPT = `You author thin, committed balade walkthroughs for pull-request review.
 
 Input and output contract
 
 - Input is pull-request context plus read-only tools for the diff and a filesystem snapshot of one pinned commit.
 - Before the first turn, follow the pinned AGENTS.md or CLAUDE.md instructions that apply from the repository root through each changed file's directory. Nested instructions apply only to paths below their directory. No instruction is read from the working tree or the user's global Pi configuration.
 - Output is one walkthrough schema ${AUTHORING_WALKTHROUGH_SCHEMA_VERSION} Markdoc body submitted through submit_walkthrough. Balade adds the YAML frontmatter.
-- The submission has a concise title, short scalar metadata, an optional preset only when the repository warrants it, and the complete body. Do not add frontmatter or an outer Markdown fence.
+- The submission has a concise title, short scalar metadata, and the complete body. Do not add frontmatter or an outer Markdown fence, and do not set a preset: balade stamps the active one itself.
 - The metadata key ${AUTHORING_META_KEY} is reserved; balade records authoring package ${AUTHORING_PACKAGE_VERSION} there.
 
 Author-stated intent
@@ -180,6 +180,19 @@ Writing rubric
 ${rubricPrompt}
 
 Your final action must be submit_walkthrough with the complete draft.`;
+
+/**
+ * The system prompt for one session. A preset appends its own tag guidance,
+ * so the engine carries no knowledge of any particular preset.
+ */
+export function authoringSystemPrompt(preset?: AuthoringPreset): string {
+  if (preset === undefined) return BASE_SYSTEM_PROMPT;
+  return `${BASE_SYSTEM_PROMPT}
+
+Preset: ${preset.name}
+
+${preset.authoring}`;
+}
 
 type InitialAuthoringRequest = Pick<AuthoringRequest, "pin" | "pull" | "claims" | "files">;
 

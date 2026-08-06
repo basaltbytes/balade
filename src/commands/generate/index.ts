@@ -3,6 +3,7 @@
 import { Context, Effect, Option, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { parsePrTarget } from "../../git/pr.js";
+import { getPreset, presetNames } from "../../preset/registry.js";
 import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
 import { formatText, stopMessage, writeStderr, writeStdout } from "../../terminal.js";
@@ -47,6 +48,13 @@ const model = Flag.string("model").pipe(
   Flag.optional,
 );
 
+const preset = Flag.string("preset").pipe(
+  Flag.withDescription(
+    `Activate a preset's tags for this walkthrough (${presetNames().join(", ")})`,
+  ),
+  Flag.optional,
+);
+
 const directory = Flag.string("dir").pipe(
   Flag.withDescription("Repository-relative directory for the generated walkthrough"),
   Flag.withDefault(".agents/walkthroughs"),
@@ -71,12 +79,20 @@ const port = Flag.integer("port").pipe(
 
 export const generateCommand = Command.make(
   "generate",
-  { pr: target, provider, model, directory, verbose, noOpen, noBrowser, port },
+  { pr: target, provider, model, preset, directory, verbose, noOpen, noBrowser, port },
   (config) =>
     Effect.gen(function* () {
       const pull = parsePrTarget(config.pr);
       if (pull === null) {
         stopMessage("Name one GitHub pull request: `balade generate <pr-url|#n>`.");
+        return;
+      }
+      const active = Option.getOrUndefined(config.preset);
+      const chosen = active === undefined ? undefined : getPreset(active);
+      if (active !== undefined && chosen === undefined) {
+        stopMessage(
+          `balade: unknown preset \`${active}\`. Available: ${presetNames().join(", ")}.`,
+        );
         return;
       }
       const selection = modelSelectionFromFlags(config.provider, config.model);
@@ -91,6 +107,9 @@ export const generateCommand = Command.make(
       const result = yield* runGeneration({
         source,
         model: selected,
+        ...(chosen === undefined
+          ? {}
+          : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         directory: config.directory,
         progressMode,
         progress,

@@ -130,6 +130,40 @@ const oDiagram: PresetTag = {
   expand: (node: Node): Block[] => [diagramBlock(node)],
 };
 
+/* Written for a model that already knows the core catalog: syntax it cannot
+   guess, plus when each tag earns its place. Every attribute here is one the
+   schemas above accept — a wrong spelling costs a repair turn. */
+const ODOO_AUTHORING = `This is an Odoo repository. Three extra tags are active.
+
+{% o-field %} replaces the core field tag inside a core fields block, for Odoo model fields:
+
+{% fields %}
+{% o-field name="allocation_id" kind="Many2one" comodel="planning.allocation" readonly=true %}
+The source row this lens reflects.
+{% /o-field %}
+{% /fields %}
+
+- name and kind are required. kind is the Odoo field type, optionally with a middle dot qualifier: "Char · compute".
+- A Many2one, One2many, Many2many or Many2oneReference field needs comodel; check fails without it.
+- compute, readonly, required and store are booleans that render as badges. badges and tags take arrays of short strings.
+- The body is the note: say what the field means to a reviewer, not what its type already says.
+
+{% o-security %} is self-closing and renders an ACL matrix. Pass rows explicitly; balade does not read ir.model.access.csv:
+
+{% o-security model="planning.pool.item" rows=[{label: "base.group_user", cells: [true, false, false, false]}] /%}
+
+Each row is one group. cells are read, write, create, unlink in that order. Use it only when the PR changes access rules.
+
+{% o-diagram %} is self-closing and draws model relations:
+
+{% o-diagram intro="How the pool reaches a slot." nodes=[{id: "pool", model: "planning.pool.item", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["allocation_id", "slot_ids"]}]}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many"}] /%}
+
+- Each node needs id and model; change is "new", "mod" or "ctx"; col and row place it on a grid starting at 1.
+- Each edge needs from and to naming node ids; kind is "new", "mod", "ctx" or "derived"; label and thick are optional.
+- Use it once, for the relation the PR actually changes. A diagram of the whole module is noise.
+
+Prefer the core tags for anything not specific to Odoo. Use an Odoo tag only where the Odoo concept is the review signal — a field's semantics, a changed ACL, a new relation.`;
+
 export const odooPreset: Preset = {
   name: "odoo",
   prefix: "o-",
@@ -138,6 +172,7 @@ export const odooPreset: Preset = {
     "o-security": oSecurity,
     "o-diagram": oDiagram,
   },
+  authoring: ODOO_AUTHORING,
   methodChips(decorator: string | undefined): string[] | undefined {
     if (decorator === undefined) return undefined;
     const chips: string[] = [];
