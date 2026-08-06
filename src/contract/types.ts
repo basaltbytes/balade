@@ -11,6 +11,8 @@ import type * as Contract from "./schema.js";
 export type Inline = typeof Contract.Inline.Type;
 export type MdNode = typeof Contract.MdNode.Type;
 
+export type Lang = typeof Contract.Lang.Type;
+
 export type FileStatus = typeof Contract.FileStatus.Type;
 export type FileDiff = typeof Contract.FileDiff.Type;
 export type FileEntry = typeof Contract.FileEntry.Type;

@@ -6,7 +6,7 @@ import { formatText } from "../../terminal.js";
 import { runCheck } from "../../walkthrough/checker.js";
 import { discoveryErrorMessage } from "../../walkthrough/discovery.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
-import type { CheckReport } from "../../contract/types.js";
+import type { Lang, CheckReport } from "../../contract/types.js";
 import type { PullHeadError, PullSnapshot } from "../../git/pr.js";
 import { escapesRoot } from "../../contract/paths.js";
 import {
@@ -56,7 +56,7 @@ export interface RunGenerationOptions {
   /** Named by `--preset`; teaches the author its tags and stamps the frontmatter. */
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
-  readonly lang?: "en" | "fr";
+  readonly lang?: Lang;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
 }
@@ -264,7 +264,7 @@ export function renderDraft(
   source: PullSnapshot,
   draft: AuthorDraft,
   preset?: AuthoringPreset,
-  lang?: "en" | "fr",
+  lang?: Lang,
 ): string {
   /* An explicit `--preset` or `--lang` is the authority: a stamped preset is
      what makes its tags active at check time, and a stamped lang is what sets

@@ -21,6 +21,7 @@ import {
   parseFrontmatter,
   type Frontmatter,
 } from "../walkthrough/frontmatter.js";
+import type { Lang } from "../contract/types.js";
 
 /** What one index row needs, read straight from the file and from git. */
 export interface IndexRow {
@@ -62,7 +63,7 @@ export interface RepoOptions {
   /** Commit the walkthrough sources are read at; absent means the working tree. */
   at?: string;
   /** Chrome language override (`--lang`). */
-  lang?: "en" | "fr";
+  lang?: Lang;
   /** `false` skips gh entirely. */
   useGh?: boolean;
 }

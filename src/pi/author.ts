@@ -6,6 +6,7 @@
 
 import { Context, Effect, Option, Redacted, Schema, Scope } from "effect";
 import type { PullIntentClaims } from "../git/intent.js";
+import type { Lang } from "../contract/types.js";
 
 export const AuthorProviderId = Schema.NonEmptyString.pipe(
   Schema.brand("@balade/AuthorProviderId"),
@@ -130,7 +131,7 @@ export interface AuthoringRequest {
   /** Active preset, when the command line named one. */
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
-  readonly lang?: "en" | "fr";
+  readonly lang?: Lang;
   readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;
 }

@@ -4,7 +4,7 @@
  */
 
 import { Effect, FileSystem, Match, Path, Schema } from "effect";
-import type { CheckDiagnostic, Payload, RangeEcho } from "../contract/types.js";
+import type { Lang, CheckDiagnostic, Payload, RangeEcho } from "../contract/types.js";
 import { ContextResolver, type CommandFailed, type ResolveError } from "../contract/context.js";
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
 import { compileDocument, referencedFiles } from "./compiler.js";
@@ -19,7 +19,7 @@ export interface LoadOptions {
   /** Fetched commit the walkthrough is served at (ref mode); threads to resolution. */
   at?: string;
   /** Chrome language override (`--lang`). */
-  lang?: "en" | "fr";
+  lang?: Lang;
   /** `false` skips gh entirely. */
   useGh?: boolean;
 }

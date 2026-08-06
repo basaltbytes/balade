@@ -645,8 +645,19 @@ Authoring package 1.6.0. The nav always supported GitHub-style file entries —
 `section file="…"` compiles to a `kind: "file"` nav node with the status color
 and keeps its review checkbox — but generated drafts never used the attribute
 because the prompt taught sections only through the bare templates. The catalog
-now carries a file-section entry (file, nav, relatedFiles), so generated
+now carries a file-section entry (file, nav, related), so generated
 sidebars can read like a changed-file list without any renderer change.
+
+Two boundary fixes rode along, caught in review before the attribute shipped
+taught. The section attribute `relatedFiles` held section *ids* rendered as
+jump chips — the schema comment admitted it — so a model taught "files" would
+emit paths and produce dead links. It is renamed to `related` (a deliberate
+payload-contract change; nothing committed used it), and the compiler now
+verifies every `related` id names a section in the document
+(`related-section-unknown`), forward references included. And the `"en" | "fr"`
+union, previously spelled inline at ten sites, is now the exported `Lang`
+schema/type in `contract/` — the app's `i18n.ts` re-exports it, so adding a
+language is a one-line contract change plus dictionaries.
 
 Language: `open`/`build --lang` stays a render-time chrome override, while
 `generate --lang en|fr` decides what the author writes — the initial request

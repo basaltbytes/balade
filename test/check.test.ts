@@ -268,6 +268,38 @@ describe("check", () => {
     }),
   );
 
+  it.effect("checks every related id against the document's sections", () =>
+    Effect.gen(function* () {
+      repo.write(
+        "walkthroughs/related.md",
+        `---
+walkthrough: 1
+title: Related sections
+pr: 42
+commit: ${repo.pin}
+---
+
+{% group label="Models" %}
+{% section id="model" title="Model" related=["proof", "missing-section"] %}
+Prose.
+{% /section %}
+{% section id="proof" title="Proof" %}
+Evidence.
+{% /section %}
+{% /group %}
+`,
+      );
+      const report = yield* provideLive(
+        checkOne({ cwd: repo.dir, path: join(repo.dir, "walkthroughs/related.md"), useGh: false }),
+      );
+      /* The forward reference to `proof` resolves; only the unknown id reports. */
+      const unknown = report.diagnostics.filter((d) => d.code === "related-section-unknown");
+      expect(unknown).toHaveLength(1);
+      expect(unknown[0]?.message).toContain("missing-section");
+      expect(report.ok).toBe(false);
+    }),
+  );
+
   it.effect("discovers every tracked walkthrough with no argument", () =>
     Effect.gen(function* () {
       const outcome = yield* provideLive(runCheck({ cwd: repo.dir, useGh: false }));

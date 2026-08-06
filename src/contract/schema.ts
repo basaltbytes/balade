@@ -304,8 +304,8 @@ export const Section = Schema.Struct({
     }),
   ),
   file: Schema.optionalKey(Schema.String),
-  /** Section ids of related file sections. */
-  relatedFiles: Schema.optionalKey(Strings),
+  /** Ids of related sections, rendered as jump chips under the heading. */
+  related: Schema.optionalKey(Strings),
   /** sha256 of this section's Markdoc source slice. */
   hash: Schema.String,
   blocks: Schema.Array(Block),
@@ -336,6 +336,8 @@ const PullRequest = Schema.Struct({
   }),
 });
 
+export const Lang = Schema.Literals(["en", "fr"]);
+
 export const Payload = Schema.Struct({
   /** Input schema version carried by the walkthrough. */
   walkthrough: Schema.Literal(1),
@@ -345,7 +347,7 @@ export const Payload = Schema.Struct({
   /** Commits between the stamp and the current PR head. */
   headDistance: Schema.Int,
   /** Resolved chrome language after the optional CLI override. */
-  lang: Schema.Literals(["en", "fr"]),
+  lang: Lang,
   /** Free domain keys rendered as header chips. */
   meta: StringMap,
   preset: Schema.optionalKey(Schema.String),
