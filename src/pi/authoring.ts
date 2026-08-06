@@ -93,7 +93,7 @@ export interface AuthoringTagExample {
 export const AUTHORING_TAG_CATALOG: readonly AuthoringTagExample[] = [
   {
     label: "section (file)",
-    note: 'A section that presents one changed file may carry file="…" — the sidebar then shows it as a color-coded file entry with the file\'s PR status instead of a plain title. The path must be one the PR changed. nav="…" shortens any entry\'s sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document. Whether a section is a file-section is a judgment call: use one only when a single changed file anchors that section\'s story. Keep plain sections for concepts, and never add file-sections to inventory the PR — the files block already lists every change.',
+    note: "A section may present one changed file by carrying file=\"…\" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no file-section at all, and never add one just to inventory the PR — the files block already lists every change. The path must be one the PR changed. nav=\"…\" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document.",
     example: `{% group label="Models" %}
 {% section id="allocation-model" title="The allocation model" file="src/models/allocation.py" related=["allocation-proof"] %}
 What this file's change does.

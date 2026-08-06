@@ -647,6 +647,10 @@ and keeps its review checkbox — but generated drafts never used the attribute
 because the prompt taught sections only through the bare templates. The catalog
 now carries a file-section entry (file, nav, related), so generated
 sidebars can read like a changed-file list without any renderer change.
+The owner's framing (2026-08-06): the base package teaches capabilities
+neutrally and leaves the use to the author's per-section judgment — many
+walkthroughs need no file-section at all; a preset is where an opinionated
+push belongs (the odoo checklist asks for file-sections on model files).
 
 Two boundary fixes rode along, caught in review before the attribute shipped
 taught. The section attribute `relatedFiles` held section *ids* rendered as

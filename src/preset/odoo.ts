@@ -158,6 +158,7 @@ What to hunt in the diff, and where each find goes:
 - Wizards (TransientModel) → their own section when the PR adds or changes one.
 - security/ir.model.access.csv rows and ir.rule records → o-security.
 - i18n/*.po and *.pot files → one core i18n block. Test files → one core tests block.
+- A model file whose change fills its own section → a file-section (file="…" on the section), so the sidebar mirrors the module's changed files.
 
 {% o-field %} replaces the core field tag inside a core fields block, for Odoo model fields:
 
