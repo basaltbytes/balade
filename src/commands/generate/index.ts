@@ -55,6 +55,11 @@ const preset = Flag.string("preset").pipe(
   Flag.optional,
 );
 
+const lang = Flag.choice("lang", ["en", "fr"]).pipe(
+  Flag.withDescription("Walkthrough language; the draft is authored and stamped in it"),
+  Flag.optional,
+);
+
 const directory = Flag.string("dir").pipe(
   Flag.withDescription("Repository-relative directory for the generated walkthrough"),
   Flag.withDefault(".agents/walkthroughs"),
@@ -79,7 +84,7 @@ const port = Flag.integer("port").pipe(
 
 export const generateCommand = Command.make(
   "generate",
-  { pr: target, provider, model, preset, directory, verbose, noOpen, noBrowser, port },
+  { pr: target, provider, model, preset, lang, directory, verbose, noOpen, noBrowser, port },
   (config) =>
     Effect.gen(function* () {
       const pull = parsePrTarget(config.pr);
@@ -110,6 +115,7 @@ export const generateCommand = Command.make(
         ...(chosen === undefined
           ? {}
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
+        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         directory: config.directory,
         progressMode,
         progress,

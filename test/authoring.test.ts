@@ -139,6 +139,28 @@ describe("the authoring package", () => {
     }
   });
 
+  it("asks for the flagged language and stays silent without the flag", () => {
+    const base = { pin: source.pin, pull: source.pull, claims: source.claims, files: [] };
+    expect(initialAuthoringPrompt({ ...base, lang: "fr" })).toContain(
+      "Walkthrough language: French",
+    );
+    expect(initialAuthoringPrompt({ ...base, lang: "en" })).toContain(
+      "Walkthrough language: English",
+    );
+    expect(initialAuthoringPrompt(base)).not.toContain("Walkthrough language");
+  });
+
+  it("stamps the flagged lang over a model-supplied one, and keeps the model's without a flag", () => {
+    const draft = {
+      title: "Lang draft",
+      meta: { lang: "en" },
+      body: `{% section id="overview" title="Overview" %}\nText.\n{% /section %}`,
+    };
+    expect(renderDraft(source, draft, undefined, "fr")).toContain("lang: fr");
+    expect(renderDraft(source, draft, undefined, "fr")).not.toContain("lang: en");
+    expect(renderDraft(source, draft)).toContain("lang: en");
+  });
+
   it("renders author-controlled claims as JSON data to verify", () => {
     const prompt = initialAuthoringPrompt({
       pin: source.pin,

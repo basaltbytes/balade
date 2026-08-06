@@ -129,6 +129,8 @@ export interface AuthoringRequest {
   readonly model: AuthorModel;
   /** Active preset, when the command line named one. */
   readonly preset?: AuthoringPreset;
+  /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
+  readonly lang?: "en" | "fr";
   readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;
 }

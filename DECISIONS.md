@@ -638,3 +638,20 @@ preset adds a what-to-hunt checklist mapping Odoo anatomy (models, fields,
 views, wizards, security, i18n, tests) to the block each belongs in, and its
 diagram guidance asks for the changed relations instead of warning away from
 the tag.
+
+## File-sections are taught, and `generate --lang` decides the authored language
+
+Authoring package 1.6.0. The nav always supported GitHub-style file entries —
+`section file="…"` compiles to a `kind: "file"` nav node with the status color
+and keeps its review checkbox — but generated drafts never used the attribute
+because the prompt taught sections only through the bare templates. The catalog
+now carries a file-section entry (file, nav, relatedFiles), so generated
+sidebars can read like a changed-file list without any renderer change.
+
+Language: `open`/`build --lang` stays a render-time chrome override, while
+`generate --lang en|fr` decides what the author writes — the initial request
+gains a language instruction and balade stamps `meta.lang`. The flag outranks
+a model-supplied `meta.lang`, mirroring the preset rule; without the flag,
+drafts stay English and a model-supplied value stands. The instruction lives in
+the initial request, not the system prompt, because it is per-run input, not a
+versioned authoring decision.
