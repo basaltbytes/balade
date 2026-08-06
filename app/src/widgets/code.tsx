@@ -8,7 +8,9 @@ import { codeExcerptDiff } from "../data/diff";
 import { useDiffHighlighter } from "../highlight/diff-highlighter";
 import { lineMarks, useHighlighted } from "../highlight/shiki";
 import { Octicon } from "../ui/octicon";
+import { usePayload } from "../ui/payload-context";
 import { useStrings } from "../ui/strings";
+import { CodeDiffLink } from "./code-diff-link";
 
 type View = "plain" | "change" | "diff";
 
@@ -16,6 +18,7 @@ const VIEWS: View[] = ["plain", "change", "diff"];
 
 export function Code({ block }: { block: CodeBlock }) {
   const strings = useStrings();
+  const { pr } = usePayload();
   const [view, setView] = useState<View>(block.view);
   const [open, setOpen] = useState(true);
 
@@ -37,22 +40,25 @@ export function Code({ block }: { block: CodeBlock }) {
       className={`codeblock my-4 border border-border rounded-[11px] overflow-hidden bg-background ${open ? "" : "collapsed"}`}
     >
       <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted border-b border-border">
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          title={open ? strings.collapse : strings.expand}
-          className="font-mono text-[12px] text-secondary-foreground inline-flex items-center gap-2 min-w-0 cursor-pointer"
-        >
-          <Octicon
-            name={open ? "chevron-down" : "chevron-right"}
-            size={14}
-            className="text-muted-foreground shrink-0"
-          />
-          <span className="truncate">{block.file}</span>
-          <span className="text-muted-foreground shrink-0">
-            {strings.lineRange(block.from, block.to)}
-          </span>
-        </button>
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            title={open ? strings.collapse : strings.expand}
+            className="font-mono text-[12px] text-secondary-foreground inline-flex items-center gap-2 min-w-0 cursor-pointer"
+          >
+            <Octicon
+              name={open ? "chevron-down" : "chevron-right"}
+              size={14}
+              className="text-muted-foreground shrink-0"
+            />
+            <span className="truncate">{block.file}</span>
+            <span className="text-muted-foreground shrink-0">
+              {strings.lineRange(block.from, block.to)}
+            </span>
+          </button>
+          <CodeDiffLink prUrl={pr.url} file={block.file} line={block.from} />
+        </div>
         <div className="flex items-center gap-1 text-[11px] shrink-0">
           {VIEWS.map((candidate) => (
             <button

@@ -46,6 +46,7 @@ export interface Strings {
   collapse: string;
   expand: string;
   lineRange: (from: number, to: number) => string;
+  openDiffOnGitHub: string;
   expectMismatch: string;
   expectMismatchBody: (quote: string) => string;
 
@@ -124,6 +125,7 @@ const en: Strings = {
   collapse: "Collapse",
   expand: "Expand",
   lineRange: (from, to) => `lines ${from}–${to}`,
+  openDiffOnGitHub: "View this file's diff on GitHub",
   expectMismatch: "expect mismatch",
   expectMismatchBody: (quote) =>
     `The first line of this range does not contain ${quote}. The lines below may be the wrong ones.`,
@@ -200,6 +202,7 @@ const fr: Strings = {
   collapse: "Replier",
   expand: "Déplier",
   lineRange: (from, to) => `lignes ${from}–${to}`,
+  openDiffOnGitHub: "Voir le diff de ce fichier sur GitHub",
   expectMismatch: "expect incorrect",
   expectMismatchBody: (quote) =>
     `La première ligne de la plage ne contient pas ${quote}. Les lignes ci-dessous sont peut-être les mauvaises.`,
