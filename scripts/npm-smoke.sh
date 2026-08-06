@@ -54,12 +54,15 @@ grep -q "^balade-authoring: " "$PROJECT/node_modules/balade/dist/skill/balade-au
 # Zero-arg check outside a git repository reports and exits 0.
 "$BIN" check | grep -qi "nothing to check"
 
-# A real install writes both agent directories inside a git repository.
+# A real install writes the shared convention; .claude/ only once it exists.
 SKILL_REPO="$TMP_ROOT/skill-repo"
 mkdir -p "$SKILL_REPO"
 git -C "$SKILL_REPO" init -q
 (cd "$SKILL_REPO" && "$BIN" skills install >/dev/null)
-test -f "$SKILL_REPO/.claude/skills/balade-authoring/SKILL.md"
 test -f "$SKILL_REPO/.agents/skills/balade-authoring/SKILL.md"
+test ! -e "$SKILL_REPO/.claude"
+mkdir "$SKILL_REPO/.claude"
+(cd "$SKILL_REPO" && "$BIN" skills install >/dev/null)
+test -f "$SKILL_REPO/.claude/skills/balade-authoring/SKILL.md"
 
 echo "npm package smoke passed: $TARBALL"

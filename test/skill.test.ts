@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../src/authoring/package.js";
-import { renderSkillMd, SKILL_LOCATIONS, SKILL_NAME } from "../src/authoring/skill.js";
+import {
+  CLAUDE_SKILL_LOCATION,
+  renderSkillMd,
+  SHARED_SKILL_LOCATION,
+  SKILL_NAME,
+} from "../src/authoring/skill.js";
 import { skillStalenessHints } from "../src/commands/check/skill.js";
 import { runSkillsInstall } from "../src/commands/skills/install.js";
 import { frontmatterBlock } from "../src/walkthrough/frontmatter.js";
@@ -70,17 +75,21 @@ describe("skills install and the check staleness hint", () => {
 
   afterAll(() => repo.cleanup());
 
-  it("writes the skill into both agent directories, idempotently", async () => {
-    const written = await install({ cwd: repo.dir });
+  it("writes the shared convention, and .claude/ only once the repo uses Claude Code", async () => {
     /* git spells the toplevel through resolved symlinks (`/private/var` on macOS). */
     const root = realpathSync(repo.dir);
-    expect(written).toEqual(
-      SKILL_LOCATIONS.map((location) => join(root, location, SKILL_NAME, "SKILL.md")),
-    );
+    const shared = join(root, SHARED_SKILL_LOCATION, SKILL_NAME, "SKILL.md");
+    const claude = join(root, CLAUDE_SKILL_LOCATION, SKILL_NAME, "SKILL.md");
+
+    /* No `.claude/` folder yet: a non-Claude repository never grows one. */
+    expect(await install({ cwd: repo.dir })).toEqual([shared]);
+
+    mkdirSync(join(repo.dir, ".claude"), { recursive: true });
+    const written = await install({ cwd: repo.dir });
+    expect(written).toEqual([claude, shared]);
     for (const file of written) expect(readFileSync(file, "utf8")).toBe(renderSkillMd());
     /* A refresh overwrites in place. */
-    const refreshed = await install({ cwd: repo.dir });
-    expect(refreshed).toEqual(written);
+    expect(await install({ cwd: repo.dir })).toEqual(written);
   });
 
   it("writes one custom directory with --out", async () => {

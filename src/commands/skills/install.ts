@@ -5,7 +5,12 @@
  */
 
 import { Effect, FileSystem, Path } from "effect";
-import { renderSkillMd, SKILL_LOCATIONS, SKILL_NAME } from "../../authoring/skill.js";
+import {
+  CLAUDE_SKILL_LOCATION,
+  renderSkillMd,
+  SHARED_SKILL_LOCATION,
+  SKILL_NAME,
+} from "../../authoring/skill.js";
 import { gitToplevel } from "../../shell.js";
 
 export interface SkillsInstallOptions {
@@ -23,7 +28,10 @@ export const runSkillsInstall = Effect.fn("runSkillsInstall")(function* (
   const bases: string[] = [];
   if (options.out === undefined) {
     const root = yield* gitToplevel(options.cwd);
-    bases.push(...SKILL_LOCATIONS.map((location) => path.join(root, location)));
+    /* `.claude/` existing is the evidence the repository uses Claude Code. */
+    const usesClaude = yield* fs.exists(path.join(root, path.dirname(CLAUDE_SKILL_LOCATION)));
+    if (usesClaude) bases.push(path.join(root, CLAUDE_SKILL_LOCATION));
+    bases.push(path.join(root, SHARED_SKILL_LOCATION));
   } else {
     bases.push(path.resolve(options.cwd, options.out));
   }

@@ -160,10 +160,12 @@ authoring skill into the repository:
 npx balade skills install
 ```
 
-This writes `.claude/skills/balade-authoring/SKILL.md` (Claude Code) and
-`.agents/skills/balade-authoring/SKILL.md` (the shared convention the other
-agents read). The skill teaches the format, the tag catalog, the writing
-rubric, and the author-check-repair loop; `balade check` remains the
+This writes `.agents/skills/balade-authoring/SKILL.md` — the shared
+convention Codex, opencode, Cursor, recent Claude Code, and most other agents
+read. When the repository already has a `.claude/` folder, it also writes
+`.claude/skills/balade-authoring/SKILL.md`, so a repo that never uses Claude
+Code never grows one. The skill teaches the format, the tag catalog, the
+writing rubric, and the author-check-repair loop; `balade check` remains the
 authority the agent converges against. Re-run the command after upgrading
 balade — `check` prints a one-line hint when the installed skill is older
 than the CLI.

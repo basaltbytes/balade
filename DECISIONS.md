@@ -566,10 +566,11 @@ prototype spelling is not part of the shipped grammar.
 
 Decided on [#43](https://github.com/basaltbytes/balade/issues/43). The typed
 authoring data renders a second time as a `SKILL.md`, and `balade skills
-install` places it in `.claude/skills/` and `.agents/skills/` at the repo
-root — the two project-level layouts that cover Claude Code and the shared
-convention (Codex, opencode, Cursor, and most others, per vercel-labs/skills'
-agent registry). Installation is not delegated to that external installer:
+install` places it in `.agents/skills/` at the repo root — the shared
+convention that covers Codex, opencode, Cursor, recent Claude Code, and most
+others, per vercel-labs/skills' agent registry — plus `.claude/skills/` when
+`.claude/` already exists, so a repository that never uses Claude Code never
+grows the folder. Installation is not delegated to that external installer:
 it has no version pinning, no origin lockfile, and no npm-name sources, so a
 delegated refresh loop diverges — an older CLI's "re-install" hint would fetch
 an even newer skill. Self-install converges by construction: the skill is
@@ -591,8 +592,8 @@ hint on a version mismatch. Stderr keeps `--json` stdout parseable; the hint
 is never a diagnostic and never the exit code, because the skill is optional
 and `check`'s fix hints already teach an agent without one. Agent detection
 (`@vercel/detect-agent`) was rejected: it names the agent running the current
-process, not the agents a repository serves, so install writes both
-directories unconditionally.
+process, not the agents a repository serves. The repository itself is the
+evidence install keys on — an existing `.claude/` folder.
 
 ## Parser properties follow schema and grammar edges
 

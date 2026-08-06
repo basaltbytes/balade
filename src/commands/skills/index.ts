@@ -33,7 +33,7 @@ const installCommand = Command.make("install", { out }, (config) =>
   ),
 ).pipe(
   Command.withDescription(
-    "Render the balade-authoring skill into .claude/skills/ and .agents/skills/",
+    "Render the balade-authoring skill into .agents/skills/, plus .claude/skills/ when the repository uses Claude Code",
   ),
 );
 

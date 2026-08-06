@@ -20,11 +20,19 @@ import { sectionTemplatesText } from "./templates.js";
 export const SKILL_NAME = "balade-authoring";
 
 /**
- * Repo-relative skills directories the installer writes and `check` scans.
- * `.claude/skills/` is Claude Code; `.agents/skills/` is the shared convention
- * the other agents read (Codex, opencode, Cursor, and the rest).
+ * The shared skills convention most agents read (Codex, opencode, Cursor, and
+ * recent Claude Code among them); install always writes it.
  */
-export const SKILL_LOCATIONS = [".claude/skills", ".agents/skills"] as const;
+export const SHARED_SKILL_LOCATION = ".agents/skills";
+
+/**
+ * Claude Code's own layout; install writes it only when `.claude/` already
+ * exists, so a repository that never uses Claude Code never grows the folder.
+ */
+export const CLAUDE_SKILL_LOCATION = ".claude/skills";
+
+/** Repo-relative skills directories `check` scans for a stamped skill. */
+export const SKILL_LOCATIONS = [CLAUDE_SKILL_LOCATION, SHARED_SKILL_LOCATION] as const;
 
 export function renderSkillMd(): string {
   return `---

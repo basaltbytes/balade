@@ -187,11 +187,13 @@ suite is excluded from the normal Vitest config and from `pnpm test`.
 ## The generated skill
 
 `balade skills install` renders the package into a `SKILL.md` and writes it to
-`.claude/skills/balade-authoring/` (Claude Code) and
-`.agents/skills/balade-authoring/` (the shared convention Codex, opencode,
-Cursor, and other agents read) at the repository root. The file is generated
-output, never a source: it always overwrites, and re-running the command after
-upgrading balade is the refresh story. `--out <dir>` renders into one custom
+`.agents/skills/balade-authoring/` at the repository root — the shared
+convention Codex, opencode, Cursor, recent Claude Code, and other agents read.
+When `.claude/` already exists it also writes
+`.claude/skills/balade-authoring/`; a repository that never uses Claude Code
+never grows the folder. The file is generated output, never a source: it
+always overwrites, and re-running the command after upgrading balade is the
+refresh story. `--out <dir>` renders into one custom
 directory instead; the build ships the same rendering at `dist/skill/`, so a
 path-based installer such as `npx skills add ./node_modules/balade/dist/skill`
 can place it for agents with other layouts.
