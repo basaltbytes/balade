@@ -76,9 +76,9 @@ function SectionView({
         </div>
 
         <div className="section-body">
-          {section.relatedFiles !== undefined && section.relatedFiles.length > 0 && (
+          {section.related !== undefined && section.related.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
-              {section.relatedFiles.map((ref) => (
+              {section.related.map((ref) => (
                 <JumpLink key={ref} id={ref}>
                   <Chip icon="link">{titles.get(ref) ?? ref}</Chip>
                 </JumpLink>

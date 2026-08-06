@@ -10,6 +10,7 @@
 import type { Node } from "@markdoc/markdoc";
 import { Option } from "effect";
 import type {
+  Lang,
   Block,
   CheckDiagnostic,
   ErrorCard,
@@ -34,7 +35,7 @@ export interface CompileInput {
   /** Repo-relative path of the walkthrough file. */
   sourcePath: string;
   /** `--lang` override; otherwise `meta.lang`, otherwise `en`. */
-  lang?: "en" | "fr";
+  lang?: Lang;
 }
 
 export interface CompileResult {
@@ -95,6 +96,7 @@ export function compileDocument(input: CompileInput): CompileResult {
 
   const sections: Section[] = [];
   const seen = new Map<string, number>();
+  const relatedRefs: { ids: readonly string[]; line: number }[] = [];
 
   const sectionOf = (node: Node): NavNode | null => {
     const id = String(node.attributes["id"] ?? "");
@@ -162,7 +164,9 @@ export function compileDocument(input: CompileInput): CompileResult {
     const icon = optionalString(node, "icon");
     const badge = optionalString(node, "badge");
     const badgeTone = optionalString(node, "badgeTone");
-    const relatedFiles = attrStrings(node, "relatedFiles");
+    const related = attrStrings(node, "related");
+    /* `related` may point forward; every id is checked after the full walk. */
+    if (related.length > 0) relatedRefs.push({ ids: related, line });
 
     if (duplicate) return null;
 
@@ -176,7 +180,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         ? { badge: { label: badge, tone: toneOf(badgeTone, status, filePath !== undefined) } }
         : {}),
       ...(filePath !== undefined ? { file: filePath } : {}),
-      ...(relatedFiles.length > 0 ? { relatedFiles } : {}),
+      ...(related.length > 0 ? { related } : {}),
     });
 
     const label =
@@ -227,6 +231,21 @@ export function compileDocument(input: CompileInput): CompileResult {
   };
 
   const nav = walk(doc.ast.children);
+
+  for (const pending of relatedRefs) {
+    for (const id of pending.ids) {
+      if (!seen.has(id)) {
+        diagnostics.push({
+          code: "related-section-unknown",
+          level: "error",
+          file: sourcePath,
+          line: pending.line,
+          message: `\`related\` names \`${id}\`, which no section in this file defines.`,
+          hint: "Each `related` entry is a section id; its chip jumps to that section.",
+        });
+      }
+    }
+  }
 
   if (ctx.headDistance > 0) {
     const overlap = [...referenced].filter((path) => ctx.touched.has(path)).sort();
@@ -290,7 +309,7 @@ function toneOf(
   return "mod";
 }
 
-function langOfMeta(value: string | undefined): "en" | "fr" {
+function langOfMeta(value: string | undefined): Lang {
   return value === "fr" ? "fr" : "en";
 }
 

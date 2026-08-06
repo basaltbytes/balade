@@ -92,6 +92,7 @@ can supply both ids and skip the picker:
 npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --provider openai-codex
 npx balade generate 96 --preset odoo # activate a preset's tags for this walkthrough
+npx balade generate 96 --lang fr     # author the walkthrough in French
 npx balade generate 96 --dir docs/walkthroughs
 npx balade generate 96 --no-browser # serve and print the URL without launching a browser
 npx balade generate 96 --no-open    # generate, print the path and exit
@@ -117,6 +118,12 @@ when `check` reads the draft. Without the flag no preset is used, and the author
 is told not to invent one. `odoo` is the preset that ships today; an unknown name
 fails before any model runs. A preset can also be activated by hand — add
 `preset: odoo` to a walkthrough's frontmatter.
+
+`--lang en|fr` sets the walkthrough's language: the author writes the title and
+all prose in it, and balade stamps `meta.lang`, which also drives the app
+chrome. Without the flag the draft is authored in English. (On `open` and
+`build`, `--lang` only overrides the chrome at render time; it does not rewrite
+authored prose.)
 
 Generated frontmatter records the prompt, template, and rubric version under
 `meta.balade-authoring`. See the [authoring package](docs/authoring-package.md)
@@ -155,7 +162,7 @@ pr: 96                        # the pull request this narrates
 commit: 9f3c2ad…              # the stamped commit every reference resolves at
 meta:                         # scalar header chips
   module: acme_loan
-  balade-authoring: 1.5.0     # generated drafts record their authoring package
+  balade-authoring: 1.6.0     # generated drafts record their authoring package
 ---
 ```
 

@@ -18,7 +18,7 @@ import {
 import { softReport } from "../walkthrough/checker.js";
 import type { LoadError } from "../walkthrough/pipeline.js";
 import { describeFailure } from "../failure.js";
-import type { CheckReport } from "../contract/types.js";
+import type { Lang, CheckReport } from "../contract/types.js";
 import { gitToplevel } from "../shell.js";
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
 import { ReviewStateStore } from "../state.js";
@@ -40,7 +40,7 @@ export interface SessionOptions {
   cwd: string;
   selection: Selection;
   /** Chrome language override (`--lang`). */
-  lang?: "en" | "fr";
+  lang?: Lang;
   /** `false` skips gh entirely. */
   useGh?: boolean;
 }

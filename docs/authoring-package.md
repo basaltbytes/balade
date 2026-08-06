@@ -7,7 +7,7 @@ inspection limits. The package ships with the CLI, so a plain
 `npx balade generate …` does not depend on a second repository or an installed
 agent skill.
 
-The current package version is `1.5.0`. Its major version matches the
+The current package version is `1.6.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -57,7 +57,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.5.0
+  balade-authoring: 1.6.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -119,6 +119,12 @@ content is enumerable. A test walks `CORE_TAG_NAMES`, so a tag added to the
 format cannot silently stay untaught. A preset appends the same kind of
 guidance for its own tags: `--preset odoo` adds the `o-` tag syntax and a
 what-to-hunt checklist that maps Odoo anatomy to blocks.
+
+The catalog also teaches file-sections: a section carrying `file="…"` renders
+in the sidebar as a color-coded changed-file entry, so the navigation can read
+like a GitHub file list. `generate --lang en|fr` adds a language instruction to
+the initial request and stamps `meta.lang`; an explicit flag outranks a
+model-supplied value.
 
 ## Writing rubric
 

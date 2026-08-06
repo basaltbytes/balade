@@ -638,3 +638,35 @@ preset adds a what-to-hunt checklist mapping Odoo anatomy (models, fields,
 views, wizards, security, i18n, tests) to the block each belongs in, and its
 diagram guidance asks for the changed relations instead of warning away from
 the tag.
+
+## File-sections are taught, and `generate --lang` decides the authored language
+
+Authoring package 1.6.0. The nav always supported GitHub-style file entries —
+`section file="…"` compiles to a `kind: "file"` nav node with the status color
+and keeps its review checkbox — but generated drafts never used the attribute
+because the prompt taught sections only through the bare templates. The catalog
+now carries a file-section entry (file, nav, related), so generated
+sidebars can read like a changed-file list without any renderer change.
+The owner's framing (2026-08-06): the base package teaches capabilities
+neutrally and leaves the use to the author's per-section judgment — many
+walkthroughs need no file-section at all; a preset is where an opinionated
+push belongs (the odoo checklist asks for file-sections on model files).
+
+Two boundary fixes rode along, caught in review before the attribute shipped
+taught. The section attribute `relatedFiles` held section *ids* rendered as
+jump chips — the schema comment admitted it — so a model taught "files" would
+emit paths and produce dead links. It is renamed to `related` (a deliberate
+payload-contract change; nothing committed used it), and the compiler now
+verifies every `related` id names a section in the document
+(`related-section-unknown`), forward references included. And the `"en" | "fr"`
+union, previously spelled inline at ten sites, is now the exported `Lang`
+schema/type in `contract/` — the app's `i18n.ts` re-exports it, so adding a
+language is a one-line contract change plus dictionaries.
+
+Language: `open`/`build --lang` stays a render-time chrome override, while
+`generate --lang en|fr` decides what the author writes — the initial request
+gains a language instruction and balade stamps `meta.lang`. The flag outranks
+a model-supplied `meta.lang`, mirroring the preset rule; without the flag,
+drafts stay English and a model-supplied value stands. The instruction lives in
+the initial request, not the system prompt, because it is per-run input, not a
+versioned authoring decision.

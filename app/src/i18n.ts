@@ -1,7 +1,8 @@
 /* Every user-visible chrome string lives here, in both shipped languages.
    Components read them through `useStrings()`; none of them hardcode English. */
 
-export type Lang = "en" | "fr";
+export type { Lang } from "./contract";
+import type { Lang } from "./contract";
 
 export interface Strings {
   loading: string;

@@ -6,7 +6,7 @@ import { formatText } from "../../terminal.js";
 import { runCheck } from "../../walkthrough/checker.js";
 import { discoveryErrorMessage } from "../../walkthrough/discovery.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
-import type { CheckReport } from "../../contract/types.js";
+import type { Lang, CheckReport } from "../../contract/types.js";
 import type { PullHeadError, PullSnapshot } from "../../git/pr.js";
 import { escapesRoot } from "../../contract/paths.js";
 import {
@@ -55,6 +55,8 @@ export interface RunGenerationOptions {
   readonly directory: string;
   /** Named by `--preset`; teaches the author its tags and stamps the frontmatter. */
   readonly preset?: AuthoringPreset;
+  /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
+  readonly lang?: Lang;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
 }
@@ -107,6 +109,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       files: options.source.files,
       model: options.model,
       ...(options.preset === undefined ? {} : { preset: options.preset }),
+      ...(options.lang === undefined ? {} : { lang: options.lang }),
       progressMode: options.progressMode,
       progress: options.progress,
     });
@@ -124,9 +127,11 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       options.directory,
     );
     yield* fs
-      .writeFileString(file, renderDraft(options.source, initial.draft, options.preset), {
-        flag: "wx",
-      })
+      .writeFileString(
+        file,
+        renderDraft(options.source, initial.draft, options.preset, options.lang),
+        { flag: "wx" },
+      )
       .pipe(
         Effect.mapError((cause) =>
           cause.reason._tag === "AlreadyExists"
@@ -147,7 +152,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
         fs,
         path,
         file,
-        renderDraft(options.source, turn.draft, options.preset),
+        renderDraft(options.source, turn.draft, options.preset, options.lang),
       ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
       report = yield* checkGeneratedDraft(options.source.root, file);
     }
@@ -259,16 +264,22 @@ export function renderDraft(
   source: PullSnapshot,
   draft: AuthorDraft,
   preset?: AuthoringPreset,
+  lang?: Lang,
 ): string {
-  /* An explicit `--preset` is the authority: the model is told not to set one,
-     and a stamped preset is what makes its tags active at check time. */
+  /* An explicit `--preset` or `--lang` is the authority: a stamped preset is
+     what makes its tags active at check time, and a stamped lang is what sets
+     the chrome language; a model-supplied value stands only without the flag. */
   const active = preset?.name ?? draft.preset;
   const frontmatter = stringifyYaml({
     walkthrough: 1,
     title: draft.title,
     pr: source.pull.number,
     commit: source.pin,
-    meta: { ...draft.meta, [AUTHORING_META_KEY]: AUTHORING_PACKAGE_VERSION },
+    meta: {
+      ...draft.meta,
+      ...(lang === undefined ? {} : { lang }),
+      [AUTHORING_META_KEY]: AUTHORING_PACKAGE_VERSION,
+    },
     ...(active === undefined ? {} : { preset: active }),
   }).trimEnd();
   return `---\n${frontmatter}\n---\n\n${draft.body.trim()}\n`;

@@ -15,7 +15,7 @@ import {
 import { softReport } from "../../walkthrough/checker.js";
 import { loadWalkthrough, type LoadError } from "../../walkthrough/pipeline.js";
 import { describeFailure } from "../../failure.js";
-import type { CheckReport } from "../../contract/types.js";
+import type { Lang, CheckReport } from "../../contract/types.js";
 import { exportHtml, type ExportAssets } from "./html.js";
 
 export interface BuildOptions {
@@ -25,7 +25,7 @@ export interface BuildOptions {
   /** Output path, absolute or relative to `cwd`. Defaults to `<walkthrough>.html`. */
   out?: string;
   /** Chrome language override (`--lang`). */
-  lang?: "en" | "fr";
+  lang?: Lang;
   /** `false` skips gh entirely. */
   useGh?: boolean;
   /** Where the export bundle is read from; defaults to the one shipped beside the CLI. */

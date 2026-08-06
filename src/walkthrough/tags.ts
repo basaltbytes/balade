@@ -58,7 +58,7 @@ const section: Schema = {
     file: { type: String },
     badge: { type: String },
     badgeTone: { type: String, matches: ["new", "mod", "del"] },
-    relatedFiles: { type: Array },
+    related: { type: Array },
   },
 };
 

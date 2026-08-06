@@ -1124,7 +1124,7 @@ const sections: Section[] = [
     id: "views",
     title: "Views & their intent",
     icon: "table",
-    relatedFiles: ["m-project", "m-slot"],
+    related: ["m-project", "m-slot"],
     hash: "sha256:sec-views-1",
     blocks: [
       {
