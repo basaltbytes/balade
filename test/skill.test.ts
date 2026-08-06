@@ -87,20 +87,22 @@ describe("skills install and the check staleness hint", () => {
   });
 
   it("writes the shared convention, and .claude/ only once the repo uses Claude Code", async () => {
-    /* git spells the toplevel through resolved symlinks (`/private/var` on macOS). */
-    const root = realpathSync(repo.dir);
-    const shared = join(root, SHARED_SKILL_LOCATION, SKILL_NAME, "SKILL.md");
-    const claude = join(root, CLAUDE_SKILL_LOCATION, SKILL_NAME, "SKILL.md");
+    /* git and node spell the same directory differently (symlinked /var on
+       macOS, short-vs-long form on Windows); compare canonical paths. */
+    const canon = (file: string) => realpathSync.native(file);
+    const shared = () => canon(join(repo.dir, SHARED_SKILL_LOCATION, SKILL_NAME, "SKILL.md"));
+    const claude = () => canon(join(repo.dir, CLAUDE_SKILL_LOCATION, SKILL_NAME, "SKILL.md"));
 
     /* No `.claude/` folder yet: a non-Claude repository never grows one. */
-    expect(await install({ cwd: repo.dir })).toEqual([shared]);
+    const first = await install({ cwd: repo.dir });
+    expect(first.map(canon)).toEqual([shared()]);
 
     mkdirSync(join(repo.dir, ".claude"), { recursive: true });
     const written = await install({ cwd: repo.dir });
-    expect(written).toEqual([claude, shared]);
+    expect(written.map(canon)).toEqual([claude(), shared()]);
     for (const file of written) expect(readFileSync(file, "utf8")).toBe(skillMd);
     /* A refresh overwrites in place. */
-    expect(await install({ cwd: repo.dir })).toEqual(written);
+    expect((await install({ cwd: repo.dir })).map(canon)).toEqual(written.map(canon));
   });
 
   it("writes one custom directory with --out", async () => {
