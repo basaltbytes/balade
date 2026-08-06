@@ -606,3 +606,26 @@ adjacent. A label whose visible run is shorter than its chip renders above the
 boxes instead of being sliced by them. This stays label placement on straight
 lines — the "no routing engine" stance holds; what would move it is curved or
 multi-segment edges.
+
+## The base prompt teaches the core tag catalog
+
+Authoring package 1.5.0. Earlier prompts named the fifteen core tags in one
+sentence and documented only `code`, so drafts avoided every block whose
+attributes the model would have had to guess — most visibly `diagram` — and
+fell back to prose. The odoo authoring text even addressed a model "that
+already knows the core catalog", which nothing taught. The observed cost was
+walkthroughs poorer than the pre-balade skill output: no diagrams, no field
+tables, no test cards.
+
+The system prompt now shows one exact example per block plus the full diagram
+node and edge shape, and states the cost model out loud: only `code` ranges
+count against the range budget, so structured blocks are free, and enumerable
+content should prefer a block over a prose list. The catalog costs a few
+hundred prompt tokens on every run; teaching tags through repair turns instead
+costs a full check round-trip per guessed attribute. A test walks
+`CORE_TAG_NAMES` so a tag added to the format cannot silently stay untaught.
+Presets still teach only their own tags on top of the taught core; the odoo
+preset adds a what-to-hunt checklist mapping Odoo anatomy (models, fields,
+views, wizards, security, i18n, tests) to the block each belongs in, and its
+diagram guidance asks for the changed relations instead of warning away from
+the tag.

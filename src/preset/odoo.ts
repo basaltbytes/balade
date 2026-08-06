@@ -135,6 +135,16 @@ const oDiagram: PresetTag = {
    schemas above accept — a wrong spelling costs a repair turn. */
 const ODOO_AUTHORING = `This is an Odoo repository. Three extra tags are active.
 
+What to hunt in the diff, and where each find goes:
+
+- New models, including _auto = False SQL views → o-field rows inside a core fields block, and a node on the o-diagram.
+- New or changed fields on existing models → o-field rows; carry compute and @api.depends in the note, and the comodel of every relation.
+- New or overridden methods → core method blocks; the api decorator renders as chips.
+- View XML → describe the intent in prose: what the user now sees or can do. Never paste the XML.
+- Wizards (TransientModel) → their own section when the PR adds or changes one.
+- security/ir.model.access.csv rows and ir.rule records → o-security.
+- i18n/*.po and *.pot files → one core i18n block. Test files → one core tests block.
+
 {% o-field %} replaces the core field tag inside a core fields block, for Odoo model fields:
 
 {% fields %}
@@ -160,7 +170,7 @@ Each row is one group. cells are read, write, create, unlink in that order. Use 
 
 - Each node needs id and model; change is "new", "mod" or "ctx"; col and row place it on a grid starting at 1.
 - Each edge needs from and to naming node ids; kind is "new", "mod", "ctx" or "derived"; label and thick are optional.
-- Use it once, for the relation the PR actually changes. A diagram of the whole module is noise.
+- When the PR adds or rewires model relations, draw them: the changed models, their direct relational neighbors, and the engine relation marked thick=true. Leave out models the PR never touches — the changed relations are the signal, the module map is noise.
 
 Prefer the core tags for anything not specific to Odoo. Use an Odoo tag only where the Odoo concept is the review signal — a field's semantics, a changed ACL, a new relation.`;
 

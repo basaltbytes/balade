@@ -11,6 +11,7 @@ import {
 } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/pipeline.js";
 import { odooPreset } from "../src/preset/odoo.js";
+import { CORE_TAG_NAMES } from "../src/walkthrough/tags.js";
 import type { PullSnapshot } from "../src/git/pr.js";
 
 const source: PullSnapshot = {
@@ -75,6 +76,20 @@ describe("the authoring package", () => {
     expect(authoringSystemPrompt()).toContain("20 searches");
   });
 
+  it("teaches every core tag's syntax in the catalog", () => {
+    const prompt = authoringSystemPrompt();
+    for (const tag of CORE_TAG_NAMES) {
+      /* Pipe tables render as-is; the catalog shows no `{% table %}` wrapper. */
+      if (tag === "table") continue;
+      expect(prompt).toContain(`{% ${tag}`);
+    }
+    /* The cost model that makes structured blocks worth choosing over prose. */
+    expect(prompt).toContain("Only code tags count against the range budget");
+    /* The diagram shape it cannot guess: node placement and edge kinds. */
+    expect(prompt).toContain("compartments");
+    expect(prompt).toContain('kind is "new", "mod", "ctx" or "derived"');
+  });
+
   it("renders author-controlled claims as JSON data to verify", () => {
     const prompt = initialAuthoringPrompt({
       pin: source.pin,
@@ -137,6 +152,9 @@ describe("the authoring package", () => {
     expect(withOdoo).toContain("needs comodel");
     expect(withOdoo).toContain("read, write, create, unlink");
     expect(withOdoo).toContain("{% o-diagram");
+    /* The extraction checklist that maps Odoo anatomy to blocks. */
+    expect(withOdoo).toContain("What to hunt in the diff");
+    expect(withOdoo).toContain("_auto = False");
     /* Every tag it is taught is a tag the schema accepts. */
     for (const tag of Object.keys(odooPreset.tags)) expect(withOdoo).toContain(tag);
   });

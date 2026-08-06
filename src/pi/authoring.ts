@@ -8,7 +8,7 @@
 import { Option } from "effect";
 import type { AuthoringPreset, AuthoringRequest } from "./author.js";
 
-export const AUTHORING_PACKAGE_VERSION = "1.4.0";
+export const AUTHORING_PACKAGE_VERSION = "1.5.0";
 export const AUTHORING_WALKTHROUGH_SCHEMA_VERSION = 1;
 export const AUTHORING_META_KEY = "balade-authoring";
 
@@ -173,7 +173,30 @@ Read the numbered source first, keep the range focused, and copy expect exactly 
 Explain the constraint.
 {% /method %}
 
-Available core tags are group, section, code, callout, flow/step, fields/field, method, tests/test, matrix, files, i18n, cards/card, patterns/pattern, attrs, diagram, and Markdown tables. Use files for changed paths that need listing but no dedicated section.
+Core tag catalog
+
+Only code tags count against the range budget; every other block is free. When the content is enumerable — fields, steps, scenarios, access rules, relations — prefer the matching block over a prose list: it is denser to read and renders as a purpose-built widget.
+
+- callout: {% callout tone="key" %}One sentence the reviewer must not miss.{% /callout %} — tone is "key" or "warn"; omit it for a neutral aside.
+- flow/step: {% flow %}{% step tag="guard" %}What happens first.{% /step %}{% /flow %} — one ordered control path; the optional tag names the actor or phase.
+- fields/field: {% fields %}{% field name="total" kind="number" badges=["computed"] tags=["cache"] %}What the field means to a reviewer.{% /field %}{% /fields %} — a name/kind/note table for fields, props, state, columns, or options.
+- method: shown above; decorator and chips are optional.
+- tests/test: {% tests %}{% test name="test_expiry" kind="unit" ref="tests/test_expiry.py" asserts=["rejects a past date", "keeps the open slot"] %}One- or two-sentence scenario.{% /test %}{% /tests %} — kind is "unit", "tour" or "http". Read the tests, then summarize; never paste test diffs.
+- matrix: a Markdown pipe table inside {% matrix %}...{% /matrix %} — the first column is the row label, a cell holding ✓ renders as granted, anything else as denied. Use it for permission or capability grids.
+- table: ordinary Markdown pipe tables render as-is.
+- files: {% files only="src/**" status="A, M" /%} — the changed-file list from PR data; only and status (A, M, D, R) filter it, why={"src/example.ts": "reason"} annotates a row. Use it for changed paths that need listing but no dedicated section.
+- i18n: {% i18n /%} — one row per changed .po or .pot file with entry counts, computed from the PR.
+- cards/card: {% cards cols=2 %}{% card icon="beaker" title="Trade-off" %}Body.{% /card %}{% /cards %} — two to four parallel points; cols is 1, 2 or 3.
+- patterns/pattern: {% patterns %}{% pattern term="lens" ref="src/lens.ts" %}Definition.{% /pattern %}{% /patterns %} — a small glossary of repository idioms the reader needs.
+- attrs: {% attrs items=["readonly", "cascade"] /%} — a bare chip list.
+
+diagram draws the relations between named models or components:
+
+{% diagram intro="How a slot reaches its pool." nodes=[{id: "pool", model: "planning.pool", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["slot_ids"]}]}, {id: "slot", model: "planning.slot", change: "mod", col: 2, row: 1}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many", thick: true}] /%}
+
+- A node needs id and model. change is "new", "mod" or "ctx". col and row place it on a grid that starts at 1. compartments hold labelled member rows.
+- An edge joins two node ids. kind is "new", "mod", "ctx" or "derived"; label and thick are optional. Mark the one relation the change turns on with thick=true.
+- When the change adds or rewires a relation between named parts, one diagram of those parts and their direct neighbors is high review signal. Leave out parts the change never touches.
 
 Writing rubric
 
