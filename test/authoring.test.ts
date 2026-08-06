@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -5,12 +6,40 @@ import {
   AUTHORING_PACKAGE_VERSION,
   AUTHORING_RUBRIC,
   AUTHORING_SECTION_TEMPLATES,
+  AUTHORING_TAG_CATALOG,
   authoringSystemPrompt,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
   initialAuthoringPrompt,
 } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/pipeline.js";
-import { odooPreset } from "../src/preset/odoo.js";
+import { odooPreset, ODOO_AUTHORING_EXAMPLES } from "../src/preset/odoo.js";
+import { parseDocument } from "../src/walkthrough/document.js";
+import { CORE_TAG_NAMES } from "../src/walkthrough/tags.js";
+
+/** Wraps a taught example in the smallest valid walkthrough document. */
+function exampleDocument(body: string, preset?: string): string {
+  return `---
+walkthrough: 1
+title: Catalog example
+pr: 1
+commit: abcdef1
+${preset === undefined ? "" : `preset: ${preset}\n`}---
+
+{% group label="Example" %}
+{% section id="example" title="Example" %}
+
+${body}
+
+{% /section %}
+{% /group %}
+`;
+}
+
+function exampleErrors(body: string, preset?: string): string[] {
+  return parseDocument(exampleDocument(body, preset), "example.md")
+    .diagnostics.filter((diagnostic) => diagnostic.level === "error")
+    .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`);
+}
 import type { PullSnapshot } from "../src/git/pr.js";
 
 const source: PullSnapshot = {
@@ -75,6 +104,41 @@ describe("the authoring package", () => {
     expect(authoringSystemPrompt()).toContain("20 searches");
   });
 
+  it("teaches every core tag's syntax in the catalog", () => {
+    const prompt = authoringSystemPrompt();
+    for (const tag of CORE_TAG_NAMES) {
+      /* Pipe tables render as-is; the catalog shows no `{% table %}` wrapper. */
+      if (tag === "table") continue;
+      expect(prompt).toContain(`{% ${tag}`);
+    }
+    /* The cost model that makes structured blocks worth choosing over prose. */
+    expect(prompt).toContain("Only code tags count against the range budget");
+  });
+
+  it("teaches only examples the real Markdoc config accepts", () => {
+    for (const { label, example } of AUTHORING_TAG_CATALOG) {
+      expect(exampleErrors(example), `catalog example ${label}`).toEqual([]);
+    }
+    for (const { group, template } of AUTHORING_SECTION_TEMPLATES) {
+      /* Templates carry their own group/section skeleton; wrap frontmatter only. */
+      const errors = parseDocument(
+        `---\nwalkthrough: 1\ntitle: Template\npr: 1\ncommit: abcdef1\n---\n\n${template}\n`,
+        "template.md",
+      ).diagnostics.filter((diagnostic) => diagnostic.level === "error");
+      expect(errors, `section template ${group}`).toEqual([]);
+    }
+    for (const [name, example] of Object.entries(ODOO_AUTHORING_EXAMPLES)) {
+      expect(exampleErrors(example, "odoo"), `odoo example ${name}`).toEqual([]);
+    }
+  });
+
+  it("keeps the documented package version in step with the code", () => {
+    for (const doc of ["../docs/authoring-package.md", "../README.md"]) {
+      const text = readFileSync(new URL(doc, import.meta.url), "utf8");
+      expect(text, doc).toContain(AUTHORING_PACKAGE_VERSION);
+    }
+  });
+
   it("renders author-controlled claims as JSON data to verify", () => {
     const prompt = initialAuthoringPrompt({
       pin: source.pin,
@@ -137,6 +201,9 @@ describe("the authoring package", () => {
     expect(withOdoo).toContain("needs comodel");
     expect(withOdoo).toContain("read, write, create, unlink");
     expect(withOdoo).toContain("{% o-diagram");
+    /* The extraction checklist that maps Odoo anatomy to blocks. */
+    expect(withOdoo).toContain("What to hunt in the diff");
+    expect(withOdoo).toContain("_auto = False");
     /* Every tag it is taught is a tag the schema accepts. */
     for (const tag of Object.keys(odooPreset.tags)) expect(withOdoo).toContain(tag);
   });

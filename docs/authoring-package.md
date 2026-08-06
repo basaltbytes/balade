@@ -1,12 +1,13 @@
 # Authoring package
 
 `balade generate` loads one versioned package from
-[`src/generate/authoring.ts`](../src/generate/authoring.ts). It contains the
-system prompt, section templates, writing rubric, and inspection limits. The
-package ships with the CLI, so a plain `npx balade generate …` does not depend
-on a second repository or an installed agent skill.
+[`src/pi/authoring.ts`](../src/pi/authoring.ts). It contains the
+system prompt, section templates, core tag catalog, writing rubric, and
+inspection limits. The package ships with the CLI, so a plain
+`npx balade generate …` does not depend on a second repository or an installed
+agent skill.
 
-The current package version is `1.3.0`. Its major version matches the
+The current package version is `1.5.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -56,7 +57,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.3.0
+  balade-authoring: 1.5.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -107,6 +108,17 @@ escapes:
 ```markdoc
 {% method sig="_check_allocation()" decorator="@api.constrains(\"allocation_id\")" %}
 ```
+
+## Block catalog
+
+The system prompt teaches the exact syntax of every core tag: one example per
+block, plus the full node and edge shape of `diagram`. It also states the cost
+model — only `code` ranges count against the range budget, so structured blocks
+are free — and tells the model to prefer a block over a prose list whenever the
+content is enumerable. A test walks `CORE_TAG_NAMES`, so a tag added to the
+format cannot silently stay untaught. A preset appends the same kind of
+guidance for its own tags: `--preset odoo` adds the `o-` tag syntax and a
+what-to-hunt checklist that maps Odoo anatomy to blocks.
 
 ## Writing rubric
 

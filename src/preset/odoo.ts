@@ -130,18 +130,38 @@ const oDiagram: PresetTag = {
   expand: (node: Node): Block[] => [diagramBlock(node)],
 };
 
-/* Written for a model that already knows the core catalog: syntax it cannot
-   guess, plus when each tag earns its place. Every attribute here is one the
-   schemas above accept — a wrong spelling costs a repair turn. */
-const ODOO_AUTHORING = `This is an Odoo repository. Three extra tags are active.
-
-{% o-field %} replaces the core field tag inside a core fields block, for Odoo model fields:
-
-{% fields %}
+/**
+ * The examples the authoring prose interpolates verbatim. Exported so tests can
+ * parse each one against the real Markdoc config — a wrong attribute here would
+ * teach every generated draft invalid syntax and cost a repair turn per run.
+ */
+export const ODOO_AUTHORING_EXAMPLES: Record<"field" | "security" | "diagram", string> = {
+  field: `{% fields %}
 {% o-field name="allocation_id" kind="Many2one" comodel="planning.allocation" readonly=true %}
 The source row this lens reflects.
 {% /o-field %}
-{% /fields %}
+{% /fields %}`,
+  security: `{% o-security model="planning.pool.item" rows=[{label: "base.group_user", cells: [true, false, false, false]}] /%}`,
+  diagram: `{% o-diagram intro="How the pool reaches a slot." nodes=[{id: "pool", model: "planning.pool.item", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["allocation_id", "slot_ids"]}]}, {id: "slot", model: "planning.slot", change: "ctx", col: 2, row: 1}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many"}] /%}`,
+};
+
+/* Written for a model that also has the core catalog in its prompt: syntax it
+   cannot guess, plus when each tag earns its place. */
+const ODOO_AUTHORING = `This is an Odoo repository. Three extra tags are active.
+
+What to hunt in the diff, and where each find goes:
+
+- New models, including _auto = False SQL views → o-field rows inside a core fields block, and a node on the o-diagram.
+- New or changed fields on existing models → o-field rows; carry compute and @api.depends in the note, and the comodel of every relation.
+- New or overridden methods → core method blocks; the api decorator renders as chips.
+- View XML → describe the intent in prose: what the user now sees or can do. Never paste the XML.
+- Wizards (TransientModel) → their own section when the PR adds or changes one.
+- security/ir.model.access.csv rows and ir.rule records → o-security.
+- i18n/*.po and *.pot files → one core i18n block. Test files → one core tests block.
+
+{% o-field %} replaces the core field tag inside a core fields block, for Odoo model fields:
+
+${ODOO_AUTHORING_EXAMPLES.field}
 
 - name and kind are required. kind is the Odoo field type, optionally with a middle dot qualifier: "Char · compute".
 - A Many2one, One2many, Many2many or Many2oneReference field needs comodel; check fails without it.
@@ -150,17 +170,17 @@ The source row this lens reflects.
 
 {% o-security %} is self-closing and renders an ACL matrix. Pass rows explicitly; balade does not read ir.model.access.csv:
 
-{% o-security model="planning.pool.item" rows=[{label: "base.group_user", cells: [true, false, false, false]}] /%}
+${ODOO_AUTHORING_EXAMPLES.security}
 
 Each row is one group. cells are read, write, create, unlink in that order. Use it only when the PR changes access rules.
 
 {% o-diagram %} is self-closing and draws model relations:
 
-{% o-diagram intro="How the pool reaches a slot." nodes=[{id: "pool", model: "planning.pool.item", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["allocation_id", "slot_ids"]}]}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many"}] /%}
+${ODOO_AUTHORING_EXAMPLES.diagram}
 
 - Each node needs id and model; change is "new", "mod" or "ctx"; col and row place it on a grid starting at 1.
 - Each edge needs from and to naming node ids; kind is "new", "mod", "ctx" or "derived"; label and thick are optional.
-- Use it once, for the relation the PR actually changes. A diagram of the whole module is noise.
+- When the PR adds or rewires model relations, draw them: the changed models, their direct relational neighbors, and the engine relation marked thick=true. Leave out models the PR never touches — the changed relations are the signal, the module map is noise.
 
 Prefer the core tags for anything not specific to Odoo. Use an Odoo tag only where the Odoo concept is the review signal — a field's semantics, a changed ACL, a new relation.`;
 
