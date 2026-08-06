@@ -6,9 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../src/authoring/package.js";
 import {
   CLAUDE_SKILL_LOCATION,
-  renderSkillMd,
   SHARED_SKILL_LOCATION,
   SKILL_NAME,
+  skillMd,
 } from "../src/authoring/skill.js";
 import { skillStalenessHints } from "../src/commands/check/skill.js";
 import { runSkillsInstall } from "../src/commands/skills/install.js";
@@ -43,7 +43,7 @@ function restamp(repoDir: string, location: string, version: string): void {
 
 describe("the generated authoring skill", () => {
   it("renders a stamped, self-describing SKILL.md", () => {
-    const skill = renderSkillMd();
+    const skill = skillMd;
     const block = frontmatterBlock(skill);
     expect(block).not.toBeNull();
     expect(block).toContain(`name: ${SKILL_NAME}`);
@@ -55,7 +55,7 @@ describe("the generated authoring skill", () => {
   });
 
   it("teaches every core tag's syntax, like the Pi prompt does", () => {
-    const skill = renderSkillMd();
+    const skill = skillMd;
     for (const tag of CORE_TAG_NAMES) {
       /* Pipe tables render as-is; the catalog shows no `{% table %}` wrapper. */
       if (tag === "table") continue;
@@ -87,7 +87,7 @@ describe("skills install and the check staleness hint", () => {
     mkdirSync(join(repo.dir, ".claude"), { recursive: true });
     const written = await install({ cwd: repo.dir });
     expect(written).toEqual([claude, shared]);
-    for (const file of written) expect(readFileSync(file, "utf8")).toBe(renderSkillMd());
+    for (const file of written) expect(readFileSync(file, "utf8")).toBe(skillMd);
     /* A refresh overwrites in place. */
     expect(await install({ cwd: repo.dir })).toEqual(written);
   });
@@ -95,7 +95,7 @@ describe("skills install and the check staleness hint", () => {
   it("writes one custom directory with --out", async () => {
     const written = await install({ cwd: repo.dir, out: "dist/skill" });
     expect(written).toEqual([join(repo.dir, "dist/skill", SKILL_NAME, "SKILL.md")]);
-    expect(readFileSync(written[0] ?? "", "utf8")).toBe(renderSkillMd());
+    expect(readFileSync(written[0] ?? "", "utf8")).toBe(skillMd);
   });
 
   it("fails outside a git repository when no --out names a target", async () => {

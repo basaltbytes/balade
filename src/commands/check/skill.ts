@@ -50,7 +50,7 @@ function olderThanCli(version: string): boolean {
     if (Number.isNaN(a) || a < b) return true;
     if (a > b) return false;
   }
-  return true;
+  return false;
 }
 
 /**

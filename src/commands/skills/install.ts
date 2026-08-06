@@ -7,9 +7,9 @@
 import { Effect, FileSystem, Path } from "effect";
 import {
   CLAUDE_SKILL_LOCATION,
-  renderSkillMd,
   SHARED_SKILL_LOCATION,
   SKILL_NAME,
+  skillMd,
 } from "../../authoring/skill.js";
 import { gitToplevel } from "../../shell.js";
 
@@ -35,13 +35,12 @@ export const runSkillsInstall = Effect.fn("runSkillsInstall")(function* (
   } else {
     bases.push(path.resolve(options.cwd, options.out));
   }
-  const rendered = renderSkillMd();
   const written: string[] = [];
   for (const base of bases) {
     const dir = path.join(base, SKILL_NAME);
     yield* fs.makeDirectory(dir, { recursive: true });
     const file = path.join(dir, "SKILL.md");
-    yield* fs.writeFileString(file, rendered);
+    yield* fs.writeFileString(file, skillMd);
     written.push(file);
   }
   return written;

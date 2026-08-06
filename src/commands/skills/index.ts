@@ -1,6 +1,7 @@
 /** `balade skills`: materialize the generated authoring skill into the host repository. */
 
 import { Effect, Option } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 import { Command, Flag } from "effect/unstable/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import type { CommandFailed, NotARepository } from "../../contract/context.js";
@@ -37,16 +38,17 @@ const installCommand = Command.make("install", { out }, (config) =>
   ),
 );
 
-type InstallError = NotARepository | CommandFailed | { readonly message: string };
+type InstallError = NotARepository | CommandFailed | PlatformError;
 
 function installErrorMessage(error: InstallError): string {
-  if ("_tag" in error && error._tag === "NotARepository") {
-    return "Not inside a git repository — run balade skills install from the repository that should hold the skill, or pass --out <dir>.";
+  switch (error._tag) {
+    case "NotARepository":
+      return "Not inside a git repository — run balade skills install from the repository that should hold the skill, or pass --out <dir>.";
+    case "CommandFailed":
+      return `${error.file} ${error.args.join(" ")} failed (exit ${error.code}).`;
+    default:
+      return `Could not write the skill: ${error.message}`;
   }
-  if ("_tag" in error && error._tag === "CommandFailed") {
-    return `${error.file} ${error.args.join(" ")} failed (exit ${error.code}).`;
-  }
-  return `Could not write the skill: ${error.message}`;
 }
 
 export const skillsCommand = Command.make("skills").pipe(

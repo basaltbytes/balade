@@ -7,6 +7,14 @@
 import { Option } from "effect";
 import { tagCatalogText } from "../authoring/catalog.js";
 import {
+  absenceText,
+  audienceText,
+  catalogLeadText,
+  markdocRulesText,
+  spineText,
+  templatesLeadText,
+} from "../authoring/guidance.js";
+import {
   AUTHORING_LIMITS,
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
@@ -37,33 +45,25 @@ Evidence rules
 
 List the changes and inspect the relevant diff. Before claiming how an identifier, type, or configuration value is used, call search_source across the pin, then read the exact numbered source ranges that the matches make relevant. Prefer fixed search for identifiers and regex only when a pattern carries meaning. Use read_base_source only when a rewrite or deletion needs more old implementation than the diff context provides. If a loaded repository instruction requires another project document, read it at the pin before analyzing the change. Never guess a path, line number, range boundary, behavior, or expect echo. Do not inventory the repository. Use no more than ${AUTHORING_LIMITS.diffReads} diff reads, ${AUTHORING_LIMITS.searches} searches, and ${AUTHORING_LIMITS.sourceReads} source reads.
 
-Choose the behavioral spine instead of inventorying changed files. A substantial walkthrough usually needs ${AUTHORING_LIMITS.suggestedSections.minimum}-${AUTHORING_LIMITS.suggestedSections.maximum} sections and ${AUTHORING_LIMITS.suggestedCodeRanges.minimum}-${AUTHORING_LIMITS.suggestedCodeRanges.maximum} focused code ranges. The package has a hard maximum of ${AUTHORING_LIMITS.codeRanges} code ranges. Small, mechanical, or documentation-only changes often need one section and few or no code ranges. Omit plumbing and unchanged context unless they carry evidence needed to review the change.
+${spineText}
 
-Write for a member of the public who did not read the code and did not join the coding session. Explain the named behavior before implementation detail. For English, apply ASD-STE100 Simplified Technical English: use one term per concept, short active sentences, and literal wording. For French, use Rédaction technique simplifiée and keep English technical terms that French developers normally use. Do not translate them word for word.
+${audienceText}
 
 Section templates
 
-Start from this canonical navigation skeleton, adapt section ids and titles, and omit every group without review signal. A changed file does not automatically deserve a section.
+${templatesLeadText}
 
 ${sectionTemplatesText}
 
-When an absence is a deliberate product rule, explain it with ordinary Markdown and a callout. Do not make a one-card cards block for an empty topic. If translations matter, use one i18n block instead of pasting PO diffs. If tests matter, summarize scenarios and assertions in one tests block instead of pasting test diffs.
+${absenceText}
 
 Markdoc rules
 
-Use ordinary Markdown for narrative inside group and section tags. Reference pinned code with a self-closing tag:
-
-{% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" /%}
-
-Read the numbered source first, keep the range focused, and copy expect exactly from the first referenced line. Markdoc attributes use double quotes. Escape every embedded double quote with a backslash, for example:
-
-{% method sig="_check_allocation()" decorator="@api.constrains(\\"allocation_id\\")" %}
-Explain the constraint.
-{% /method %}
+${markdocRulesText}
 
 Core tag catalog
 
-Only code tags count against the range budget; every other block is free. When the content is enumerable — fields, steps, scenarios, access rules, relations — prefer the matching block over a prose list: it is denser to read and renders as a purpose-built widget. Ordinary Markdown pipe tables also render as-is.
+${catalogLeadText}
 
 ${tagCatalogText}
 

@@ -583,7 +583,11 @@ versions still converge.
 The source stays TypeScript, not Markdown: the data is typed and CI
 parse-validates every catalog example against the real Markdoc config, which
 a hand-edited `.md` source could not guarantee. The generated SKILL.md is the
-only Markdown and is never edited — install always overwrites.
+only Markdown and is never edited — install always overwrites. Prose that
+both renderings state verbatim lives once in `src/authoring/guidance.ts` and
+is interpolated by each, so the prompt and the skill cannot drift
+sentence-by-sentence; only rendering-specific prose (the Pi tool contract,
+the skill's authoring loop) is written in a renderer.
 
 The staleness guard lives in `check` at the command boundary
 (`commands/check/skill.ts`), not in the checker: it scans both conventional
