@@ -33,9 +33,10 @@
     "provenance": true
   },
   "scripts": {
-    "build": "pnpm run build:cli && pnpm run build:app",
+    "build": "pnpm run build:cli && pnpm run build:app && pnpm run build:skill",
     "build:cli": "tsc -p tsconfig.build.json",
     "build:app": "vite build app && vite build app --mode export",
+    "build:skill": "node dist/cli.js skills install --out dist/skill",
     "dev:app": "vite app",
     "dev:site": "vite site",
     "build:site": "vite build site",

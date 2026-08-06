@@ -50,9 +50,10 @@ const ROOT_UTILS = ["shell.ts", "state.ts", "terminal.ts", "failure.ts"];
 const CONCEPT_EDGES: Record<string, readonly string[]> = {
   contract: ["contract"],
   preset: ["preset", "contract"],
+  authoring: ["authoring"],
   git: ["git", "contract", ...ROOT_UTILS],
   walkthrough: ["walkthrough", "preset", "contract", ...ROOT_UTILS],
-  pi: ["pi", "git", "contract", ...ROOT_UTILS],
+  pi: ["pi", "authoring", "git", "contract", ...ROOT_UTILS],
   ...Object.fromEntries(ROOT_UTILS.map((util) => [util, [util, "contract"]])),
 };
 

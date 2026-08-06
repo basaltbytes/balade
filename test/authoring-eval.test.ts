@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
-import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../src/pi/authoring.js";
+import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../src/authoring/package.js";
 import { runGeneration } from "../src/commands/generate/pipeline.js";
 import { AUTHORING_EVAL_CASES } from "./fixtures/authoring.js";
 import {

@@ -12,7 +12,8 @@ import type { Node } from "@markdoc/markdoc";
 import { Effect, FileSystem, Option, Path, Result } from "effect";
 import { CommandExecutor, gitOut } from "../shell.js";
 import type { AuthoringRequest } from "./author.js";
-import { AUTHORING_LIMITS, authoringSystemPrompt } from "./authoring.js";
+import { AUTHORING_LIMITS } from "../authoring/package.js";
+import { authoringSystemPrompt } from "./authoring.js";
 import {
   openPinnedRepositorySnapshot,
   type PinnedRepositorySnapshot,
