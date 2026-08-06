@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -5,13 +6,40 @@ import {
   AUTHORING_PACKAGE_VERSION,
   AUTHORING_RUBRIC,
   AUTHORING_SECTION_TEMPLATES,
+  AUTHORING_TAG_CATALOG,
   authoringSystemPrompt,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
   initialAuthoringPrompt,
 } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/pipeline.js";
-import { odooPreset } from "../src/preset/odoo.js";
+import { odooPreset, ODOO_AUTHORING_EXAMPLES } from "../src/preset/odoo.js";
+import { parseDocument } from "../src/walkthrough/document.js";
 import { CORE_TAG_NAMES } from "../src/walkthrough/tags.js";
+
+/** Wraps a taught example in the smallest valid walkthrough document. */
+function exampleDocument(body: string, preset?: string): string {
+  return `---
+walkthrough: 1
+title: Catalog example
+pr: 1
+commit: abcdef1
+${preset === undefined ? "" : `preset: ${preset}\n`}---
+
+{% group label="Example" %}
+{% section id="example" title="Example" %}
+
+${body}
+
+{% /section %}
+{% /group %}
+`;
+}
+
+function exampleErrors(body: string, preset?: string): string[] {
+  return parseDocument(exampleDocument(body, preset), "example.md")
+    .diagnostics.filter((diagnostic) => diagnostic.level === "error")
+    .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`);
+}
 import type { PullSnapshot } from "../src/git/pr.js";
 
 const source: PullSnapshot = {
@@ -85,9 +113,30 @@ describe("the authoring package", () => {
     }
     /* The cost model that makes structured blocks worth choosing over prose. */
     expect(prompt).toContain("Only code tags count against the range budget");
-    /* The diagram shape it cannot guess: node placement and edge kinds. */
-    expect(prompt).toContain("compartments");
-    expect(prompt).toContain('kind is "new", "mod", "ctx" or "derived"');
+  });
+
+  it("teaches only examples the real Markdoc config accepts", () => {
+    for (const { label, example } of AUTHORING_TAG_CATALOG) {
+      expect(exampleErrors(example), `catalog example ${label}`).toEqual([]);
+    }
+    for (const { group, template } of AUTHORING_SECTION_TEMPLATES) {
+      /* Templates carry their own group/section skeleton; wrap frontmatter only. */
+      const errors = parseDocument(
+        `---\nwalkthrough: 1\ntitle: Template\npr: 1\ncommit: abcdef1\n---\n\n${template}\n`,
+        "template.md",
+      ).diagnostics.filter((diagnostic) => diagnostic.level === "error");
+      expect(errors, `section template ${group}`).toEqual([]);
+    }
+    for (const [name, example] of Object.entries(ODOO_AUTHORING_EXAMPLES)) {
+      expect(exampleErrors(example, "odoo"), `odoo example ${name}`).toEqual([]);
+    }
+  });
+
+  it("keeps the documented package version in step with the code", () => {
+    for (const doc of ["../docs/authoring-package.md", "../README.md"]) {
+      const text = readFileSync(new URL(doc, import.meta.url), "utf8");
+      expect(text, doc).toContain(AUTHORING_PACKAGE_VERSION);
+    }
   });
 
   it("renders author-controlled claims as JSON data to verify", () => {

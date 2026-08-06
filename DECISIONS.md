@@ -622,8 +622,17 @@ node and edge shape, and states the cost model out loud: only `code` ranges
 count against the range budget, so structured blocks are free, and enumerable
 content should prefer a block over a prose list. The catalog costs a few
 hundred prompt tokens on every run; teaching tags through repair turns instead
-costs a full check round-trip per guessed attribute. A test walks
-`CORE_TAG_NAMES` so a tag added to the format cannot silently stay untaught.
+costs a full check round-trip per guessed attribute.
+
+The catalog is authored, not derived from the tag schemas: the value is the
+judgment prose and realistic examples, and the prompt is a versioned artifact
+that must not drift silently with code. The guard runs the other way — the
+catalog and the odoo authoring text keep their examples in typed structures
+(`AUTHORING_TAG_CATALOG`, `ODOO_AUTHORING_EXAMPLES`) interpolated into the
+prompt, and tests parse every example through the real `parseDocument` config,
+so a wrong attribute fails CI instead of teaching every draft a repair turn.
+A test also walks `CORE_TAG_NAMES` so a tag added to the format cannot
+silently stay untaught, and the docs must contain the current package version.
 Presets still teach only their own tags on top of the taught core; the odoo
 preset adds a what-to-hunt checklist mapping Odoo anatomy (models, fields,
 views, wizards, security, i18n, tests) to the block each belongs in, and its

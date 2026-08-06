@@ -80,6 +80,98 @@ Replace this line with the detailed reading path.
   },
 ];
 
+export interface AuthoringTagExample {
+  /** The tag family taught, e.g. "fields/field". */
+  readonly label: string;
+  /** When the block earns its place, plus the attribute rules the example cannot show. */
+  readonly note: string;
+  /** A complete use, valid against the real Markdoc config — tests parse every entry. */
+  readonly example: string;
+}
+
+export const AUTHORING_TAG_CATALOG: readonly AuthoringTagExample[] = [
+  {
+    label: "callout",
+    note: 'tone is "key" or "warn"; omit it for a neutral aside.',
+    example: `{% callout tone="key" %}
+One sentence the reviewer must not miss.
+{% /callout %}`,
+  },
+  {
+    label: "flow/step",
+    note: "One ordered control path; the optional tag names the actor or phase.",
+    example: `{% flow %}
+{% step tag="guard" %}Reject a stale pin before any write.{% /step %}
+{% step %}Apply the change.{% /step %}
+{% /flow %}`,
+  },
+  {
+    label: "fields/field",
+    note: "A name/kind/note table for fields, props, state, columns, or options.",
+    example: `{% fields %}
+{% field name="total" kind="number" badges=["computed"] %}What the field means to a reviewer.{% /field %}
+{% /fields %}`,
+  },
+  {
+    label: "method",
+    note: "decorator and chips are optional; the decorator renders as chips beside the signature.",
+    example: `{% method sig="apply(change)" decorator="@memo" %}
+What it does and when it runs.
+{% /method %}`,
+  },
+  {
+    label: "tests/test",
+    note: 'kind is "unit", "tour" or "http". Read the tests, then summarize; never paste test diffs.',
+    example: `{% tests %}
+{% test name="test_expiry" kind="unit" ref="tests/test_expiry.py" asserts=["rejects a past date", "keeps the open slot"] %}One- or two-sentence scenario.{% /test %}
+{% /tests %}`,
+  },
+  {
+    label: "matrix",
+    note: "The first column is the row label; a cell holding ✓ renders as granted, anything else as denied. Use it for permission or capability grids.",
+    example: `{% matrix %}
+| Group | read | write |
+| --- | --- | --- |
+| base.group_user | ✓ | — |
+{% /matrix %}`,
+  },
+  {
+    label: "files",
+    note: "The changed-file list from PR data; only and status (A, M, D, R) filter it, why annotates a row. Use it for changed paths that need listing but no dedicated section.",
+    example: `{% files only="src/**" status="A, M" why={"src/example.ts": "why it changed"} /%}`,
+  },
+  {
+    label: "i18n",
+    note: "One row per changed .po or .pot file with entry counts, computed from the PR.",
+    example: `{% i18n /%}`,
+  },
+  {
+    label: "cards/card",
+    note: "Two to four parallel points; cols is 1, 2 or 3.",
+    example: `{% cards cols=2 %}
+{% card icon="beaker" title="Trade-off" %}Body.{% /card %}
+{% card title="Alternative" %}Body.{% /card %}
+{% /cards %}`,
+  },
+  {
+    label: "patterns/pattern",
+    note: "A small glossary of repository idioms the reader needs.",
+    example: `{% patterns %}
+{% pattern term="lens" ref="src/lens.ts" %}Definition.{% /pattern %}
+{% /patterns %}`,
+  },
+  {
+    label: "attrs",
+    note: "A bare chip list.",
+    example: `{% attrs items=["readonly", "cascade"] /%}`,
+  },
+  {
+    label: "diagram",
+    note: 'Relations between named models or components. A node needs id and model; change is "new", "mod" or "ctx"; col and row place it on a grid that starts at 1; compartments hold labelled member rows. An edge joins two node ids; kind is "new", "mod", "ctx" or "derived"; label and thick are optional — mark the one relation the change turns on with thick=true. When the change adds or rewires a relation between named parts, one diagram of those parts and their direct neighbors is high review signal. Leave out parts the change never touches.',
+    example: `{% diagram intro="How a slot reaches its pool." nodes=[{id: "pool", model: "planning.pool", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["slot_ids"]}]}, {id: "slot", model: "planning.slot", change: "mod", col: 2, row: 1}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many", thick: true}] /%}`,
+  },
+];
+
 export interface AuthoringRubricCriterion {
   readonly id: "factual-accuracy" | "section-selection" | "reviewer-usefulness" | "prose-quality";
   readonly question: string;
@@ -129,6 +221,11 @@ const rubricPrompt = AUTHORING_RUBRIC.map(
   ({ question, pass, reject }) => `- ${question}\n  Pass: ${pass}\n  Reject: ${reject}`,
 ).join("\n");
 
+const tagCatalogPrompt = AUTHORING_TAG_CATALOG.map(
+  ({ label, note, example }) => `${label} — ${note}
+${example}`,
+).join("\n\n");
+
 const BASE_SYSTEM_PROMPT = `You author thin, committed balade walkthroughs for pull-request review.
 
 Input and output contract
@@ -175,28 +272,9 @@ Explain the constraint.
 
 Core tag catalog
 
-Only code tags count against the range budget; every other block is free. When the content is enumerable — fields, steps, scenarios, access rules, relations — prefer the matching block over a prose list: it is denser to read and renders as a purpose-built widget.
+Only code tags count against the range budget; every other block is free. When the content is enumerable — fields, steps, scenarios, access rules, relations — prefer the matching block over a prose list: it is denser to read and renders as a purpose-built widget. Ordinary Markdown pipe tables also render as-is.
 
-- callout: {% callout tone="key" %}One sentence the reviewer must not miss.{% /callout %} — tone is "key" or "warn"; omit it for a neutral aside.
-- flow/step: {% flow %}{% step tag="guard" %}What happens first.{% /step %}{% /flow %} — one ordered control path; the optional tag names the actor or phase.
-- fields/field: {% fields %}{% field name="total" kind="number" badges=["computed"] tags=["cache"] %}What the field means to a reviewer.{% /field %}{% /fields %} — a name/kind/note table for fields, props, state, columns, or options.
-- method: shown above; decorator and chips are optional.
-- tests/test: {% tests %}{% test name="test_expiry" kind="unit" ref="tests/test_expiry.py" asserts=["rejects a past date", "keeps the open slot"] %}One- or two-sentence scenario.{% /test %}{% /tests %} — kind is "unit", "tour" or "http". Read the tests, then summarize; never paste test diffs.
-- matrix: a Markdown pipe table inside {% matrix %}...{% /matrix %} — the first column is the row label, a cell holding ✓ renders as granted, anything else as denied. Use it for permission or capability grids.
-- table: ordinary Markdown pipe tables render as-is.
-- files: {% files only="src/**" status="A, M" /%} — the changed-file list from PR data; only and status (A, M, D, R) filter it, why={"src/example.ts": "reason"} annotates a row. Use it for changed paths that need listing but no dedicated section.
-- i18n: {% i18n /%} — one row per changed .po or .pot file with entry counts, computed from the PR.
-- cards/card: {% cards cols=2 %}{% card icon="beaker" title="Trade-off" %}Body.{% /card %}{% /cards %} — two to four parallel points; cols is 1, 2 or 3.
-- patterns/pattern: {% patterns %}{% pattern term="lens" ref="src/lens.ts" %}Definition.{% /pattern %}{% /patterns %} — a small glossary of repository idioms the reader needs.
-- attrs: {% attrs items=["readonly", "cascade"] /%} — a bare chip list.
-
-diagram draws the relations between named models or components:
-
-{% diagram intro="How a slot reaches its pool." nodes=[{id: "pool", model: "planning.pool", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["slot_ids"]}]}, {id: "slot", model: "planning.slot", change: "mod", col: 2, row: 1}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many", thick: true}] /%}
-
-- A node needs id and model. change is "new", "mod" or "ctx". col and row place it on a grid that starts at 1. compartments hold labelled member rows.
-- An edge joins two node ids. kind is "new", "mod", "ctx" or "derived"; label and thick are optional. Mark the one relation the change turns on with thick=true.
-- When the change adds or rewires a relation between named parts, one diagram of those parts and their direct neighbors is high review signal. Leave out parts the change never touches.
+${tagCatalogPrompt}
 
 Writing rubric
 
