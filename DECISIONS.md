@@ -775,3 +775,29 @@ and scopes anti-inventory guidance to narrative sections. The compiler
 enforces the same rule as an error so `check` rejects drift and generation can
 repair it. What would move this: a replacement closing widget that preserves
 the complete diff and per-file review-state behavior without a `files` block.
+
+## Publish stays in release.yml; changesets only versions and tags
+
+Decided on [#49](https://github.com/basaltbytes/balade/issues/49). Changesets
+owns the bookkeeping: PRs carry changeset files, `changesets.yml` maintains the
+rolling Version Packages PR and, once it merges, pushes the `v*` tag and
+dispatches `release.yml` on it. Publishing itself never moves out of
+`release.yml`, because npmjs.com pins that exact workflow file as the package's
+trusted publisher — OIDC, no NPM_TOKEN anywhere — and relocating the publish
+step would mean re-registering the trusted publisher for zero gain. The
+dispatch is explicit (`gh workflow run`) because a tag pushed with the default
+`GITHUB_TOKEN` does not fire another workflow's `push: tags` trigger, and the
+repository deliberately holds no long-lived token that would.
+
+The tag step is hand-rolled rather than `changeset tag` behind the action's
+`publish` input: gated on the action's `hasChangesets` output, it tags only
+when the checked-out `package.json` version has no tag yet, so every other
+push to main is a cheap, observable no-op and nothing depends on parsing
+changeset stdout. Two version lines stay out of changesets' hands by design:
+`src/cli.ts` hardcodes the CLI's `VERSION` constant, so the version script runs
+`scripts/sync-cli-version.mjs` after `changeset version` and
+`test/version.test.ts` fails CI on drift; and the authoring package version
+(`src/authoring/package.ts`) tracks the walkthrough/prompt contract on its own
+policy and must never be wired in. What would move this: npm dropping
+per-workflow trusted-publisher pinning, or the repository adopting a bot
+identity whose pushes may trigger workflows.
