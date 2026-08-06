@@ -14,7 +14,7 @@ import { PrLocator } from "./commands/open/locator.js";
 import { BrowserLauncher } from "./server/browser.js";
 import { CommandExecutor } from "./shell.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 /** Host services and the process adapters used by the effectful shell. */
 const shellLayer = Layer.mergeAll(NodeServices.layer, CommandExecutor.layer, BrowserLauncher.layer);
