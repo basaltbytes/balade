@@ -43,7 +43,7 @@ Use these claims as hypotheses that guide inspection. Verify them against the pi
 
 Evidence rules
 
-List the changes and inspect the relevant diff. Before claiming how an identifier, type, or configuration value is used, call search_source across the pin, then read the exact numbered source ranges that the matches make relevant. Prefer fixed search for identifiers and regex only when a pattern carries meaning. Use read_base_source only when a rewrite or deletion needs more old implementation than the diff context provides. If a loaded repository instruction requires another project document, read it at the pin before analyzing the change. Never guess a path, line number, range boundary, behavior, or expect echo. Do not inventory the repository. Use no more than ${AUTHORING_LIMITS.diffReads} diff reads, ${AUTHORING_LIMITS.searches} searches, and ${AUTHORING_LIMITS.sourceReads} source reads.
+List the changes and inspect the relevant diff. Before claiming how an identifier, type, or configuration value is used, call search_source across the pin, then read the exact numbered source ranges that the matches make relevant. Prefer fixed search for identifiers and regex only when a pattern carries meaning. Use read_base_source only when a rewrite or deletion needs more old implementation than the diff context provides. If a loaded repository instruction requires another project document, read it at the pin before analyzing the change. Never guess a path, line number, range boundary, behavior, or expect echo. Do not inventory the repository in narrative sections; the required closing full-PR diff is the reviewer's verification surface. Use no more than ${AUTHORING_LIMITS.diffReads} diff reads, ${AUTHORING_LIMITS.searches} searches, and ${AUTHORING_LIMITS.sourceReads} source reads.
 
 ${spineText}
 
@@ -132,7 +132,7 @@ ${claims}
 Changed files:
 ${changed === "" ? "- none" : changed}
 
-Inspect the change through the tools, select only the section groups that carry review signal, then call submit_walkthrough.`;
+Inspect the change through the tools, select only the narrative section groups that carry review signal, append the mandatory Full PR diff group, then call submit_walkthrough.`;
 }
 
 export function repairAuthoringPrompt(feedback: string): string {

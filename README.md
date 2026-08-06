@@ -186,7 +186,7 @@ pr: 96                        # the pull request this narrates
 commit: 9f3c2ad…              # the stamped commit every reference resolves at
 meta:                         # scalar header chips
   module: acme_loan
-  balade-authoring: 1.7.0     # generated drafts record their authoring package
+  balade-authoring: 1.8.0     # generated drafts record their authoring package
 ---
 ```
 

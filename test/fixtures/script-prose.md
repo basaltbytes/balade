@@ -16,4 +16,6 @@ so a walkthrough about HTML still exports.
 An unescaped `</script>` would end the baked payload early.
 {% /callout %}
 
+{% files /%}
+
 {% /section %}

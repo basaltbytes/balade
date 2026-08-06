@@ -78,6 +78,7 @@ describe("the authoring package", () => {
       "Surface",
       "Quality",
       "Deep dive",
+      "Full PR diff",
     ]);
     expect(AUTHORING_RUBRIC.map((criterion) => criterion.id)).toEqual([
       "factual-accuracy",
@@ -91,7 +92,7 @@ describe("the authoring package", () => {
     expect(authoringSystemPrompt()).toContain("ASD-STE100 Simplified Technical English");
     expect(authoringSystemPrompt()).toContain("Rédaction technique simplifiée");
     expect(authoringSystemPrompt()).toContain(
-      "A changed file does not automatically deserve a section",
+      "A changed file does not automatically deserve a narrative section",
     );
     expect(authoringSystemPrompt()).toContain(`decorator="@api.constrains(\\"allocation_id\\")"`);
     expect(authoringSystemPrompt()).toContain("ordinary Markdown and a callout");
@@ -101,6 +102,7 @@ describe("the authoring package", () => {
     expect(authoringSystemPrompt()).toContain("call search_source across the pin");
     expect(authoringSystemPrompt()).toContain("Use read_base_source only when a rewrite");
     expect(authoringSystemPrompt()).toContain("20 searches");
+    expect(authoringSystemPrompt()).toContain("Every walkthrough ends with the Full PR diff group");
   });
 
   it("teaches every core tag's syntax in the catalog", () => {

@@ -1,11 +1,11 @@
 /**
- * The canonical navigation skeleton: five section-template groups the author
- * adapts and prunes. Tests parse every template against the real Markdoc
- * config.
+ * The canonical navigation skeleton: five narrative groups the author adapts
+ * and prunes, followed by one mandatory review group. Tests parse every
+ * template against the real Markdoc config.
  */
 
 export interface AuthoringSectionTemplate {
-  readonly group: "Orientation" | "Models" | "Surface" | "Quality" | "Deep dive";
+  readonly group: "Orientation" | "Models" | "Surface" | "Quality" | "Deep dive" | "Full PR diff";
   readonly selectWhen: string;
   readonly template: string;
 }
@@ -58,6 +58,16 @@ Replace this line with the safety or test evidence.
     template: `{% group label="Deep dive" %}
 {% section id="mechanism" title="Mechanism" %}
 Replace this line with the detailed reading path.
+{% /section %}
+{% /group %}`,
+  },
+  {
+    group: "Full PR diff",
+    selectWhen:
+      "Always, and always last. This unfiltered diff browser lets the reviewer inspect every changed file and mark each one as viewed.",
+    template: `{% group label="Full PR diff" %}
+{% section id="files" title="Full PR diff" icon="file-diff" %}
+{% files /%}
 {% /section %}
 {% /group %}`,
   },

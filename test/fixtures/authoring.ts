@@ -29,6 +29,16 @@ export interface AuthoringEvalCase {
   readonly expected: AuthoringDecisionExpectation;
 }
 
+const CLOSING_FULL_PR_DIFF = `{% group label="Full PR diff" %}
+
+{% section id="files" title="Full PR diff" icon="file-diff" %}
+
+{% files /%}
+
+{% /section %}
+
+{% /group %}`;
+
 export const AUTHORING_EVAL_CASES = [
   {
     id: "feature",
@@ -124,14 +134,16 @@ The scenario separates a permanent status, the last permitted retry, and an exha
 
 {% /section %}
 
-{% /group %}`,
+{% /group %}
+
+${CLOSING_FULL_PR_DIFF}`,
         },
       },
     ],
     expected: {
-      groups: ["Orientation", "Models", "Quality"],
+      groups: ["Orientation", "Models", "Quality", "Full PR diff"],
       omittedGroups: ["Surface", "Deep dive"],
-      sections: { minimum: 3, maximum: 3 },
+      sections: { minimum: 4, maximum: 4 },
       codeRanges: { minimum: 1, maximum: 1 },
       referencedFiles: ["src/retries.ts"],
       unreferencedFiles: ["test/retries.test.ts"],
@@ -207,14 +219,16 @@ The first function returns a number. The formatter consumes that result and owns
 
 {% /section %}
 
-{% /group %}`,
+{% /group %}
+
+${CLOSING_FULL_PR_DIFF}`,
         },
       },
     ],
     expected: {
-      groups: ["Orientation", "Deep dive"],
+      groups: ["Orientation", "Deep dive", "Full PR diff"],
       omittedGroups: ["Models", "Surface", "Quality"],
-      sections: { minimum: 2, maximum: 2 },
+      sections: { minimum: 3, maximum: 3 },
       codeRanges: { minimum: 2, maximum: 2 },
       referencedFiles: ["src/invoice-total.ts", "src/format-invoice.ts"],
       unreferencedFiles: ["src/format.ts"],
@@ -299,14 +313,16 @@ The scenarios cover a complete batch and a short final batch.
 
 {% /section %}
 
-{% /group %}`,
+{% /group %}
+
+${CLOSING_FULL_PR_DIFF}`,
         },
       },
     ],
     expected: {
-      groups: ["Orientation", "Quality"],
+      groups: ["Orientation", "Quality", "Full PR diff"],
       omittedGroups: ["Models", "Surface", "Deep dive"],
-      sections: { minimum: 2, maximum: 2 },
+      sections: { minimum: 3, maximum: 3 },
       codeRanges: { minimum: 1, maximum: 1 },
       referencedFiles: ["src/batches.ts"],
       unreferencedFiles: ["test/batches.test.ts"],
@@ -360,18 +376,18 @@ export const header = (name: string): string => clientLabel(name);
 
 The public helper and its caller now use client instead of customer. Behavior and arguments do not change.
 
-{% files /%}
-
 {% /section %}
 
-{% /group %}`,
+{% /group %}
+
+${CLOSING_FULL_PR_DIFF}`,
         },
       },
     ],
     expected: {
-      groups: ["Orientation"],
+      groups: ["Orientation", "Full PR diff"],
       omittedGroups: ["Models", "Surface", "Quality", "Deep dive"],
-      sections: { minimum: 1, maximum: 1 },
+      sections: { minimum: 2, maximum: 2 },
       codeRanges: { minimum: 0, maximum: 0 },
       referencedFiles: [],
       unreferencedFiles: ["src/client-label.ts", "src/header.ts"],
@@ -431,14 +447,16 @@ Permanent client and authentication failures return without delay.
 
 {% /section %}
 
-{% /group %}`,
+{% /group %}
+
+${CLOSING_FULL_PR_DIFF}`,
         },
       },
     ],
     expected: {
-      groups: ["Orientation", "Surface"],
+      groups: ["Orientation", "Surface", "Full PR diff"],
       omittedGroups: ["Models", "Quality", "Deep dive"],
-      sections: { minimum: 2, maximum: 2 },
+      sections: { minimum: 3, maximum: 3 },
       codeRanges: { minimum: 1, maximum: 1 },
       referencedFiles: ["docs/retries.md"],
       unreferencedFiles: [],

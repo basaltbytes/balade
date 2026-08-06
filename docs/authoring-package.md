@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.7.0`. Its major version matches the
+The current package version is `1.8.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -60,7 +60,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.7.0
+  balade-authoring: 1.8.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -89,8 +89,8 @@ the existing decisions and objective checks green.
 
 ## Section selection
 
-The package starts from the pr-96 navigation skeleton, but it does not copy all
-five groups into every draft.
+The package starts from the pr-96 navigation skeleton. It selects only the
+narrative groups that add review signal, then appends the mandatory full-PR diff.
 
 | Group | Use it for |
 | --- | --- |
@@ -99,11 +99,14 @@ five groups into every draft.
 | Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |
 | Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
 | Deep dive | One algorithm, lifecycle, state transition, or compatibility boundary that needs a slower reading path. |
+| Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block. |
 
-A changed file does not earn a section by itself. Mechanical renames can use
-one orientation section plus a `files` block. When an empty area expresses a
-product rule, the draft explains the absence with Markdown and a callout; it
-does not create a one-card block.
+A changed file does not earn a narrative section by itself. Mechanical renames
+can use one orientation section before the required full-PR diff. That final
+block stays attribute-free so every changed file remains available for review
+and its Viewed checkbox. When an empty area expresses a product rule, the draft
+explains the absence with Markdown and a callout; it does not create a one-card
+block.
 
 Markdoc attributes use double quotes. Embedded double quotes need backslash
 escapes:
@@ -136,7 +139,7 @@ The evaluator and human review use four questions:
 | Criterion | Pass | Reject |
 | --- | --- | --- |
 | Factual accuracy | Every claim, path, range, and boundary echo matches inspected evidence at the pin. | The draft guesses intent or cites code it did not inspect. |
-| Section selection | Each section adds review signal; low-signal files and topics stay out of the reading path. | The draft inventories files or copies the full skeleton by habit. |
+| Section selection | Each narrative section adds review signal; the required bare full-PR diff remains last. | The narrative inventories files, copies all five narrative groups by habit, or omits, filters, or moves the closing full-PR diff. |
 | Reviewer usefulness | The draft explains observable behavior, control flow, constraints, and the proof or risk that matters. | It paraphrases syntax or repeats the PR title. |
 | Prose quality | A reader who missed the coding session can understand direct, neutral, concrete prose. | The text assumes prior code knowledge or uses vague praise. |
 

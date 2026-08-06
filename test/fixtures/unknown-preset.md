@@ -10,4 +10,6 @@ preset: sap
 
 Nothing to see here.
 
+{% files /%}
+
 {% /section %}

@@ -8,7 +8,7 @@
 import { AUTHORING_LIMITS } from "./package.js";
 
 /** Section economy: follow the change's spine, not its file list. */
-export const spineText = `Choose the behavioral spine instead of inventorying changed files. A substantial walkthrough usually needs ${AUTHORING_LIMITS.suggestedSections.minimum}-${AUTHORING_LIMITS.suggestedSections.maximum} sections and ${AUTHORING_LIMITS.suggestedCodeRanges.minimum}-${AUTHORING_LIMITS.suggestedCodeRanges.maximum} focused code ranges. The package has a hard maximum of ${AUTHORING_LIMITS.codeRanges} code ranges. Small, mechanical, or documentation-only changes often need one section and few or no code ranges. Omit plumbing and unchanged context unless they carry evidence needed to review the change.`;
+export const spineText = `Choose the behavioral spine instead of inventorying changed files in narrative sections. A substantial walkthrough usually needs ${AUTHORING_LIMITS.suggestedSections.minimum}-${AUTHORING_LIMITS.suggestedSections.maximum} narrative sections and ${AUTHORING_LIMITS.suggestedCodeRanges.minimum}-${AUTHORING_LIMITS.suggestedCodeRanges.maximum} focused code ranges. The package has a hard maximum of ${AUTHORING_LIMITS.codeRanges} code ranges. Small, mechanical, or documentation-only changes often need one narrative section and few or no code ranges. The mandatory closing full-PR diff is a verification surface, not a narrative inventory, and does not count toward those section guidelines. Omit plumbing and unchanged context unless they carry evidence needed to review the change.`;
 
 /** Who the walkthrough is for, and the writing standard per language. */
 export const audienceText =
@@ -16,7 +16,7 @@ export const audienceText =
 
 /** How to hold the section-template skeleton. */
 export const templatesLeadText =
-  "Start from this canonical navigation skeleton, adapt section ids and titles, and omit every group without review signal. A changed file does not automatically deserve a section.";
+  "Start from this canonical navigation skeleton, adapt section ids and titles, and omit every narrative group without review signal. A changed file does not automatically deserve a narrative section. Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. Keep that group last; it is mandatory and does not count as inventorying the PR.";
 
 /** Deliberate absences and the blocks that replace pasted diffs. */
 export const absenceText =

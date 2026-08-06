@@ -179,7 +179,7 @@ describe("compile", () => {
     const deleted = payload.files.find((entry) => entry.path === "docs/old.md");
     expect(deleted?.status).toBe("D");
     expect(deleted?.why).toBe("superseded by the pool item");
-    expect(deleted?.ref).toBe("files");
+    expect(deleted?.ref).toBe("patterns");
     expect(payload.files.find((entry) => entry.path === "models/planning_pool_item.py")?.ref).toBe(
       "m-pool",
     );

@@ -710,3 +710,18 @@ a model-supplied `meta.lang`, mirroring the preset rule; without the flag,
 drafts stay English and a model-supplied value stands. The instruction lives in
 the initial request, not the system prompt, because it is per-run input, not a
 versioned authoring decision.
+
+## Every walkthrough ends with the unfiltered full-PR diff
+
+Decided on [#46](https://github.com/basaltbytes/balade/issues/46). The final
+section of every walkthrough contains an attribute-free `{% files /%}` block.
+It gives the reviewer every changed file, expand-context controls and the
+per-file Viewed checkboxes after the narrative reading path. Filtered `files`
+blocks remain available inside earlier narrative sections, but they do not
+satisfy the closing rule.
+
+The authoring package teaches the closing group as a mandatory structural rule
+and scopes anti-inventory guidance to narrative sections. The compiler
+enforces the same rule as an error so `check` rejects drift and generation can
+repair it. What would move this: a replacement closing widget that preserves
+the complete diff and per-file review-state behavior without a `files` block.

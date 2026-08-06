@@ -144,11 +144,23 @@ The pool model computes live placement from slots.
 
 {% code file="models/planning_pool_item.py" from=1 to=8 expect="${PINNED_LINE}" /%}
 
+{% /section %}
+
+{% section id="files" title="Full PR diff" %}
+
+{% files /%}
+
 {% /section %}`;
 
 const invalidBody = `{% section id="pool-model" title="Pool model" %}
 
 {% code file="models/planning_pool_item.py" from=999 to=1000 expect="not there" /%}
+
+{% /section %}
+
+{% section id="files" title="Full PR diff" %}
+
+{% files /%}
 
 {% /section %}`;
 

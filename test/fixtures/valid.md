@@ -118,11 +118,13 @@ Every new label shipped with its French translation.
 {% /pattern %}
 {% /patterns %}
 
+{% files only="docs/**" why={"docs/old.md": "superseded by the pool item"} /%}
+
 {% /section %}
 
 {% section id="files" title="Files changed" icon="file-diff" %}
 
-{% files why={"docs/old.md": "superseded by the pool item"} /%}
+{% files /%}
 
 {% /section %}
 
