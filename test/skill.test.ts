@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
@@ -68,12 +68,23 @@ describe("the generated authoring skill", () => {
 
 describe("skills install and the check staleness hint", () => {
   let repo: FixtureRepo;
+  const scratchDirs: string[] = [];
+
+  /** A throwaway directory that is not a git repository. */
+  function outsideRepo(): string {
+    const dir = mkdtempSync(join(tmpdir(), "balade-no-repo-"));
+    scratchDirs.push(dir);
+    return dir;
+  }
 
   beforeAll(() => {
     repo = createFixtureRepo();
   });
 
-  afterAll(() => repo.cleanup());
+  afterAll(() => {
+    repo.cleanup();
+    for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+  });
 
   it("writes the shared convention, and .claude/ only once the repo uses Claude Code", async () => {
     /* git spells the toplevel through resolved symlinks (`/private/var` on macOS). */
@@ -99,9 +110,8 @@ describe("skills install and the check staleness hint", () => {
   });
 
   it("fails outside a git repository when no --out names a target", async () => {
-    const outside = mkdtempSync(join(tmpdir(), "balade-no-repo-"));
     const error = await Effect.runPromise(
-      provideLive(Effect.flip(runSkillsInstall({ cwd: outside }))),
+      provideLive(Effect.flip(runSkillsInstall({ cwd: outsideRepo() }))),
     );
     expect(error._tag).toBe("NotARepository");
   });
@@ -113,14 +123,14 @@ describe("skills install and the check staleness hint", () => {
 
   it("hints a re-install for a stale skill and an upgrade for a newer one", async () => {
     await install({ cwd: repo.dir });
-    restamp(repo.dir, ".claude/skills", "1.0.0");
+    restamp(repo.dir, CLAUDE_SKILL_LOCATION, "1.0.0");
     const stale = await hints(repo.dir);
     expect(stale).toHaveLength(1);
-    expect(stale[0]).toContain(".claude/skills/balade-authoring/SKILL.md");
+    expect(stale[0]).toContain(`${CLAUDE_SKILL_LOCATION}/${SKILL_NAME}/SKILL.md`);
     expect(stale[0]).toContain("1.0.0");
     expect(stale[0]).toContain("balade skills install");
 
-    restamp(repo.dir, ".agents/skills", "9.9.9");
+    restamp(repo.dir, SHARED_SKILL_LOCATION, "9.9.9");
     const mixed = await hints(repo.dir);
     expect(mixed).toHaveLength(2);
     expect(mixed.find((line) => line.includes("9.9.9"))).toContain("Upgrade balade");
@@ -131,10 +141,9 @@ describe("skills install and the check staleness hint", () => {
   });
 
   it("ignores skill files without the stamp and stays silent outside a repository", async () => {
-    const foreign = join(repo.dir, ".claude/skills/some-other-skill");
+    const foreign = join(repo.dir, CLAUDE_SKILL_LOCATION, "some-other-skill");
     await install({ cwd: repo.dir });
-    const outside = mkdtempSync(join(tmpdir(), "balade-no-repo-"));
-    expect(await hints(outside)).toEqual([]);
+    expect(await hints(outsideRepo())).toEqual([]);
     mkdirSync(foreign, { recursive: true });
     writeFileSync(join(foreign, "SKILL.md"), "---\nname: other\ndescription: d\n---\nBody.\n");
     expect(await hints(repo.dir)).toEqual([]);

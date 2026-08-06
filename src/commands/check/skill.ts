@@ -33,8 +33,8 @@ const findSkillStamps = Effect.fn("findSkillStamps")(function* (root: string) {
         .readFileString(path.join(root, location, entry, "SKILL.md"))
         .pipe(Effect.orElseSucceed(() => ""));
       const block = frontmatterBlock(source);
-      const version = block === null ? null : STAMP.exec(block)?.[1];
-      if (version != null) stamps.push({ file: `${location}/${entry}/SKILL.md`, version });
+      const version = block === null ? undefined : STAMP.exec(block)?.[1];
+      if (version !== undefined) stamps.push({ file: `${location}/${entry}/SKILL.md`, version });
     }
   }
   return stamps;
@@ -64,9 +64,10 @@ export const skillStalenessHints = Effect.fn("skillStalenessHints")(function* (c
   );
   return stamps
     .filter((stamp) => stamp.version !== AUTHORING_PACKAGE_VERSION)
-    .map((stamp) =>
-      olderThanCli(stamp.version)
-        ? `hint ${stamp.file} teaches authoring package ${stamp.version}; this balade ships ${AUTHORING_PACKAGE_VERSION}. Refresh it with \`balade skills install\`.`
-        : `hint ${stamp.file} teaches authoring package ${stamp.version}; this balade ships ${AUTHORING_PACKAGE_VERSION}. Upgrade balade to match it.`,
-    );
+    .map((stamp) => {
+      const remedy = olderThanCli(stamp.version)
+        ? "Refresh it with `balade skills install`."
+        : "Upgrade balade to match it.";
+      return `hint ${stamp.file} teaches authoring package ${stamp.version}; this balade ships ${AUTHORING_PACKAGE_VERSION}. ${remedy}`;
+    });
 });
