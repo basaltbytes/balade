@@ -3,7 +3,7 @@
 import { Effect, Layer, Schema } from "effect";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "@effect/vitest";
-import { AUTHORING_PACKAGE_VERSION } from "../../src/pi/authoring.js";
+import { AUTHORING_PACKAGE_VERSION } from "../../src/authoring/package.js";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLive } from "../../src/pi/client.js";
 import { runGeneration } from "../../src/commands/generate/pipeline.js";

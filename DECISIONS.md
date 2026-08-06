@@ -6,9 +6,10 @@ and what would move it.
 ## The src/ layout is a folder-per-verb boundary over autonomous concept modules
 
 Decided on [#37](https://github.com/basaltbytes/balade/issues/37). `src/` holds
-one folder per CLI verb under `commands/`, five concept folders — `walkthrough/`
+one folder per CLI verb under `commands/`, the concept folders — `walkthrough/`
 (the document, bytes to contract), `git/` (facts from the repository and forge),
 `contract/` (shared vocabulary: shapes that cross module boundaries), `preset/`,
+`authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the generation engine), `server/` (live session runtime) — and the root
 files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`.
 
@@ -17,10 +18,11 @@ All imports flow one direction; peers never import each other:
 ```
 cli.ts                      entry + layer wiring
 commands/    server/        orchestrators — the ONLY places concepts compose
-pi/                         → git (type imports), contract, shell
+pi/                         → authoring, git (type imports), contract, shell
 walkthrough/                → preset, contract, shell        (never git/)
 git/                        → contract, shell                (never walkthrough/)
 preset/                     → contract
+authoring/                  → nothing internal
 contract/                   → nothing internal
 shell.ts  state.ts  terminal.ts  failure.ts                  root ports & utils → contract
 ```
@@ -523,9 +525,10 @@ full diagnostics remain visible when the generated draft still needs manual repa
 
 ## Balade owns the versioned authoring package
 
-The programmatic system prompt, section templates, rubric and inspection limits
-ship in `src/pi/authoring.ts`. Balade is their single source because
-`generate` must work from a bare npm install. The `code-walkthrough` skill is an
+The section templates, tag catalog, rubric and inspection limits ship as typed
+data in `src/authoring/`; `src/pi/authoring.ts` renders them into the
+programmatic system prompt. Balade is their single source because `generate`
+must work from a bare npm install. The `code-walkthrough` skill is an
 interactive wrapper: it points to the package contract and adds its human-agent
 workflow, writing-skill review and visual diagram pass. It does not vendor a
 second authoritative prompt or rubric.
@@ -558,6 +561,38 @@ Walkthrough v1 Markdoc accepts double-quoted attributes only. Quote-heavy
 values therefore use backslash escapes, such as
 `decorator="@api.constrains(\"allocation_id\")"`; the older single-quote
 prototype spelling is not part of the shipped grammar.
+
+## The authoring skill is generated and self-installed
+
+Decided on [#43](https://github.com/basaltbytes/balade/issues/43). The typed
+authoring data renders a second time as a `SKILL.md`, and `balade skills
+install` places it in `.claude/skills/` and `.agents/skills/` at the repo
+root — the two project-level layouts that cover Claude Code and the shared
+convention (Codex, opencode, Cursor, and most others, per vercel-labs/skills'
+agent registry). Installation is not delegated to that external installer:
+it has no version pinning, no origin lockfile, and no npm-name sources, so a
+delegated refresh loop diverges — an older CLI's "re-install" hint would fetch
+an even newer skill. Self-install converges by construction: the skill is
+rendered from the installed CLI's own data, so the frontmatter stamp always
+matches. The escape hatch for tail-agent layouts is `--out <dir>` plus the
+`dist/skill/` rendering in the npm package, which a path-based
+`npx skills add` can place; the path points at the installed package, so
+versions still converge.
+
+The source stays TypeScript, not Markdown: the data is typed and CI
+parse-validates every catalog example against the real Markdoc config, which
+a hand-edited `.md` source could not guarantee. The generated SKILL.md is the
+only Markdown and is never edited — install always overwrites.
+
+The staleness guard lives in `check` at the command boundary
+(`commands/check/skill.ts`), not in the checker: it scans both conventional
+directories for a `balade-authoring:` frontmatter stamp and prints one stderr
+hint on a version mismatch. Stderr keeps `--json` stdout parseable; the hint
+is never a diagnostic and never the exit code, because the skill is optional
+and `check`'s fix hints already teach an agent without one. Agent detection
+(`@vercel/detect-agent`) was rejected: it names the agent running the current
+process, not the agents a repository serves, so install writes both
+directories unconditionally.
 
 ## Parser properties follow schema and grammar edges
 

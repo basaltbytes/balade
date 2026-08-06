@@ -1,16 +1,15 @@
 import { readFileSync } from "node:fs";
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import { AUTHORING_TAG_CATALOG } from "../src/authoring/catalog.js";
 import {
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
-  AUTHORING_RUBRIC,
-  AUTHORING_SECTION_TEMPLATES,
-  AUTHORING_TAG_CATALOG,
-  authoringSystemPrompt,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
-  initialAuthoringPrompt,
-} from "../src/pi/authoring.js";
+} from "../src/authoring/package.js";
+import { AUTHORING_RUBRIC } from "../src/authoring/rubric.js";
+import { AUTHORING_SECTION_TEMPLATES } from "../src/authoring/templates.js";
+import { authoringSystemPrompt, initialAuthoringPrompt } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/pipeline.js";
 import { odooPreset, ODOO_AUTHORING_EXAMPLES } from "../src/preset/odoo.js";
 import { parseDocument } from "../src/walkthrough/document.js";

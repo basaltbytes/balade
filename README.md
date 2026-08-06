@@ -150,6 +150,28 @@ with status 1; edit the reported lines, then check it again:
 npx balade check .agents/walkthroughs/pr-96-loan-refactor.md
 ```
 
+## Teach your agent the format
+
+An agent can also author the walkthrough by hand — Claude Code, Codex,
+opencode, Cursor, or any tool that reads skills. Install the generated
+authoring skill into the repository:
+
+```sh
+npx balade skills install
+```
+
+This writes `.claude/skills/balade-authoring/SKILL.md` (Claude Code) and
+`.agents/skills/balade-authoring/SKILL.md` (the shared convention the other
+agents read). The skill teaches the format, the tag catalog, the writing
+rubric, and the author-check-repair loop; `balade check` remains the
+authority the agent converges against. Re-run the command after upgrading
+balade — `check` prints a one-line hint when the installed skill is older
+than the CLI.
+
+For an agent with another skills layout, `npx balade skills install --out
+<dir>` renders into one custom directory, and the npm package ships the same
+rendering at `dist/skill/` for path-based installers.
+
 ## The walkthrough file
 
 The frontmatter is the anchor:
@@ -162,7 +184,7 @@ pr: 96                        # the pull request this narrates
 commit: 9f3c2ad…              # the stamped commit every reference resolves at
 meta:                         # scalar header chips
   module: acme_loan
-  balade-authoring: 1.6.0     # generated drafts record their authoring package
+  balade-authoring: 1.7.0     # generated drafts record their authoring package
 ---
 ```
 

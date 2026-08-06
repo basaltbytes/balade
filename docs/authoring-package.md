@@ -1,13 +1,16 @@
 # Authoring package
 
-`balade generate` loads one versioned package from
-[`src/pi/authoring.ts`](../src/pi/authoring.ts). It contains the
-system prompt, section templates, core tag catalog, writing rubric, and
-inspection limits. The package ships with the CLI, so a plain
-`npx balade generate …` does not depend on a second repository or an installed
-agent skill.
+The versioned authoring data lives in [`src/authoring/`](../src/authoring/):
+section templates, core tag catalog, writing rubric, and inspection limits.
+It renders twice — into the Pi system prompt
+([`src/pi/authoring.ts`](../src/pi/authoring.ts)) that `balade generate`
+loads, and into the generated `balade-authoring` skill
+([`src/authoring/skill.ts`](../src/authoring/skill.ts)) that teaches an
+external coding agent the same format. The package ships with the CLI, so a
+plain `npx balade generate …` does not depend on a second repository or an
+installed agent skill.
 
-The current package version is `1.6.0`. Its major version matches the
+The current package version is `1.7.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -57,7 +60,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.6.0
+  balade-authoring: 1.7.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -180,6 +183,25 @@ pnpm eval:authoring:paid
 The paid config runs the same five repositories through the live Pi layer and
 uses the same structural checks. Inspect its prose against the rubric. This
 suite is excluded from the normal Vitest config and from `pnpm test`.
+
+## The generated skill
+
+`balade skills install` renders the package into a `SKILL.md` and writes it to
+`.claude/skills/balade-authoring/` (Claude Code) and
+`.agents/skills/balade-authoring/` (the shared convention Codex, opencode,
+Cursor, and other agents read) at the repository root. The file is generated
+output, never a source: it always overwrites, and re-running the command after
+upgrading balade is the refresh story. `--out <dir>` renders into one custom
+directory instead; the build ships the same rendering at `dist/skill/`, so a
+path-based installer such as `npx skills add ./node_modules/balade/dist/skill`
+can place it for agents with other layouts.
+
+The skill's frontmatter stamps `balade-authoring: <version>`. `balade check`
+scans both conventional directories for that stamp and prints one stderr hint
+when it differs from the CLI's own version — re-run the install for a stale
+skill, upgrade balade for a newer one. A current or absent skill stays silent,
+and the hint never becomes a diagnostic or an exit code: `check`'s own
+model-directed fix hints already teach an agent that has no skill at all.
 
 ## `code-walkthrough` skill
 

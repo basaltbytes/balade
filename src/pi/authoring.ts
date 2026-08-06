@@ -1,243 +1,21 @@
 /**
- * The versioned authoring package used by every Pi session.
- *
- * Its major version matches the walkthrough schema it teaches. Generated
- * files record the full package version under `meta.balade-authoring`.
+ * The Pi rendering of the authoring package: the system prompt and the
+ * per-session request prompts. The typed data lives in `src/authoring/`;
+ * this module only assembles it for the Pi harness.
  */
 
 import { Option } from "effect";
-import type { AuthoringPreset, AuthoringRequest } from "./author.js";
+import { tagCatalogText } from "../authoring/catalog.js";
+import {
+  AUTHORING_LIMITS,
+  AUTHORING_META_KEY,
+  AUTHORING_PACKAGE_VERSION,
+  AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
+} from "../authoring/package.js";
+import { rubricText } from "../authoring/rubric.js";
+import { sectionTemplatesText } from "../authoring/templates.js";
 import type { Lang } from "../contract/types.js";
-
-export const AUTHORING_PACKAGE_VERSION = "1.6.0";
-export const AUTHORING_WALKTHROUGH_SCHEMA_VERSION = 1;
-export const AUTHORING_META_KEY = "balade-authoring";
-
-export const AUTHORING_LIMITS = {
-  diffReads: 8,
-  searches: 20,
-  sourceReads: 12,
-  codeRanges: 10,
-  suggestedSections: { minimum: 2, maximum: 5 },
-  suggestedCodeRanges: { minimum: 3, maximum: 8 },
-} as const;
-
-export interface AuthoringSectionTemplate {
-  readonly group: "Orientation" | "Models" | "Surface" | "Quality" | "Deep dive";
-  readonly selectWhen: string;
-  readonly template: string;
-}
-
-export const AUTHORING_SECTION_TEMPLATES: readonly AuthoringSectionTemplate[] = [
-  {
-    group: "Orientation",
-    selectWhen:
-      "Always. State what changed, why a reviewer should care, and the constraint that shapes the implementation.",
-    template: `{% group label="Orientation" %}
-{% section id="overview" title="Overview" %}
-Replace this line with the review frame.
-{% /section %}
-{% /group %}`,
-  },
-  {
-    group: "Models",
-    selectWhen:
-      "Use for domain types, persisted state, components, or services whose structure carries the change.",
-    template: `{% group label="Models" %}
-{% section id="implementation" title="Implementation" %}
-Replace this line with the state or component anatomy.
-{% /section %}
-{% /group %}`,
-  },
-  {
-    group: "Surface",
-    selectWhen:
-      "Use for behavior that a caller, operator, or user can observe: UI, API, CLI, configuration, or documentation.",
-    template: `{% group label="Surface" %}
-{% section id="interface" title="Interface" %}
-Replace this line with the observable behavior.
-{% /section %}
-{% /group %}`,
-  },
-  {
-    group: "Quality",
-    selectWhen:
-      "Use when tests, security, migrations, or translations provide evidence a reviewer needs. Keep each selected topic in its own section.",
-    template: `{% group label="Quality" %}
-{% section id="proof" title="Proof" %}
-Replace this line with the safety or test evidence.
-{% /section %}
-{% /group %}`,
-  },
-  {
-    group: "Deep dive",
-    selectWhen:
-      "Use only when one algorithm, lifecycle, state transition, or compatibility boundary needs a slower reading path.",
-    template: `{% group label="Deep dive" %}
-{% section id="mechanism" title="Mechanism" %}
-Replace this line with the detailed reading path.
-{% /section %}
-{% /group %}`,
-  },
-];
-
-export interface AuthoringTagExample {
-  /** The tag family taught, e.g. "fields/field". */
-  readonly label: string;
-  /** When the block earns its place, plus the attribute rules the example cannot show. */
-  readonly note: string;
-  /** A complete use, valid against the real Markdoc config — tests parse every entry. */
-  readonly example: string;
-}
-
-export const AUTHORING_TAG_CATALOG: readonly AuthoringTagExample[] = [
-  {
-    label: "section (file)",
-    note: "A section may present one changed file by carrying file=\"…\" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no file-section at all, and never add one just to inventory the PR — the files block already lists every change. The path must be one the PR changed. nav=\"…\" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document.",
-    example: `{% group label="Models" %}
-{% section id="allocation-model" title="The allocation model" file="src/models/allocation.py" related=["allocation-proof"] %}
-What this file's change does.
-{% /section %}
-{% section id="allocation-proof" title="Proof" file="tests/test_allocation.py" %}
-The regression evidence.
-{% /section %}
-{% /group %}`,
-  },
-  {
-    label: "callout",
-    note: 'tone is "key" or "warn"; omit it for a neutral aside.',
-    example: `{% callout tone="key" %}
-One sentence the reviewer must not miss.
-{% /callout %}`,
-  },
-  {
-    label: "flow/step",
-    note: "One ordered control path; the optional tag names the actor or phase.",
-    example: `{% flow %}
-{% step tag="guard" %}Reject a stale pin before any write.{% /step %}
-{% step %}Apply the change.{% /step %}
-{% /flow %}`,
-  },
-  {
-    label: "fields/field",
-    note: "A name/kind/note table for fields, props, state, columns, or options.",
-    example: `{% fields %}
-{% field name="total" kind="number" badges=["computed"] %}What the field means to a reviewer.{% /field %}
-{% /fields %}`,
-  },
-  {
-    label: "method",
-    note: "decorator and chips are optional; the decorator renders as chips beside the signature.",
-    example: `{% method sig="apply(change)" decorator="@memo" %}
-What it does and when it runs.
-{% /method %}`,
-  },
-  {
-    label: "tests/test",
-    note: 'kind is "unit", "tour" or "http". Read the tests, then summarize; never paste test diffs.',
-    example: `{% tests %}
-{% test name="test_expiry" kind="unit" ref="tests/test_expiry.py" asserts=["rejects a past date", "keeps the open slot"] %}One- or two-sentence scenario.{% /test %}
-{% /tests %}`,
-  },
-  {
-    label: "matrix",
-    note: "The first column is the row label; a cell holding ✓ renders as granted, anything else as denied. Use it for permission or capability grids.",
-    example: `{% matrix %}
-| Group | read | write |
-| --- | --- | --- |
-| base.group_user | ✓ | — |
-{% /matrix %}`,
-  },
-  {
-    label: "files",
-    note: "The changed-file list from PR data; only and status (A, M, D, R) filter it, why annotates a row. Use it for changed paths that need listing but no dedicated section.",
-    example: `{% files only="src/**" status="A, M" why={"src/example.ts": "why it changed"} /%}`,
-  },
-  {
-    label: "i18n",
-    note: "One row per changed .po or .pot file with entry counts, computed from the PR.",
-    example: `{% i18n /%}`,
-  },
-  {
-    label: "cards/card",
-    note: "Two to four parallel points; cols is 1, 2 or 3.",
-    example: `{% cards cols=2 %}
-{% card icon="beaker" title="Trade-off" %}Body.{% /card %}
-{% card title="Alternative" %}Body.{% /card %}
-{% /cards %}`,
-  },
-  {
-    label: "patterns/pattern",
-    note: "A small glossary of repository idioms the reader needs.",
-    example: `{% patterns %}
-{% pattern term="lens" ref="src/lens.ts" %}Definition.{% /pattern %}
-{% /patterns %}`,
-  },
-  {
-    label: "attrs",
-    note: "A bare chip list.",
-    example: `{% attrs items=["readonly", "cascade"] /%}`,
-  },
-  {
-    label: "diagram",
-    note: 'Relations between named models or components. A node needs id and model; change is "new", "mod" or "ctx"; col and row place it on a grid that starts at 1; compartments hold labelled member rows. An edge joins two node ids; kind is "new", "mod", "ctx" or "derived"; label and thick are optional — mark the one relation the change turns on with thick=true. When the change adds or rewires a relation between named parts, one diagram of those parts and their direct neighbors is high review signal. Leave out parts the change never touches.',
-    example: `{% diagram intro="How a slot reaches its pool." nodes=[{id: "pool", model: "planning.pool", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["slot_ids"]}]}, {id: "slot", model: "planning.slot", change: "mod", col: 2, row: 1}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many", thick: true}] /%}`,
-  },
-];
-
-export interface AuthoringRubricCriterion {
-  readonly id: "factual-accuracy" | "section-selection" | "reviewer-usefulness" | "prose-quality";
-  readonly question: string;
-  readonly pass: string;
-  readonly reject: string;
-}
-
-export const AUTHORING_RUBRIC: readonly AuthoringRubricCriterion[] = [
-  {
-    id: "factual-accuracy",
-    question: "Can every claim and code reference be confirmed at the pinned commit?",
-    pass: "Paths, ranges, boundary echoes, behavior, and stated constraints match inspected evidence.",
-    reject:
-      "The draft guesses intent, describes code it did not inspect, or uses an unconfirmed range.",
-  },
-  {
-    id: "section-selection",
-    question: "Does each section earn its place in the review story?",
-    pass: "The draft follows the behavioral spine and omits files or topics that add no review signal.",
-    reject:
-      "The draft inventories files, copies all five groups by habit, or gives a mechanical change its own deep section.",
-  },
-  {
-    id: "reviewer-usefulness",
-    question: "Can a reviewer use the draft to choose what to inspect and what to challenge?",
-    pass: "The draft explains observable behavior, control flow, constraints, and the proof or risk that matters.",
-    reject:
-      "The draft paraphrases syntax, repeats the PR title, or hides the decision behind generic praise.",
-  },
-  {
-    id: "prose-quality",
-    question: "Can a reader understand the change without prior access to the coding session?",
-    pass: "Prose is direct, neutral, concrete, and consistent about technical terms.",
-    reject:
-      "Prose assumes the reader already knows the code, uses vague claims, or turns headings into marketing copy.",
-  },
-];
-
-const sectionTemplatePrompt = AUTHORING_SECTION_TEMPLATES.map(
-  ({ group, selectWhen, template }) => `### ${group}
-${selectWhen}
-
-${template}`,
-).join("\n\n");
-
-const rubricPrompt = AUTHORING_RUBRIC.map(
-  ({ question, pass, reject }) => `- ${question}\n  Pass: ${pass}\n  Reject: ${reject}`,
-).join("\n");
-
-const tagCatalogPrompt = AUTHORING_TAG_CATALOG.map(
-  ({ label, note, example }) => `${label} — ${note}
-${example}`,
-).join("\n\n");
+import type { AuthoringPreset, AuthoringRequest } from "./author.js";
 
 const BASE_SYSTEM_PROMPT = `You author thin, committed balade walkthroughs for pull-request review.
 
@@ -267,7 +45,7 @@ Section templates
 
 Start from this canonical navigation skeleton, adapt section ids and titles, and omit every group without review signal. A changed file does not automatically deserve a section.
 
-${sectionTemplatePrompt}
+${sectionTemplatesText}
 
 When an absence is a deliberate product rule, explain it with ordinary Markdown and a callout. Do not make a one-card cards block for an empty topic. If translations matter, use one i18n block instead of pasting PO diffs. If tests matter, summarize scenarios and assertions in one tests block instead of pasting test diffs.
 
@@ -287,11 +65,11 @@ Core tag catalog
 
 Only code tags count against the range budget; every other block is free. When the content is enumerable — fields, steps, scenarios, access rules, relations — prefer the matching block over a prose list: it is denser to read and renders as a purpose-built widget. Ordinary Markdown pipe tables also render as-is.
 
-${tagCatalogPrompt}
+${tagCatalogText}
 
 Writing rubric
 
-${rubricPrompt}
+${rubricText}
 
 Your final action must be submit_walkthrough with the complete draft.`;
 

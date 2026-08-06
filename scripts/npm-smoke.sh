@@ -44,7 +44,22 @@ fi
 test -f "$PROJECT/node_modules/balade/dist/app/index.html"
 test -f "$PROJECT/node_modules/balade/dist/export/app.js"
 
+# The tarball also ships the rendered skill for path-based installers.
+test -f "$PROJECT/node_modules/balade/dist/skill/balade-authoring/SKILL.md"
+grep -q "^balade-authoring: " "$PROJECT/node_modules/balade/dist/skill/balade-authoring/SKILL.md"
+
+"$BIN" skills --help | grep -qi "authoring"
+"$BIN" skills install --help | grep -qi -- "--out"
+
 # Zero-arg check outside a git repository reports and exits 0.
 "$BIN" check | grep -qi "nothing to check"
+
+# A real install writes both agent directories inside a git repository.
+SKILL_REPO="$TMP_ROOT/skill-repo"
+mkdir -p "$SKILL_REPO"
+git -C "$SKILL_REPO" init -q
+(cd "$SKILL_REPO" && "$BIN" skills install >/dev/null)
+test -f "$SKILL_REPO/.claude/skills/balade-authoring/SKILL.md"
+test -f "$SKILL_REPO/.agents/skills/balade-authoring/SKILL.md"
 
 echo "npm package smoke passed: $TARBALL"

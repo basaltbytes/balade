@@ -21,7 +21,7 @@ import {
   type AuthorUsage,
   type AuthoringPreset,
 } from "../../pi/author.js";
-import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../../pi/authoring.js";
+import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 
 const MAX_REPAIR_ATTEMPTS = 2;
 
