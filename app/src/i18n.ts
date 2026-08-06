@@ -65,6 +65,7 @@ export interface Strings {
   fieldsHead: [string, string, string];
   i18nHead: [string, string, string, string];
   entries: Record<"new" | "updated" | "removed", string>;
+  calloutTitle: Record<"key" | "warn", string>;
   unknownBlock: (kind: string) => string;
   diagramRelations: string;
 
@@ -143,6 +144,7 @@ const en: Strings = {
   fieldsHead: ["Field", "Kind", "Note"],
   i18nHead: ["File", "Language", "Lines", "Entries"],
   entries: { new: "new", updated: "updated", removed: "removed" },
+  calloutTitle: { key: "Key point", warn: "Warning" },
   unknownBlock: (kind) => `No renderer for “${kind}” blocks.`,
   diagramRelations: "Relations",
 
@@ -219,6 +221,7 @@ const fr: Strings = {
   fieldsHead: ["Champ", "Type", "Note"],
   i18nHead: ["Fichier", "Langue", "Lignes", "Entrées"],
   entries: { new: "nouvelles", updated: "mises à jour", removed: "supprimées" },
+  calloutTitle: { key: "Point clé", warn: "Attention" },
   unknownBlock: (kind) => `Aucun rendu pour les blocs « ${kind} ».`,
   diagramRelations: "Relations",
 

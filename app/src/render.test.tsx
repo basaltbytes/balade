@@ -34,6 +34,39 @@ describe("the walkthrough route", () => {
     expect(html).toContain("expect mismatch");
   });
 
+  it("renders toned callouts as localized banners and leaves neutral callouts plain", () => {
+    const callouts: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "callouts",
+          title: "Callouts",
+          hash: "sha256:callouts",
+          blocks: [
+            { b: "callout", tone: "key", body: ["Key body"] },
+            { b: "callout", tone: "warn", body: ["Warning body"] },
+            { b: "callout", body: ["Neutral body"] },
+          ],
+        },
+      ],
+    };
+    const en = render(callouts);
+
+    expect(en).toContain("Key point");
+    expect(en).toContain("Key body");
+    expect(en).toContain("octicon-light-bulb text-primary");
+    expect(en).toContain("Warning");
+    expect(en).toContain("Warning body");
+    expect(en).toContain("octicon-alert text-modified");
+    expect(en).toContain(
+      'border-border rounded-md bg-card px-4 py-3 leading-relaxed text-secondary-foreground">Neutral body',
+    );
+
+    const fr = render({ ...callouts, lang: "fr" }, "fr");
+    expect(fr).toContain("Point clé");
+    expect(fr).toContain("Attention");
+  });
+
   it("surfaces the unresolved reference as an error card", () => {
     expect(html).toContain("range-unresolvable");
   });

@@ -60,11 +60,23 @@ export function Chip({
   );
 }
 
-const BANNER_TONES: Record<string, string> = {
-  warn: "border-modified/50 bg-modified/10 text-secondary-foreground",
-  error: "border-destructive/50 bg-destructive/10 text-secondary-foreground",
-  key: "border-primary/50 bg-primary/10 text-secondary-foreground",
-  done: "border-added/50 bg-added/10 text-secondary-foreground",
+const BANNER_TONES = {
+  warn: {
+    frame: "border-modified/50 bg-modified/10 text-secondary-foreground",
+    icon: "text-modified",
+  },
+  error: {
+    frame: "border-destructive/50 bg-destructive/10 text-secondary-foreground",
+    icon: "text-destructive",
+  },
+  key: {
+    frame: "border-primary/50 bg-primary/10 text-secondary-foreground",
+    icon: "text-primary",
+  },
+  done: {
+    frame: "border-added/50 bg-added/10 text-secondary-foreground",
+    icon: "text-added",
+  },
 };
 
 export function Banner({
@@ -81,9 +93,10 @@ export function Banner({
   onDismiss?: () => void;
 }) {
   const strings = useStrings();
+  const styles = BANNER_TONES[tone];
   return (
-    <div className={`my-4 border rounded-md px-4 py-3 flex gap-3 ${BANNER_TONES[tone]}`}>
-      <Octicon name={icon} size={16} className="mt-[2px] shrink-0" />
+    <div className={`my-4 border rounded-md px-4 py-3 flex gap-3 ${styles.frame}`}>
+      <Octicon name={icon} size={16} className={`${styles.icon} mt-[2px] shrink-0`} />
       <div className="min-w-0 flex-1">
         <div className="font-semibold text-foreground text-[13.5px]">{title}</div>
         {children && <div className="text-[13px] leading-relaxed mt-1">{children}</div>}
