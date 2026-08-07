@@ -37,6 +37,12 @@ When working on a feature/bugfix/refactoring you need to do the following before
   memory. Versions are pinned exact; bump deliberately.
 - Tests go through real seams (fixture git repos, injected stores); module
   mocking is forbidden.
+- **Every string derived from a pull request is untrusted**, including the
+  repository's own files at the PR head. Before changing a trust boundary — the
+  payload schema, a render sink, the authoring tool allowlist, a server route,
+  the export HTML, or a workflow file — read
+  [docs/threat-model.md](docs/threat-model.md) and check the invariant you are
+  about to move.
 - A PR that changes user-facing behavior adds a changeset (`pnpm changeset`):
   its release note becomes the CHANGELOG entry. Infra/docs-only PRs add none.
   Releasing is fully CI-driven — see [docs/releasing.md](docs/releasing.md);
