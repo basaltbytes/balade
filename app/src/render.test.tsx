@@ -44,7 +44,7 @@ describe("the walkthrough route", () => {
           hash: "sha256:callouts",
           blocks: [
             { b: "callout", tone: "key", body: ["Key body"] },
-            { b: "callout", tone: "warn", body: ["Warning body"] },
+            { b: "callout", tone: "warn", body: ["Warn body"] },
             { b: "callout", body: ["Neutral body"] },
           ],
         },
@@ -56,7 +56,7 @@ describe("the walkthrough route", () => {
     expect(en).toContain("Key body");
     expect(en).toContain("octicon-light-bulb text-primary");
     expect(en).toContain("Warning");
-    expect(en).toContain("Warning body");
+    expect(en).toContain("Warn body");
     expect(en).toContain("octicon-alert text-modified");
     expect(en).toContain(
       'border-border rounded-md bg-card px-4 py-3 leading-relaxed text-secondary-foreground">Neutral body',
