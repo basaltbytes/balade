@@ -25,13 +25,17 @@ export function normalizeUnified(unified: string, path: string, oldPath?: string
  * `from` anchors them to the same absolute range instead of an excerpt-local
  * offset. The renderer composes both sides from this hunk, so it offers no
  * expand-context it could not honour.
+ *
+ * An excerpt the overlay leaves untouched has no diff: both sides compose to
+ * the same text, which the parser rejects as an invalid diff and renders as
+ * nothing. `null` says so, and the widget shows the plain rendering instead.
  */
 export function codeExcerptHunk(
   lines: ReadonlyArray<string>,
   changed: ReadonlyArray<number>,
   from: number,
   path: string,
-): string {
+): string | null {
   const added = new Set(changed);
   let oldCount = 0;
   const body: string[] = [];
@@ -43,7 +47,8 @@ export function codeExcerptHunk(
       body.push(` ${line}`);
     }
   });
-  const header = `@@ -${oldCount === 0 ? 0 : from},${oldCount} +${lines.length === 0 ? 0 : from},${lines.length} @@`;
+  if (oldCount === lines.length) return null;
+  const header = `@@ -${oldCount === 0 ? 0 : from},${oldCount} +${from},${lines.length} @@`;
   return `--- a/${path}\n+++ b/${path}\n${header}\n${body.join("\n")}`;
 }
 

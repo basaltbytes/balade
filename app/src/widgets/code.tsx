@@ -85,7 +85,7 @@ export function Code({ block }: { block: CodeBlock }) {
       )}
 
       <div className="cbody">
-        {view === "diff" ? (
+        {view === "diff" && hunk !== null ? (
           <div className="code-diff text-[12px]" data-theme="dark">
             <DiffView
               data={{

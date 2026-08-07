@@ -53,7 +53,7 @@ describe("the fixture's diffs, through the real parser", () => {
 describe("the code block's excerpt diff, through the real parser", () => {
   it("parses and reports every overlay line as an addition", () => {
     const lines = ["def a():", "    return 1", "    return 2"];
-    const hunk = codeExcerptHunk(lines, [41, 42], 40, "models/x.py");
+    const hunk = codeExcerptHunk(lines, [41, 42], 40, "models/x.py") ?? "";
     const file = parse(hunk, null, null, "python");
     file.buildSplitDiffLines();
     expect(file.additionLength).toBe(2);

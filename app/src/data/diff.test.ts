@@ -20,18 +20,23 @@ describe("normalizeUnified", () => {
 
 describe("codeExcerptHunk", () => {
   it("turns the change overlay into additions against the lines it left alone", () => {
-    const hunk = codeExcerptHunk(["ctx", "added", "tail"], [11], 10, "models/x.py");
+    const hunk = codeExcerptHunk(["ctx", "added", "tail"], [11], 10, "models/x.py") ?? "";
     expect(hunk).toContain("@@ -10,2 +10,3 @@");
     expect(hunk.endsWith(" ctx\n+added\n tail")).toBe(true);
   });
 
   it("covers the whole excerpt with one hunk, so nothing is left to expand", () => {
     const lines = ["a", "b", "c", "d"];
-    const hunk = codeExcerptHunk(lines, [1, 2, 3, 4], 1, "x.py");
+    const hunk = codeExcerptHunk(lines, [1, 2, 3, 4], 1, "x.py") ?? "";
     expect(hunk).toContain("@@ -0,0 +1,4 @@");
     expect(
       hunk.split("\n").filter((line) => line.startsWith("+") && !line.startsWith("+++")),
     ).toHaveLength(4);
+  });
+
+  it("declines an excerpt the overlay leaves untouched, which has no diff to compose", () => {
+    expect(codeExcerptHunk(["a", "b"], [], 40, "x.py")).toBeNull();
+    expect(codeExcerptHunk(["a", "b"], [99], 40, "x.py")).toBeNull();
   });
 });
 

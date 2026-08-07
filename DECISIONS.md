@@ -353,6 +353,12 @@ preserving its absolute coordinates and suppressing the placeholder rows before
 `from`. This also disables context expansion, which is correct: a code block
 does not carry the surrounding file and cannot honour an expansion request.
 
+Hunk-only composition cannot represent an excerpt the overlay leaves untouched:
+both sides compose to the same text and the parser drops the diff, rendering an
+empty view. `codeExcerptHunk` returns `null` for such an excerpt and the widget
+shows the plain rendering in the diff view's place — the same lines, the same
+absolute numbers, and no pretence of a change that is not there.
+
 ## A preset is activated explicitly, and owns the prose that teaches it
 
 `generate --preset <name>` is the only way generation activates a preset
