@@ -4,7 +4,7 @@
 import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import { useMemo, useState } from "react";
 import type { CodeBlock } from "../contract";
-import { codeExcerptDiff } from "../data/diff";
+import { codeExcerptHunk } from "../data/diff";
 import { useDiffHighlighter } from "../highlight/diff-highlighter";
 import { lineMarks, useHighlighted } from "../highlight/shiki";
 import { Octicon } from "../ui/octicon";
@@ -28,8 +28,8 @@ export function Code({ block }: { block: CodeBlock }) {
     [block.from, block.changed, block.mark],
   );
   const html = useHighlighted(code, block.lang, transformers);
-  const excerpt = useMemo(
-    () => codeExcerptDiff(block.lines, block.changed, block.from, block.file),
+  const hunk = useMemo(
+    () => codeExcerptHunk(block.lines, block.changed, block.from, block.file),
     [block.lines, block.changed, block.from, block.file],
   );
   const highlighter = useDiffHighlighter([block.lang]);
@@ -91,21 +91,19 @@ export function Code({ block }: { block: CodeBlock }) {
       )}
 
       <div className="cbody">
-        {view === "diff" ? (
+        {view === "diff" && hunk !== null ? (
           <div className="code-diff text-[12px]" data-theme="dark">
             <DiffView
               data={{
                 oldFile: {
                   fileName: block.file,
                   fileLang: block.lang,
-                  content: excerpt.oldContent,
                 },
                 newFile: {
                   fileName: block.file,
                   fileLang: block.lang,
-                  content: excerpt.newContent,
                 },
-                hunks: excerpt.hunks,
+                hunks: [hunk],
               }}
               diffViewMode={DiffModeEnum.Split}
               diffViewTheme="dark"

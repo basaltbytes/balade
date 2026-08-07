@@ -5,7 +5,7 @@
 import { DiffFile } from "@git-diff-view/react";
 import { describe, expect, it } from "vitest";
 import { pr96 } from "../fixtures/pr96";
-import { codeExcerptDiff, normalizeUnified } from "./diff";
+import { codeExcerptHunk, normalizeUnified } from "./diff";
 
 const parse = (
   unified: string,
@@ -53,11 +53,19 @@ describe("the fixture's diffs, through the real parser", () => {
 describe("the code block's excerpt diff, through the real parser", () => {
   it("parses and reports every overlay line as an addition", () => {
     const lines = ["def a():", "    return 1", "    return 2"];
-    const excerpt = codeExcerptDiff(lines, [41, 42], 40, "models/x.py");
-    const hunk = excerpt.hunks[0];
-    expect(hunk).toBeDefined();
-    const file = parse(hunk!, excerpt.oldContent, excerpt.newContent, "python");
+    const hunk = codeExcerptHunk(lines, [41, 42], 40, "models/x.py") ?? "";
+    const file = parse(hunk, null, null, "python");
+    file.buildSplitDiffLines();
     expect(file.additionLength).toBe(2);
     expect(file.deletionLength).toBe(0);
+    const indexes = Array.from({ length: file.splitLineLength }, (_, index) => index);
+    expect(indexes.map((index) => file.getSplitLeftLine(index).lineNumber)).toEqual([
+      40,
+      undefined,
+      undefined,
+    ]);
+    expect(indexes.map((index) => file.getSplitRightLine(index).lineNumber)).toEqual([40, 41, 42]);
+    expect(file.hasSomeLineCollapsed).toBe(false);
+    expect(file.getExpandEnabled()).toBe(false);
   });
 });
