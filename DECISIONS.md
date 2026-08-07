@@ -710,3 +710,21 @@ a model-supplied `meta.lang`, mirroring the preset rule; without the flag,
 drafts stay English and a model-supplied value stands. The instruction lives in
 the initial request, not the system prompt, because it is per-run input, not a
 versioned authoring decision.
+
+## Code excerpts deep-link to the PR diff without changing the payload
+
+Decided on [#45](https://github.com/basaltbytes/balade/issues/45). Every code
+header carries one discreet external link to
+`<pr.url>/files#diff-<sha256(file)>R<from>`. The PR diff is the target rather
+than a pinned blob because the reviewer is jumping out to inspect context and
+comment; a second blob link would make the small header affordance compete with
+the view switcher.
+
+The app computes GitHub's path hash through Web Crypto. The served loopback URL
+and self-contained `file://` export are secure contexts, so both modes can use
+`crypto.subtle` without adding a hash to the CLI/app payload contract. The link
+renders immediately as `<pr.url>/files` for SSR, first paint, and environments
+without Web Crypto, then upgrades to the file and right-side line anchor. A
+hash failure therefore loses precision but never loses the route to the PR's
+files tab. GitHub may lazy-load a large diff before its fragment exists; landing
+on the files tab is the accepted fallback.
