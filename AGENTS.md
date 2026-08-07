@@ -49,7 +49,8 @@ When working on a feature/bugfix/refactoring you need to do the following before
   never bump versions by hand.
 
 ## Public state of the library: pre-alpha
-- The library is not published anywhere, breaking changes are the norm, API is not finalized.
+- Published on npm as `balade` at 0.x. Breaking changes are the norm and the API
+  is not finalized.
 - Do not preserve backward compatibility. Remove obsolete paths instead of
 adding compatibility layers, fallbacks or migrations.
 
