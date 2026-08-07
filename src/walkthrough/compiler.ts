@@ -97,6 +97,7 @@ export function compileDocument(input: CompileInput): CompileResult {
   const sections: Section[] = [];
   const seen = new Map<string, number>();
   const relatedRefs: { ids: readonly string[]; line: number }[] = [];
+  let closingSection: Node | undefined;
 
   const sectionOf = (node: Node): NavNode | null => {
     const id = String(node.attributes["id"] ?? "");
@@ -201,6 +202,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         continue;
       }
       if (node.type === "tag" && node.tag === "section") {
+        closingSection = node;
         const entry = sectionOf(node);
         if (entry !== null) nav.push(entry);
         continue;
@@ -231,6 +233,23 @@ export function compileDocument(input: CompileInput): CompileResult {
   };
 
   const nav = walk(doc.ast.children);
+
+  if (
+    closingSection === undefined ||
+    !closingSection.children.some(
+      (node) =>
+        node.type === "tag" && node.tag === "files" && Object.keys(node.attributes).length === 0,
+    )
+  ) {
+    diagnostics.push({
+      code: "closing-files-missing",
+      level: "error",
+      file: sourcePath,
+      line: closingSection === undefined ? 1 : lineOf(closingSection),
+      message: "The last section must contain a bare `{% files /%}` block.",
+      hint: "End the walkthrough with an unfiltered full-PR diff block that has no attributes.",
+    });
+  }
 
   for (const pending of relatedRefs) {
     for (const id of pending.ids) {

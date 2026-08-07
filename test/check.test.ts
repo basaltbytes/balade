@@ -285,6 +285,8 @@ Prose.
 {% /section %}
 {% section id="proof" title="Proof" %}
 Evidence.
+
+{% files /%}
 {% /section %}
 {% /group %}
 `,
@@ -297,6 +299,38 @@ Evidence.
       expect(unknown).toHaveLength(1);
       expect(unknown[0]?.message).toContain("missing-section");
       expect(report.ok).toBe(false);
+    }),
+  );
+
+  it.effect("requires the last section to expose the unfiltered PR diff", () =>
+    Effect.gen(function* () {
+      const path = join(repo.dir, "walkthroughs/filtered-files-close.md");
+      repo.write(
+        "walkthroughs/filtered-files-close.md",
+        `---
+walkthrough: 1
+title: Closing files
+pr: 42
+commit: ${repo.pin}
+---
+
+{% section id="overview" title="Overview" %}
+{% files /%}
+{% /section %}
+{% section id="files" title="Full PR diff" %}
+{% files only="src/**" /%}
+{% /section %}
+`,
+      );
+      const rejected = yield* provideLive(checkOne({ cwd: repo.dir, path, useGh: false }));
+
+      expect(find(rejected, "closing-files-missing")).toMatchObject({
+        level: "error",
+        message: expect.stringContaining("last section"),
+        hint: expect.stringContaining("unfiltered"),
+      });
+      expect(codes(valid.diagnostics)).not.toContain("closing-files-missing");
+      expect(valid.ok).toBe(true);
     }),
   );
 

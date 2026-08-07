@@ -17,10 +17,10 @@ export const AUTHORING_RUBRIC: readonly AuthoringRubricCriterion[] = [
   },
   {
     id: "section-selection",
-    question: "Does each section earn its place in the review story?",
-    pass: "The draft follows the behavioral spine and omits files or topics that add no review signal.",
+    question: "Does each narrative section earn its place in the review story?",
+    pass: "The narrative follows the behavioral spine and omits files or topics that add no review signal; the required bare full-PR diff remains last.",
     reject:
-      "The draft inventories files, copies all five groups by habit, or gives a mechanical change its own deep section.",
+      "The narrative inventories files, copies all five narrative groups by habit, gives a mechanical change its own deep section, or omits, filters, or moves the closing full-PR diff.",
   },
   {
     id: "reviewer-usefulness",

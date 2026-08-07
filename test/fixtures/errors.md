@@ -32,4 +32,6 @@ The source row.
 
 {% code file="models/planning_pool_item.py" from=4 to=6 /%}
 
+{% files /%}
+
 {% /section %}

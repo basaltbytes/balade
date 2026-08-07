@@ -26,4 +26,6 @@ Human label.
 Sums the hours of every linked slot.
 {% /method %}
 
+{% files /%}
+
 {% /section %}

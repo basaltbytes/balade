@@ -16,7 +16,7 @@ export interface AuthoringTagExample {
 export const AUTHORING_TAG_CATALOG: readonly AuthoringTagExample[] = [
   {
     label: "section (file)",
-    note: "A section may present one changed file by carrying file=\"…\" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no file-section at all, and never add one just to inventory the PR — the files block already lists every change. The path must be one the PR changed. nav=\"…\" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document.",
+    note: "A narrative section may present one changed file by carrying file=\"…\" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no narrative file-section, and never add one just to inventory the PR. The mandatory closing files section is the verification surface, not narrative inventory. The path must be one the PR changed. nav=\"…\" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document.",
     example: `{% group label="Models" %}
 {% section id="allocation-model" title="The allocation model" file="src/models/allocation.py" related=["allocation-proof"] %}
 What this file's change does.
@@ -73,7 +73,7 @@ What it does and when it runs.
   },
   {
     label: "files",
-    note: "The changed-file list from PR data; only and status (A, M, D, R) filter it, why annotates a row. Use it for changed paths that need listing but no dedicated section.",
+    note: "Every walkthrough ends with a closing section containing a bare `{% files /%}`. That block renders the unfiltered full-PR diff browser for the reviewer's final verification sweep. A narrative section may also use a filtered listing: only matches paths, status accepts A, M, D, or R, and why annotates rows. Never put those attributes on the mandatory closing block.",
     example: `{% files only="src/**" status="A, M" why={"src/example.ts": "why it changed"} /%}`,
   },
   {

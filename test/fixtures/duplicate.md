@@ -15,4 +15,6 @@ commit: __COMMIT__
 
 {% code file="models/does_not_exist.py" from=1 to=3 expect="anything" /%}
 
+{% files /%}
+
 {% /section %}
