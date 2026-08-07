@@ -37,6 +37,10 @@ When working on a feature/bugfix/refactoring you need to do the following before
   memory. Versions are pinned exact; bump deliberately.
 - Tests go through real seams (fixture git repos, injected stores); module
   mocking is forbidden.
+- A PR that changes user-facing behavior adds a changeset (`pnpm changeset`):
+  its release note becomes the CHANGELOG entry. Infra/docs-only PRs add none.
+  Releasing is fully CI-driven — see [docs/releasing.md](docs/releasing.md);
+  never bump versions by hand.
 
 ## Public state of the library: pre-alpha
 - The library is not published anywhere, breaking changes are the norm, API is not finalized.
