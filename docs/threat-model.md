@@ -108,8 +108,10 @@ for the complete inventory and the sharing position.
 ### 5. Supply chain and CI
 
 Dependencies are pinned exact; publishing uses OIDC trusted publishing with no
-long-lived token ([docs/releasing.md](releasing.md)). Actions are pinned by
-mutable tag: [#57](https://github.com/basaltbytes/balade/issues/57).
+long-lived token ([docs/releasing.md](releasing.md)). Actions are pinned to
+full commit SHAs with Dependabot (`.github/dependabot.yml`) bumping the pins;
+`ci.yml` holds a read-only token
+([#57](https://github.com/basaltbytes/balade/issues/57)).
 
 ## Verified invariants
 
