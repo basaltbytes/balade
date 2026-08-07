@@ -137,6 +137,17 @@ the runtime, layers and typed browser workflows. It is accepted so the SPA uses
 the same dependency, error and parsing model as the CLI without handing render
 state to a second state system.
 
+## Toned callouts derive their chrome from the tone
+
+A `key` or `warn` callout renders through the app's shared banner shape: a
+tone-colored icon, a localized heading, and the body. `key` uses a light-bulb
+with “Key point” / “Point clé”; `warn` uses an alert icon with “Warning” /
+“Attention”. Untoned callouts remain neutral asides without an icon or heading.
+
+The title stays app chrome derived from `tone`. It does not enter the walkthrough
+contract, so authors cannot supply a title and existing files need no change. An
+author-provided title would change both the contract and the authoring catalog.
+
 ## The effectful shell has shared and session-scoped layer stacks
 
 The CLI provides `cliLayer` once at its entry point (`src/cli.ts`, where the

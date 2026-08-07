@@ -1,5 +1,15 @@
-import type { Inline, MdNode } from "../contract";
+import type { Block, Inline, MdNode } from "../contract";
+import { Banner } from "../ui/bits";
 import { Rich, Tag } from "../ui/rich";
+import { useStrings } from "../ui/strings";
+
+type CalloutProps = Omit<Extract<Block, { readonly b: "callout" }>, "b">;
+type CalloutTone = NonNullable<CalloutProps["tone"]>;
+
+const CALLOUT_ICON: Record<CalloutTone, string> = {
+  key: "light-bulb",
+  warn: "alert",
+};
 
 export function Md({ nodes }: { nodes: ReadonlyArray<MdNode> }) {
   return (
@@ -43,17 +53,17 @@ export function Md({ nodes }: { nodes: ReadonlyArray<MdNode> }) {
   );
 }
 
-export function Callout({ tone, body }: { tone?: "key" | "warn"; body: ReadonlyArray<Inline> }) {
-  const styles =
-    tone === "key"
-      ? "border-primary/50 bg-primary/10"
-      : tone === "warn"
-        ? "border-modified/50 bg-modified/10"
-        : "border-border bg-card";
+export function Callout({ tone, body }: CalloutProps) {
+  const strings = useStrings();
+  if (tone !== undefined) {
+    return (
+      <Banner tone={tone} icon={CALLOUT_ICON[tone]} title={strings.calloutTitle[tone]}>
+        <Rich v={body} />
+      </Banner>
+    );
+  }
   return (
-    <div
-      className={`my-4 border rounded-md px-4 py-3 leading-relaxed text-secondary-foreground ${styles}`}
-    >
+    <div className="my-4 border border-border rounded-md bg-card px-4 py-3 leading-relaxed text-secondary-foreground">
       <Rich v={body} />
     </div>
   );
