@@ -43,6 +43,10 @@ npx balade check  .agents/walkthroughs/pr-96-loan-refactor.md   # validate; exit
 - `check` with no file validates every discovered walkthrough. `--json` prints
   the report as JSON.
 
+Each code excerpt links from its header to that file and starting line in the
+pull request's GitHub diff, so the authoritative hunk and commenting controls
+stay one click away. Live reviews and self-contained exports both include it.
+
 Discovery is git-tracked files matching `**/walkthroughs/*.md` whose
 frontmatter holds the `walkthrough` key — including the default
 `.agents/walkthroughs/`, since the pattern matches at any depth.
