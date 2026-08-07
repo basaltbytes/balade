@@ -338,6 +338,21 @@ type. The casts bridge two structurally identical declarations; no unchecked
 runtime value passes through them. They stay until the two packages agree on one
 `hast` version.
 
+## Code excerpt diffs use absolute synthetic hunks
+
+The plain, change and diff views of a `code` block all number an excerpt from
+its absolute `from` line. The diff payload only identifies changed lines in the
+new file and cannot recover their pre-image coordinates, so the synthetic old
+side starts at `from` too. This anchors both sides to the same absolute range
+and avoids an excerpt-local offset; old-side numbers are explicitly not
+historical positions.
+
+The code widget gives `@git-diff-view` the hunk and file metadata without the
+excerpt as file content. The renderer then composes both sides from the hunk,
+preserving its absolute coordinates and suppressing the placeholder rows before
+`from`. This also disables context expansion, which is correct: a code block
+does not carry the surrounding file and cannot honour an expansion request.
+
 ## A preset is activated explicitly, and owns the prose that teaches it
 
 `generate --preset <name>` is the only way generation activates a preset
