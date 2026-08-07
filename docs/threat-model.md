@@ -135,9 +135,23 @@ they describe.
   structurally cannot express a link. This is the strongest control in the app.
 - `Rich` (`app/src/ui/rich.tsx`) renders every branch as a React text child. No
   `href`, no `style` from data, no HTML sink.
-- Exactly **one** `dangerouslySetInnerHTML` (`app/src/widgets/code.tsx:129`),
-  fed by shiki over payload text; grammars are a closed 31-entry allowlist
-  falling back to `"text"` (`app/src/highlight/shiki.ts:74-77`).
+- Exactly one `dangerouslySetInnerHTML` **in balade's own source**
+  (`app/src/widgets/code.tsx:129`), fed by shiki over payload text; grammars are
+  a closed 31-entry allowlist falling back to `"text"`
+  (`app/src/highlight/shiki.ts:74-77`). `@git-diff-view/react` adds four more on
+  the same attacker-controlled bytes — see below.
+- **shiki's `codeToHtml` output is safe to inject.** Text nodes are escaped by
+  `hast-util-to-html` via `stringifyEntities`, attribute values by
+  `handle/element.js`, and raw HTML is off by default (`allowDangerousHtml:
+  false`), with shiki calling `toHtml` with no options
+  (`@shikijs/core@4.4.1/dist/index.mjs:1024`, `:1035`). Nothing balade passes
+  can change that: only `lang`, `theme` and `transformers`
+  (`app/src/highlight/shiki.ts:138-142`), and its single transformer only adds
+  static class names. `style` values come from the bundled theme, never from
+  input.
+- **shiki's tokenizer is not DoS-bounded**, and highlighting runs synchronously
+  on the main thread with no input size cap:
+  [#74](https://github.com/basaltbytes/balade/issues/74).
 - The only payload-derived `href` is `pr.url` (`app/src/ui/chrome.tsx:36`),
   which is GitHub-derived (`src/git/git.ts:229`) and additionally protected by
   React 19's `javascript:` blocking.
@@ -178,6 +192,14 @@ they describe.
   (`src/state.ts:39`) — **no injection into that file is possible.**
 - Static serving is not traversable: decode → null-reject → normalize →
   prefix-confine (`effect` `HttpStaticServer`), and it registers `GET` only.
+  That path does **not** resolve symlinks, so a symlink inside the served root
+  would be followed — but the root cannot contain one: it is the hardcoded
+  `APP_DIR` beside the CLI with no flag to override it
+  (`src/server/http.ts:34`, `:58-67`); `dist/app` is rollup output with
+  `emptyOutDir: true` and no `publicDir` copy step (`app/vite.config.ts:24`);
+  no CLI path writes into it; and both `npm pack` and `pnpm pack` were tested to
+  strip symlinks from the tarball. **Re-check this if `app/public/` is ever
+  added.**
 
 **Authoring sandbox**
 
