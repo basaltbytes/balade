@@ -1,0 +1,9 @@
+# Keeps the SHA-pinned actions in .github/workflows fresh: Dependabot bumps
+# the pin and updates the trailing version comment. Without it, SHA pins stop
+# receiving upstream security fixes.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
