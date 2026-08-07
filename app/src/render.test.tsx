@@ -67,6 +67,11 @@ describe("the walkthrough route", () => {
     expect(fr).toContain("Attention");
   });
 
+  it("renders code links before the browser computes their diff anchors", () => {
+    expect(html).toContain(`href="${pr96.pr.url}/files"`);
+    expect(html).toContain('aria-label="View this file&#x27;s diff on GitHub"');
+  });
+
   it("surfaces the unresolved reference as an error card", () => {
     expect(html).toContain("range-unresolvable");
   });
@@ -89,6 +94,7 @@ describe("the walkthrough route", () => {
   it("takes its chrome language from the payload", () => {
     const fr = render({ ...pr96, lang: "fr" }, "fr");
     expect(fr).toContain("Marquer comme relu");
+    expect(fr).toContain("Voir le diff de ce fichier sur GitHub");
     expect(fr).not.toContain("Mark reviewed");
   });
 
