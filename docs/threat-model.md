@@ -71,7 +71,7 @@ from the **PR head**, which an attacker controls: see
 
 Linked issues are fetched with the reviewer's own GitHub token and are not
 restricted to the same repository:
-[#60](https://github.com/basaltbytes/balade/issues/60).
+[#59](https://github.com/basaltbytes/balade/issues/59).
 
 ### 2. PR bytes → the renderer
 
@@ -86,7 +86,7 @@ Markdoc registers no variables, functions or partials
 JSON payload of plain data. The exposure is the browser origin.
 
 The reviewer is currently given no signal that this is happening:
-[#69](https://github.com/basaltbytes/balade/issues/69).
+[#67](https://github.com/basaltbytes/balade/issues/67).
 
 ### 3. The local review server
 
@@ -109,7 +109,7 @@ for the complete inventory and the sharing position.
 
 Dependencies are pinned exact; publishing uses OIDC trusted publishing with no
 long-lived token ([docs/releasing.md](releasing.md)). Actions are pinned by
-mutable tag: [#58](https://github.com/basaltbytes/balade/issues/58).
+mutable tag: [#57](https://github.com/basaltbytes/balade/issues/57).
 
 ## Verified invariants
 
@@ -124,7 +124,7 @@ they describe.
   (`app/src/data/source.ts:29-32`, baked `:124`, served `:112`);
   `window.__BALADE__` is typed `unknown`. Enforced, not conventional.
 - The schema is **shape-only** — no length, bound or protocol refinements. See
-  [#72](https://github.com/basaltbytes/balade/issues/72).
+  [#74](https://github.com/basaltbytes/balade/issues/74).
 
 **Rendering**
 
@@ -182,7 +182,7 @@ they describe.
   `commit` is validated hex (`src/contract/schema.ts:441`).
 - `git rev-parse --verify --quiet` is inert for every dash-leading argument
   shape — it spawns no process and writes no file. See
-  [#70](https://github.com/basaltbytes/balade/issues/70) for the evidence and
+  [#74](https://github.com/basaltbytes/balade/issues/74) for the evidence and
   the residual DoS.
 - `?path=` never reaches the filesystem: it is allowlist membership against the
   served set (`src/server/api.ts:124-137`). State filenames keep only the
@@ -249,17 +249,21 @@ A one-shot audit ages badly, and agent-authored mega-diffs are the norm in this
 repository — the exact condition under which a boundary erodes without anyone
 noticing.
 
-**Position: run a branch-scoped security review before each release.** The
-`/security-review` skill already exists in-repo, and releases are already a
-deliberate, changesets-driven checkpoint
-([docs/releasing.md](releasing.md)) — so the cadence attaches to something that
-already happens rather than inventing a new ritual.
+**Position, for pre-alpha: no automated recurring review.** A full agent-driven
+pass over a branch is expensive, and during pre-alpha the API churns faster than
+the findings would stay true. Revisit once the surface settles.
 
-Two things make it worth more than a ritual:
+What runs instead, and costs nothing:
 
-- The **verified invariants** above give the review a concrete checklist. Most
-  of them are one-line greps.
-- Any PR that touches a trust boundary — the payload schema, the render sinks,
-  the tool allowlist, the server routes, the export HTML, or a workflow file —
-  should say in its changeset which invariant it affects, or state that it
-  affects none.
+- **The verified invariants above are the checklist.** Most are a single grep.
+  Reading them before touching a boundary is the whole gate.
+- **A PR that touches a trust boundary says so.** The boundaries are the payload
+  schema, the render sinks, the authoring tool allowlist, the server routes, the
+  export HTML, and the workflow files. A PR that moves one names the invariant
+  it affects; every other PR says nothing and pays nothing.
+
+**Revisit at the first stable release.** At that point a branch-scoped
+`/security-review` before each release is the natural cadence — releases are
+already a deliberate, changesets-driven checkpoint
+([docs/releasing.md](releasing.md)), so it attaches to something that already
+happens rather than inventing a ritual.
