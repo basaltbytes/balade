@@ -1,6 +1,6 @@
 {
   "name": "balade",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Narrated code walkthroughs for pull requests — a CLI that renders a thin, committed walkthrough file into an interactive review app.",
   "keywords": [
     "cli",
