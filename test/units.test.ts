@@ -1,7 +1,7 @@
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { compileBlocks, parseMark, type CompileEnv } from "../src/walkthrough/blocks.js";
-import { diagramNodes } from "../src/contract/diagram.js";
+import { diagramNodes, MAX_DIAGRAM_GRID_SIZE } from "../src/contract/diagram.js";
 import { inlineOf, mdNodesOf, plainText } from "../src/walkthrough/inline.js";
 import { parseDocument } from "../src/walkthrough/document.js";
 import type { Block, CheckDiagnostic } from "../src/contract/types.js";
@@ -50,6 +50,12 @@ describe("small pure helpers", () => {
       row: 3,
       compartments: [],
     });
+  });
+
+  it("clamps diagram coordinates before they enter the payload", () => {
+    const [node] = diagramNodes([{ id: "n1", model: "m", col: 999_999_999, row: -999_999_999 }]);
+
+    expect(node).toMatchObject({ col: MAX_DIAGRAM_GRID_SIZE, row: 1 });
   });
 });
 

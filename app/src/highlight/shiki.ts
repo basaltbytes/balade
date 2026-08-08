@@ -13,6 +13,19 @@ import {
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
 export const THEME = "github-dark-default";
+export const MAX_HIGHLIGHT_LINE_CHARS = 2_000;
+
+export function hasOverlongHighlightLine(code: string): boolean {
+  let lineStart = 0;
+  while (lineStart <= code.length) {
+    const lineEnd = code.indexOf("\n", lineStart);
+    if ((lineEnd === -1 ? code.length : lineEnd) - lineStart > MAX_HIGHLIGHT_LINE_CHARS)
+      return true;
+    if (lineEnd === -1) return false;
+    lineStart = lineEnd + 1;
+  }
+  return false;
+}
 
 type LangLoader = () => Promise<{ default: LanguageRegistration[] }>;
 
@@ -76,6 +89,10 @@ export const resolveLang = (lang: string): string => {
   return id in LANGS ? id : "text";
 };
 
+/** Oversized lines stay on Shiki's linear plaintext path in diff views. */
+export const highlightLanguage = (code: string, lang: string): string =>
+  hasOverlongHighlightLine(code) ? "text" : resolveLang(lang);
+
 let instance: Promise<HighlighterCore> | null = null;
 
 const getHighlighter = (): Promise<HighlighterCore> => {
@@ -129,7 +146,12 @@ export function useHighlighted(
   transformers: ShikiTransformer[],
 ): string | null {
   const [html, setHtml] = useState<string | null>(null);
+  const overlongLine = hasOverlongHighlightLine(code);
   useEffect(() => {
+    if (overlongLine) {
+      setHtml(null);
+      return;
+    }
     let alive = true;
     ensureLangs([lang])
       .then((highlighter) => {
@@ -148,6 +170,6 @@ export function useHighlighted(
     return () => {
       alive = false;
     };
-  }, [code, lang, transformers]);
-  return html;
+  }, [code, lang, overlongLine, transformers]);
+  return overlongLine ? null : html;
 }

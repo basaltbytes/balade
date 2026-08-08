@@ -18,7 +18,7 @@ import {
 import { PULL_COMMIT_SUBJECT_LIMIT } from "../src/git/intent.js";
 import { fetchPullHead, parseOpenTarget, parsePrTarget, resolvePullHead } from "../src/git/pr.js";
 import { CommandFailed } from "../src/contract/context.js";
-import { repoName, repoSlug } from "../src/git/git.js";
+import { repoName, repoSlug, resolveCommit } from "../src/git/git.js";
 import { prepareSession } from "../src/server/session.js";
 import { CommandExecutor } from "../src/shell.js";
 import { commandLayerWithGh, unavailableGhLayer } from "./support/command.js";
@@ -251,6 +251,24 @@ describe("a served PR without a checkout", () => {
 const pullFixture = Effect.acquireRelease(Effect.sync(createFixtureRepo), (repo) =>
   Effect.sync(() => repo.cleanup()),
 );
+
+describe("git revision resolution", () => {
+  it.effect("treats a leading-dash ref as a revision rather than an option", () =>
+    Effect.gen(function* () {
+      const repo = yield* pullFixture;
+      const ref = "--path-format=absolute";
+      execFileSync("git", ["update-ref", `refs/heads/${ref}`, "HEAD"], { cwd: repo.dir });
+      const expected = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+
+      expect(Option.getOrUndefined(yield* provideLive(resolveCommit(repo.dir, ref)))).toBe(
+        expected,
+      );
+    }),
+  );
+});
 
 describe("pull-request authoring intent", () => {
   it.effect("collects GitHub claims and caps commit subjects from real Git", () =>

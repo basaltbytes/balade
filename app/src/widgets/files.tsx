@@ -8,6 +8,7 @@ import type { FileEntry } from "../contract";
 import { normalizeUnified, splitPath } from "../data/diff";
 import { fileByPath } from "../data/review";
 import { useDiffHighlighter } from "../highlight/diff-highlighter";
+import { hasOverlongHighlightLine } from "../highlight/shiki";
 import { JumpLink } from "../ui/nav";
 import { Octicon, FileStatusIcon } from "../ui/octicon";
 import { usePayload } from "../ui/payload-context";
@@ -42,6 +43,12 @@ function FileRow({ entry }: { entry: FileEntry }) {
   const viewed = review.fileViewed(sectionId, entry.path);
   const [dir, name] = splitPath(entry.path);
   const sectionRef = entry.ref;
+  const highlightSkipped =
+    open &&
+    entry.diff !== null &&
+    [entry.diff.oldContent, entry.diff.newContent].some(
+      (content) => content !== null && hasOverlongHighlightLine(content),
+    );
 
   const data = useMemo(() => {
     if (!entry.diff) return null;
@@ -126,6 +133,12 @@ function FileRow({ entry }: { entry: FileEntry }) {
             </p>
           ) : (
             <>
+              {highlightSkipped && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border-soft text-[12px] text-muted-foreground">
+                  <Octicon name="info" size={14} className="shrink-0" />
+                  <span>{strings.highlightSkippedLongLine}</span>
+                </div>
+              )}
               <div className="flex items-center justify-end gap-1 px-3 py-2 border-b border-border-soft text-[11px]">
                 {(
                   [
@@ -152,7 +165,7 @@ function FileRow({ entry }: { entry: FileEntry }) {
                   data={data}
                   diffViewMode={mode}
                   diffViewTheme="dark"
-                  diffViewHighlight
+                  diffViewHighlight={highlighter !== undefined}
                   diffViewFontSize={12}
                   diffViewWrap={false}
                   {...(highlighter ? { registerHighlighter: highlighter } : {})}

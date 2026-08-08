@@ -322,7 +322,7 @@ export const repoName = (root: string): string =>
 /** A commit-ish resolved by a quiet probe; only git's documented exit 1 is absence. */
 export const resolveCommit = Effect.fn("resolveCommit")(function* (root: string, revision: string) {
   const out = yield* optionOnExitOne(
-    gitOut(["rev-parse", "--verify", "--quiet", `${revision}^{commit}`], root),
+    gitOut(["rev-parse", "--verify", "--quiet", "--end-of-options", `${revision}^{commit}`], root),
   );
   return Option.flatMap(out, (value) => {
     const sha = value.trim();
