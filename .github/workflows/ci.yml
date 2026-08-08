@@ -20,6 +20,12 @@ jobs:
         with: { version: 10 }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: "${{ matrix.node }}", cache: pnpm }
+      # Every OS installs ripgrep from its package manager: Pi's fallback
+      # downloads it through an anonymous GitHub API call, which shared runner
+      # IPs rate-limit unpredictably (#82).
+      - name: Install ripgrep on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
       - name: Install ripgrep on macOS
         if: runner.os == 'macOS'
         run: brew install ripgrep
@@ -31,7 +37,10 @@ jobs:
       - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm build
+      # PI_OFFLINE forbids the download fallback, so a missing binary fails
+      # deterministically instead of by network luck.
       - run: pnpm test
+        env: { PI_OFFLINE: "1" }
   npm-package:
     runs-on: ubuntu-latest
     steps:
