@@ -434,7 +434,10 @@ The adapter itself is split at the session boundary: `pi/client.ts` owns
 account, authentication and global settings, while `pi/session.ts` owns the
 scoped authoring session, its read-only tool policy and provider-event
 forwarding. `pi/project-context.ts` owns repository-instruction selection and
-the system-prompt trust boundary.
+the system-prompt trust boundary. Project-context loading composes the pinned
+snapshot's typed effects directly. The immutable snapshot memoizes its
+source-file listing as an Effect and shares it with Pi's Promise-based tool
+callbacks, where the runtime boundary belongs.
 This keeps preference durability independent from the security-sensitive tool
 sandbox and session lifecycle.
 

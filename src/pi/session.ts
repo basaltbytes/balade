@@ -53,22 +53,16 @@ export async function createPiSession(
       pin: request.pin,
     }),
   );
-  let sourcePathLoad: Promise<readonly string[]> | undefined;
-  const sourcePaths = (): Promise<readonly string[]> => {
-    if (sourcePathLoad === undefined) {
-      sourcePathLoad = runSessionEffect(snapshot.listFiles);
-    }
-    return sourcePathLoad;
-  };
   const changed = new Set(request.files.map((file) => file.path));
-  const projectContext = await loadPinnedProjectContext(
-    {
-      pin: request.pin,
-      changedPaths: changed,
-      trustHeadInstructions: request.trustHeadInstructions,
-    },
-    snapshot,
-    sourcePaths,
+  const projectContext = await runSessionEffect(
+    loadPinnedProjectContext(
+      {
+        pin: request.pin,
+        changedPaths: changed,
+        trustHeadInstructions: request.trustHeadInstructions,
+      },
+      snapshot,
+    ),
   );
   for (const notice of projectContext.notices) request.progress(notice);
 
@@ -110,7 +104,9 @@ export async function createPiSession(
     }),
     execute: async (_id, params) => {
       const prefix = params.prefix?.replace(/^\.\//u, "") ?? "";
-      const matching = (await sourcePaths()).filter((path) => path.startsWith(prefix));
+      const matching = (await runSessionEffect(snapshot.listFiles)).filter((path) =>
+        path.startsWith(prefix),
+      );
       const offset = params.offset ?? 0;
       const limit = params.limit ?? MAX_TREE_FILES;
       const visible = matching.slice(offset, offset + limit);
@@ -219,7 +215,7 @@ export async function createPiSession(
       to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
     }),
     execute: async (_id, params) => {
-      if (!(await sourcePaths()).includes(params.path)) {
+      if (!(await runSessionEffect(snapshot.listFiles)).includes(params.path)) {
         throw new Error(`${params.path} does not exist at ${request.pin}.`);
       }
       if (sourceReads >= AUTHORING_LIMITS.sourceReads) {

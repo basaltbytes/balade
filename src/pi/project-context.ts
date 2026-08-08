@@ -2,7 +2,11 @@
 
 import { Effect } from "effect";
 import type { AuthorNotice } from "./author.js";
-import type { PinnedRepositorySnapshot } from "./snapshot.js";
+import type {
+  PinnedRepositorySnapshot,
+  SnapshotPathRejected,
+  SnapshotReadFailed,
+} from "./snapshot.js";
 
 const PROJECT_CONTEXT_FILE_NAMES = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
 const PROJECT_CONTEXT_CLOSING_TAG = /<\/project_(?:instructions|context)\s*>/iu;
@@ -23,12 +27,11 @@ export interface LoadPinnedProjectContextOptions {
   readonly trustHeadInstructions: boolean;
 }
 
-export async function loadPinnedProjectContext(
+export const loadPinnedProjectContext = Effect.fn("loadPinnedProjectContext")(function* (
   options: LoadPinnedProjectContextOptions,
   snapshot: PinnedRepositorySnapshot,
-  sourcePaths: () => Promise<readonly string[]>,
-): Promise<PinnedProjectContext> {
-  const available = new Set(await sourcePaths());
+): Effect.fn.Return<PinnedProjectContext, SnapshotPathRejected | SnapshotReadFailed> {
+  const available = new Set(yield* snapshot.listFiles);
   const directories = new Set([""]);
   for (const changedPath of options.changedPaths) {
     const parts = changedPath.split("/");
@@ -48,11 +51,9 @@ export async function loadPinnedProjectContext(
     const selected = PROJECT_CONTEXT_FILE_NAMES.find((name) => available.has(`${prefix}${name}`));
     return selected === undefined ? [] : [`${prefix}${selected}`];
   });
-  const candidates = await Promise.all(
-    paths.map(async (path) => ({
-      path,
-      content: await Effect.runPromise(snapshot.readFile(path)),
-    })),
+  const candidates = yield* Effect.all(
+    paths.map((path) => snapshot.readFile(path).pipe(Effect.map((content) => ({ path, content })))),
+    { concurrency: "unbounded" },
   );
   const files: ProjectContextFile[] = [];
   const notices: AuthorNotice[] = [];
@@ -92,7 +93,7 @@ export async function loadPinnedProjectContext(
     });
   }
   return { files, notices };
-}
+});
 
 function escapeProjectContextPath(path: string): string {
   return path

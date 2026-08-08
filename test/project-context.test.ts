@@ -33,10 +33,7 @@ const readProjectContext = Effect.fn("test.readProjectContext")(function* (
     repositoryRoot: repo.dir,
     pin,
   });
-  const sourcePaths = yield* snapshot.listFiles;
-  return yield* Effect.promise(() =>
-    loadPinnedProjectContext({ pin, ...options }, snapshot, () => Promise.resolve(sourcePaths)),
-  );
+  return yield* loadPinnedProjectContext({ pin, ...options }, snapshot);
 });
 
 describe("pinned project context", () => {
