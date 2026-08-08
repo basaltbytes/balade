@@ -110,6 +110,9 @@ export type AuthorProgress =
 
 export type AuthorProgressMode = "compact" | "verbose";
 
+/** Whether repository instructions changed at the pinned head enter authoring. */
+export type HeadInstructionPolicy = "omit-changed" | "trust-changed";
+
 export interface AuthorChangedFile {
   readonly path: string;
   readonly status: "A" | "M" | "D" | "R";
@@ -143,8 +146,7 @@ export interface AuthoringRequest {
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
   readonly lang?: Lang;
-  /** Apply instruction files that the pull request itself changes. */
-  readonly trustHeadInstructions: boolean;
+  readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;
 }

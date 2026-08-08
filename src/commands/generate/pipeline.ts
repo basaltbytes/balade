@@ -20,6 +20,7 @@ import {
   type AuthorProgressMode,
   type AuthorUsage,
   type AuthoringPreset,
+  type HeadInstructionPolicy,
 } from "../../pi/author.js";
 import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 
@@ -57,8 +58,7 @@ export interface RunGenerationOptions {
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
   readonly lang?: Lang;
-  /** Apply instruction files that the pull request itself changes. */
-  readonly trustHeadInstructions: boolean;
+  readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
 }
@@ -112,7 +112,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       model: options.model,
       ...(options.preset === undefined ? {} : { preset: options.preset }),
       ...(options.lang === undefined ? {} : { lang: options.lang }),
-      trustHeadInstructions: options.trustHeadInstructions,
+      headInstructionPolicy: options.headInstructionPolicy,
       progressMode: options.progressMode,
       progress: options.progress,
     });

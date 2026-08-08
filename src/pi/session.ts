@@ -46,23 +46,30 @@ export async function createPiSession(
   let diffReads = 0;
   let searches = 0;
   let sourceReads = 0;
-  const snapshot = await runSessionEffect(
-    openPinnedRepositorySnapshot({
-      cacheRoot: snapshotCacheRoot,
-      repositoryRoot: request.root,
-      pin: request.pin,
-    }),
-  );
   const changed = new Set(request.files.map((file) => file.path));
-  const projectContext = await runSessionEffect(
-    loadPinnedProjectContext(
-      {
+  const { snapshot, projectContext, searchConfiguration } = await runSessionEffect(
+    Effect.gen(function* () {
+      const snapshot = yield* openPinnedRepositorySnapshot({
+        cacheRoot: snapshotCacheRoot,
+        repositoryRoot: request.root,
         pin: request.pin,
-        changedPaths: changed,
-        trustHeadInstructions: request.trustHeadInstructions,
-      },
-      snapshot,
-    ),
+      });
+      const prepared = yield* Effect.all(
+        {
+          projectContext: loadPinnedProjectContext(
+            {
+              pin: request.pin,
+              changedPaths: changed,
+              headInstructionPolicy: request.headInstructionPolicy,
+            },
+            snapshot,
+          ),
+          searchConfiguration: writeSearchConfiguration(snapshotCacheRoot),
+        },
+        { concurrency: "unbounded" },
+      );
+      return { snapshot, ...prepared };
+    }).pipe(Effect.withSpan("PiSession.prepare")),
   );
   for (const notice of projectContext.notices) request.progress(notice);
 
@@ -119,7 +126,6 @@ export async function createPiSession(
   });
 
   const grep = pi.coding.createGrepToolDefinition(snapshot.root);
-  const searchConfiguration = await runSessionEffect(writeSearchConfiguration(snapshotCacheRoot));
   const searchSource = pi.coding.defineTool({
     name: "search_source",
     label: "Search pinned source",

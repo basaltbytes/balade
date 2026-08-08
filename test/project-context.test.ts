@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HeadInstructionPolicy } from "../src/pi/author.js";
 import { loadPinnedProjectContext } from "../src/pi/project-context.js";
 import { openPinnedRepositorySnapshot } from "../src/pi/snapshot.js";
 import { shellLayer } from "./support/effect.js";
@@ -24,7 +25,7 @@ const readProjectContext = Effect.fn("test.readProjectContext")(function* (
   pin: string,
   options: {
     readonly changedPaths: ReadonlySet<string>;
-    readonly trustHeadInstructions: boolean;
+    readonly headInstructionPolicy: HeadInstructionPolicy;
   },
 ) {
   const cacheRoot = yield* snapshotCache;
@@ -45,7 +46,7 @@ describe("pinned project context", () => {
 
       const context = yield* readProjectContext(repo, pin, {
         changedPaths: new Set(["AGENTS.md", "models/planning_pool_item.py"]),
-        trustHeadInstructions: false,
+        headInstructionPolicy: "omit-changed",
       });
 
       expect(context.files).toEqual([]);
@@ -70,7 +71,7 @@ describe("pinned project context", () => {
 
       const context = yield* readProjectContext(repo, pin, {
         changedPaths: new Set([instruction]),
-        trustHeadInstructions: true,
+        headInstructionPolicy: "trust-changed",
       });
 
       expect(context.files).toEqual([
@@ -106,7 +107,7 @@ describe("pinned project context", () => {
 
       const context = yield* readProjectContext(repo, pin, {
         changedPaths: new Set(["models/context-trigger.py"]),
-        trustHeadInstructions: false,
+        headInstructionPolicy: "omit-changed",
       });
 
       expect(context.files).toEqual([]);

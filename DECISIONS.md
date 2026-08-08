@@ -477,10 +477,12 @@ file the PR adds or edits is a claim until a human explicitly passes
 unchanged instructions retain the existing behavior. Loading the base version
 was rejected because a PR that intentionally changes its instructions must be
 testable under the new rules. Interactive confirmation was rejected because
-`generate` remains scriptable. A project-context closing tag always rejects the
-file with a notice, even when the file is otherwise trusted, and attribute
-characters in its untrusted repository path are escaped before Pi interpolates
-the path into the system prompt.
+`generate` remains scriptable. The CLI flag becomes an explicit
+`omit-changed | trust-changed` policy at the command boundary instead of sending
+a behavior-switching boolean through the generation pipeline. A project-context
+closing tag always rejects the file with a notice, even when the file is
+otherwise trusted, and attribute characters in its untrusted repository path
+are escaped before Pi interpolates the path into the system prompt.
 
 The allowlist contains only seven balade-owned tools: list PR changes, list
 pinned paths, search pinned source, read a pinned diff, read numbered lines at

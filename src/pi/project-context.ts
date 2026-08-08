@@ -1,7 +1,7 @@
 /** Repository instructions selected from the pinned pull-request snapshot. */
 
 import { Effect } from "effect";
-import type { AuthorNotice } from "./author.js";
+import type { AuthorNotice, HeadInstructionPolicy } from "./author.js";
 import type {
   PinnedRepositorySnapshot,
   SnapshotPathRejected,
@@ -24,7 +24,7 @@ export interface PinnedProjectContext {
 export interface LoadPinnedProjectContextOptions {
   readonly pin: string;
   readonly changedPaths: ReadonlySet<string>;
-  readonly trustHeadInstructions: boolean;
+  readonly headInstructionPolicy: HeadInstructionPolicy;
 }
 
 export const loadPinnedProjectContext = Effect.fn("loadPinnedProjectContext")(function* (
@@ -70,7 +70,7 @@ export const loadPinnedProjectContext = Effect.fn("loadPinnedProjectContext")(fu
     }
 
     const changedAtHead = options.changedPaths.has(candidate.path);
-    if (changedAtHead && !options.trustHeadInstructions) {
+    if (changedAtHead && options.headInstructionPolicy === "omit-changed") {
       notices.push({
         _tag: "AuthorNotice",
         code: "head-instructions-skipped",

@@ -133,7 +133,7 @@ export const generateCommand = Command.make(
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         directory: config.directory,
-        trustHeadInstructions: config.trustHeadInstructions,
+        headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
       });

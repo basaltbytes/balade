@@ -12,6 +12,7 @@ import {
   AuthorModel as AuthorModelSchema,
   WalkthroughAuthor,
   type AuthorModel,
+  type AuthoringRequest,
   type AuthorProgress,
 } from "../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
@@ -77,7 +78,7 @@ function authorRequest(
   model: AuthorModel,
   progress: (event: AuthorProgress) => void = () => {},
   progressMode: "compact" | "verbose" = "compact",
-) {
+): AuthoringRequest {
   return {
     root,
     pin,
@@ -96,7 +97,7 @@ function authorRequest(
     },
     files: [CHANGED_FILE],
     model,
-    trustHeadInstructions: false,
+    headInstructionPolicy: "omit-changed",
     progressMode,
     progress,
   };
@@ -745,7 +746,7 @@ describe("generation", () => {
           source,
           model,
           directory: "walkthroughs",
-          trustHeadInstructions: true,
+          headInstructionPolicy: "trust-changed",
           progressMode: "compact",
           progress: (event) => {
             if (event._tag === "AuthorUsageUpdated") usageTurns.push(event.usage.total);
@@ -796,7 +797,7 @@ describe("generation", () => {
           source: prepared(repo.dir, repo.pin),
           model,
           directory: "drafts",
-          trustHeadInstructions: false,
+          headInstructionPolicy: "omit-changed",
           progressMode: "compact",
           progress: () => {},
         });
@@ -827,7 +828,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "linked/walkthroughs",
-            trustHeadInstructions: false,
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
           }),
@@ -837,7 +838,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: ".git/walkthroughs",
-            trustHeadInstructions: false,
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
           }),
@@ -865,7 +866,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "walkthroughs",
-            trustHeadInstructions: false,
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
           }),
@@ -896,7 +897,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "drafts",
-            trustHeadInstructions: false,
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: (event) => {
               if (event._tag === "AuthorUsageUpdated") usage.push(event.usage.total);
