@@ -66,7 +66,7 @@ describe("pinned project context", () => {
       const repo = yield* fixture;
       const directory = "scope&team";
       const instruction = `${directory}/CLAUDE.md`;
-      repo.write(instruction, "TRUSTED CHANGED INSTRUCTIONS\n");
+      repo.write(instruction, "TRUSTED CHANGED INSTRUCTIONS");
       const pin = repo.commit("docs: change trusted repository instructions");
 
       const context = yield* readProjectContext(repo, pin, {
@@ -77,7 +77,7 @@ describe("pinned project context", () => {
       expect(context.files).toEqual([
         {
           path: `${pin}:scope&amp;team/CLAUDE.md`,
-          content: "TRUSTED CHANGED INSTRUCTIONS\n",
+          content: "TRUSTED CHANGED INSTRUCTIONS",
         },
       ]);
       expect(context.notices).toContainEqual(
