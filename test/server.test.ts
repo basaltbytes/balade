@@ -7,6 +7,7 @@
 import { Effect, Layer, Option } from "effect";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
@@ -244,6 +245,21 @@ it.live("invalidates a cached payload when the scoped watcher sees an edit", () 
 async function exercise(url: string, path: string): Promise<void> {
   const query = `?path=${encodeURIComponent(path)}`;
 
+  for (const [route, request] of [
+    ["/", { kind: "read" }],
+    ["/api/walkthrough", { kind: "read" }],
+    [`/api/state${query}`, { kind: "read" }],
+    [`/api/state${query}`, { kind: "write", body: "{}" }],
+    [`/api/staleness${query}`, { kind: "read" }],
+  ] satisfies ReadonlyArray<readonly [string, HostRequest]>) {
+    expect(await statusWithHost(`${url}${route}`, "evil.com", request)).toBe(403);
+  }
+
+  const port = new URL(url).port;
+  for (const host of [`localhost:${port}`, `[::1]:${port}`]) {
+    expect(await statusWithHost(`${url}/`, host, { kind: "read" })).toBe(200);
+  }
+
   /* One walkthrough served: the bare endpoint is that walkthrough. */
   const answer = await fetch(`${url}/api/walkthrough`);
   expect(answer.status).toBe(200);
@@ -276,6 +292,13 @@ async function exercise(url: string, path: string): Promise<void> {
   });
   expect(put.status).toBe(200);
 
+  const tooLarge = await fetch(`${url}/api/state${query}`, {
+    method: "PUT",
+    headers: json,
+    body: "x".repeat(4 * 1024 * 1024 + 1),
+  });
+  expect(tooLarge.status).toBe(400);
+
   const stored = await fetch(`${url}/api/state${query}`);
   expect(stored.status).toBe(200);
   expect(await stored.json()).toEqual(state);
@@ -302,7 +325,42 @@ async function exercise(url: string, path: string): Promise<void> {
   /* The SPA sits under the API and still answers the root. */
   const spa = await fetch(`${url}/`);
   expect(spa.status).toBe(200);
+  expect(spa.headers.get("x-frame-options")).toBe("DENY");
   expect(await spa.text()).toContain("balade");
+}
+
+type HostRequest = { kind: "read" } | { kind: "write"; body: string };
+
+function statusWithHost(url: string, host: string, request: HostRequest): Promise<number> {
+  const details =
+    request.kind === "read"
+      ? { method: "GET", headers: { host }, body: undefined }
+      : {
+          method: "PUT",
+          headers: {
+            host,
+            "content-length": Buffer.byteLength(request.body),
+            "content-type": "application/json",
+          },
+          body: request.body,
+        };
+
+  return new Promise((resolve, reject) => {
+    const connection = httpRequest(
+      url,
+      {
+        method: details.method,
+        headers: details.headers,
+      },
+      (response) => {
+        response.on("error", reject);
+        response.resume();
+        response.on("end", () => resolve(response.statusCode ?? 0));
+      },
+    );
+    connection.on("error", reject);
+    connection.end(details.body);
+  });
 }
 
 describe("the index", () => {

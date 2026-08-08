@@ -362,6 +362,26 @@ metadata before users share the HTML. Export review state stays resumable in
 `localStorage`; the README also records the `file://` partition exposure and
 the dedicated-origin option instead of weakening persistence.
 
+## The review server validates its authority before routing
+
+Decided on [#63](https://github.com/basaltbytes/balade/issues/63). Every routed
+request passes through one global middleware that accepts only `127.0.0.1`,
+`localhost` or `[::1]`, with an optional numeric port. Loopback binding alone
+does not stop DNS rebinding: a rebound page can connect to `127.0.0.1`, but its
+`Host` header still names the attacker's origin. Missing, malformed and other
+hosts therefore receive `403` before the static app or an API handler runs.
+
+Once a host passes, the same middleware adds `X-Frame-Options: DENY` to the
+response so another site cannot frame the served review UI. This is a
+response-header control and stays separate from the export's meta CSP, which
+browsers cannot use to enforce `frame-ancestors`.
+
+Only `PUT /api/state` reads a request body. Its JSON read provides Effect's
+`MaxBodySize` with a 4 MiB limit; an oversized body follows the existing invalid
+review-state response and leaves the process alive. The limit is generous for a
+review state while staying far below the Node string-size failure found during
+the security audit.
+
 ## The inlined bundle is escaped, the baked payload is JSON-escaped
 
 Both scripts in the export sit in HTML script data, where `</script` ends the
