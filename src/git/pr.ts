@@ -108,20 +108,18 @@ export const repositoryRootForTarget = Effect.fn("repositoryRootForTarget")(func
 
 /** Fetch one advertised SHA without reading or writing process-global FETCH_HEAD. */
 export const fetchPullHead = Effect.fn("fetchPullHead")(function* (root: string, number: number) {
-  return yield* Effect.gen(function* () {
-    const advertised = yield* gitOut(
-      ["ls-remote", "--refs", "origin", `refs/pull/${number}/head`],
-      root,
-    );
-    const pin = advertised.trim().split(/\s/u)[0] ?? "";
-    if (!/^[0-9a-f]{40,64}$/u.test(pin)) return yield* new PullFetchFailed({ number });
-    yield* gitOut(["fetch", "--quiet", "--no-write-fetch-head", "origin", pin], root);
-    const resolved = yield* resolveCommit(root, pin);
-    if (Option.isNone(resolved) || resolved.value !== pin) {
-      return yield* new PullFetchFailed({ number });
-    }
-    return pin;
-  }).pipe(Effect.mapError(() => new PullFetchFailed({ number })));
+  const advertised = yield* gitOut(
+    ["ls-remote", "--refs", "origin", `refs/pull/${number}/head`],
+    root,
+  );
+  const pin = advertised.trim().split(/\s/u)[0] ?? "";
+  if (!/^[0-9a-f]{40,64}$/u.test(pin)) return yield* new PullFetchFailed({ number });
+  yield* gitOut(["fetch", "--quiet", "--no-write-fetch-head", "origin", pin], root);
+  const resolved = yield* resolveCommit(root, pin);
+  if (Option.isNone(resolved) || resolved.value !== pin) {
+    return yield* new PullFetchFailed({ number });
+  }
+  return pin;
 });
 
 /** Resolve the exact PR head and its lightweight metadata in one GitHub snapshot. */

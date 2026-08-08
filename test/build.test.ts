@@ -10,7 +10,9 @@ import { runInNewContext } from "node:vm";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import {
+  buildErrorMessage,
   exportContentsMessage,
+  ExportBundleReadFailed,
   runBuild as runBuildEffect,
   type BuildOptions,
 } from "../src/commands/build/pipeline.js";
@@ -247,6 +249,17 @@ describe("build", () => {
         }),
       );
       expect(error).toMatchObject({ _tag: "ExportBundleReadFailed", dir });
+      expect(buildErrorMessage(error)).toContain(join(dir, "app.js"));
     }),
   );
+
+  it("includes the underlying export-bundle read failure in the CLI message", () => {
+    const error = new ExportBundleReadFailed({
+      dir: "/bundle",
+      file: "/bundle/app.js",
+      cause: new Error("permission denied"),
+    });
+
+    expect(buildErrorMessage(error)).toContain("permission denied");
+  });
 });

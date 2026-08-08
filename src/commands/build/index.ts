@@ -31,27 +31,20 @@ export const buildCommand = Command.make(
         paths: config.files,
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         ...(Option.isSome(config.out) ? { out: config.out.value } : {}),
-      }).pipe(
-        Effect.map(Option.some),
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            stopMessage(buildErrorMessage(error));
-            return Option.none();
-          }),
-        ),
-      );
-      if (Option.isNone(result)) return;
-      return yield* Match.valueTags(result.value, {
+      });
+      return yield* Match.valueTags(result, {
         Built: ({ reports, file, bytes, changedFileCount }) =>
           Effect.sync(() => {
             printSoft(reports);
-            writeStdout(`balade wrote ${file} (${size(bytes)})\n`);
-            writeStdout(`${exportContentsMessage(changedFileCount)}\n`);
+            writeStdout(
+              `balade wrote ${file} (${size(bytes)})\n` +
+                `${exportContentsMessage(changedFileCount)}\n`,
+            );
           }),
         BuildNotRun: ({ message }) => Effect.sync(() => stopMessage(message)),
         BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
       });
-    }),
+    }).pipe(Effect.catch((error) => Effect.sync(() => stopMessage(buildErrorMessage(error))))),
 ).pipe(
   Command.withDescription(
     "Export one self-contained HTML review; no server, state stays in the browser",

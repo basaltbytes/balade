@@ -22,6 +22,7 @@ import {
   type PrTarget,
 } from "../../git/pr.js";
 import type { LocatedSelection } from "../../server/session.js";
+import { describeFailure } from "../../failure.js";
 
 export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughForPull>()(
   "NoWalkthroughForPull",
@@ -41,7 +42,7 @@ export class PullSourceReadFailed extends Schema.TaggedErrorClass<PullSourceRead
   { path: Schema.String, cause: Schema.Defect() },
 ) {
   get note(): string {
-    return `Could not read the walkthrough source at ${this.path}.`;
+    return `Could not read the walkthrough source at ${this.path} (${describeFailure(this.cause)}).`;
   }
 }
 

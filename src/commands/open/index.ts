@@ -5,7 +5,6 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { parseOpenTarget } from "../../git/pr.js";
 import { locateErrorMessage, PrLocator } from "./locator.js";
 import { runReviewSession } from "../../server/review.js";
-import type { Selection } from "../../server/session.js";
 import { stopMessage } from "../../terminal.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
@@ -40,30 +39,21 @@ export const openCommand = Command.make(
         stopMessage(target.message);
         return;
       }
-      let selection: Option.Option<Selection>;
-      if (target.kind === "pr") {
-        const locator = yield* PrLocator;
-        selection = yield* locator.locate(process.cwd(), target.pr).pipe(
-          Effect.map(Option.some),
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              stopMessage(locateErrorMessage(error));
-              return Option.none<Selection>();
-            }),
-          ),
-        );
-      } else {
-        selection = Option.some<Selection>(target);
-      }
-      if (Option.isNone(selection)) return;
+      const selection =
+        target.kind === "pr"
+          ? yield* PrLocator.use((locator) => locator.locate(process.cwd(), target.pr))
+          : target;
       return yield* runReviewSession({
         session: {
           cwd: process.cwd(),
-          selection: selection.value,
+          selection,
           ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         },
         port: config.port,
         browserMode: config.noBrowser ? "headless" : "launch",
       });
-    }).pipe(Effect.scoped),
+    }).pipe(
+      Effect.catch((error) => Effect.sync(() => stopMessage(locateErrorMessage(error)))),
+      Effect.scoped,
+    ),
 ).pipe(Command.withDescription("Serve a live review session and open it in your default browser"));

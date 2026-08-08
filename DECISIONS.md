@@ -217,6 +217,13 @@ commands and writes are errors. In particular, `gitOut`, `parseReviewState` and
 bundle similarly fails as `AppBundleMissing` instead of returning a nullable
 path.
 
+The CLI catches typed failures directly at its presentation boundary; it does
+not turn a failed command, read or write into an empty `Option` to stop control
+flow. Pull-head lookup likewise preserves `CommandFailed` from `ls-remote`,
+`fetch` and commit resolution instead of relabelling every cause as a missing
+pull ref. Read adapters keep their external cause, and terminal renderers name
+that cause and the exact source or bundle file that failed.
+
 Git absence is classified at the command that defines it. Quiet `rev-parse`,
 `symbolic-ref` and `git config --get` map only their documented exit 1 to
 `Option.none`; spawn failures and every other exit remain `CommandFailed`.
