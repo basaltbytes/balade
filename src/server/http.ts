@@ -21,6 +21,23 @@ import { ApiReviewStateInvalid, apiErrorResponse, type Api, type ApiError } from
 
 /** A review tool listens for the reviewer, not for the network. */
 const HOST = "127.0.0.1";
+const ALLOWED_HOSTS = new Set([HOST, "localhost", "[::1]"]);
+const REVIEW_STATE_BODY_LIMIT = FileSystem.MiB(4);
+
+const hostAllowed = (host: string | undefined): boolean =>
+  host !== undefined && ALLOWED_HOSTS.has(host.replace(/:\d+$/u, ""));
+
+const protectReviewServer = HttpRouter.middleware(
+  (httpEffect) =>
+    Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      if (!hostAllowed(request.headers["host"])) {
+        return HttpServerResponse.empty({ status: 403 });
+      }
+      return HttpServerResponse.setHeader(yield* httpEffect, "X-Frame-Options", "DENY");
+    }),
+  { global: true },
+);
 
 export interface ServeOptions {
   /** Directory holding the prebuilt SPA: an `index.html` and its assets. */
@@ -82,6 +99,7 @@ export const serve = (options: ServeOptions) =>
 
 const routes = (options: ServeOptions) =>
   Layer.mergeAll(
+    protectReviewServer,
     HttpRouter.add(
       "GET",
       "/api/walkthrough",
@@ -120,7 +138,10 @@ const putState = (api: Api) =>
   Effect.gen(function* () {
     const path = yield* queryPath;
     const request = yield* HttpServerRequest.HttpServerRequest;
-    const body = yield* request.json.pipe(Effect.mapError(() => new ApiReviewStateInvalid({})));
+    const body = yield* request.json.pipe(
+      Effect.provideService(HttpServerRequest.MaxBodySize, REVIEW_STATE_BODY_LIMIT),
+      Effect.mapError(() => new ApiReviewStateInvalid({})),
+    );
     return yield* api.writeState(path, body);
   }).pipe(Effect.match({ onFailure: respondError, onSuccess: respondJson }));
 
