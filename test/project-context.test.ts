@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HeadInstructionPolicy } from "../src/pi/author.js";
 import { loadPinnedProjectContext } from "../src/pi/project-context.js";
-import { openPinnedRepositorySnapshot } from "../src/pi/snapshot.js";
+import { openPinnedRepositorySnapshot, type PinnedRepositorySnapshot } from "../src/pi/snapshot.js";
 import { shellLayer } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
@@ -64,7 +64,7 @@ describe("pinned project context", () => {
   it.effect("loads a changed instruction only with explicit trust", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
-      const directory = 'scope&"<team>';
+      const directory = "scope&team";
       const instruction = `${directory}/CLAUDE.md`;
       repo.write(instruction, "TRUSTED CHANGED INSTRUCTIONS\n");
       const pin = repo.commit("docs: change trusted repository instructions");
@@ -76,7 +76,7 @@ describe("pinned project context", () => {
 
       expect(context.files).toEqual([
         {
-          path: `${pin}:scope&amp;&quot;&lt;team&gt;/CLAUDE.md`,
+          path: `${pin}:scope&amp;team/CLAUDE.md`,
           content: "TRUSTED CHANGED INSTRUCTIONS\n",
         },
       ]);
@@ -89,6 +89,39 @@ describe("pinned project context", () => {
       );
     }).pipe(Effect.provide(shellLayer), Effect.scoped),
   );
+
+  it.effect("escapes every markup delimiter in an instruction path", () => {
+    const pin = "0123456789abcdef0123456789abcdef01234567";
+    const instruction = 'scope&"<team>/CLAUDE.md';
+    const content = "TRUSTED CHANGED INSTRUCTIONS\n";
+    const snapshot = {
+      root: "/virtual-pinned-snapshot",
+      listFiles: Effect.succeed([instruction]),
+      resolvePath: () => Effect.die("The path resolver is not used by project-context loading"),
+      readFile: (path: string) =>
+        path === instruction
+          ? Effect.succeed(content)
+          : Effect.die(`Unexpected project-context read: ${path}`),
+    } satisfies PinnedRepositorySnapshot;
+
+    return Effect.gen(function* () {
+      const context = yield* loadPinnedProjectContext(
+        {
+          pin,
+          changedPaths: new Set([instruction]),
+          headInstructionPolicy: "trust-changed",
+        },
+        snapshot,
+      );
+
+      expect(context.files).toEqual([
+        {
+          path: `${pin}:scope&amp;&quot;&lt;team&gt;/CLAUDE.md`,
+          content,
+        },
+      ]);
+    });
+  });
 
   it.effect("rejects both project-context closing tags in unchanged instructions", () =>
     Effect.gen(function* () {
