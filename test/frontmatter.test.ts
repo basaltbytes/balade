@@ -96,4 +96,21 @@ describe("frontmatter schema diagnostics", () => {
     ]);
     expect(result.diagnostics.every((diagnostic) => diagnostic.hint !== undefined)).toBe(true);
   });
+
+  it.each(["a(b", "(a+)+$"])("treats the unknown key %s as literal text", (key) => {
+    const bait = key === "(a+)+$" ? [`${"a".repeat(26)}: bait`] : [];
+    const result = parseFrontmatter(
+      ["walkthrough: 1", "title: T", "pr: 7", "commit: abc1234", ...bait, `${key}: value`].join(
+        "\n",
+      ),
+      "walkthroughs/adversarial.md",
+    );
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "frontmatter-key-unknown",
+        message: `Unknown frontmatter key \`${key}\`.`,
+      }),
+    );
+  });
 });
