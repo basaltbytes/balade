@@ -97,6 +97,7 @@ npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --provider openai-codex
 npx balade generate 96 --preset odoo # activate a preset's tags for this walkthrough
 npx balade generate 96 --lang fr     # author the walkthrough in French
+npx balade generate 96 --trust-head-instructions # apply reviewed instruction changes
 npx balade generate 96 --dir docs/walkthroughs
 npx balade generate 96 --no-browser # serve and print the URL without launching a browser
 npx balade generate 96 --no-open    # generate, print the path and exit
@@ -128,6 +129,13 @@ all prose in it, and balade stamps `meta.lang`, which also drives the app
 chrome. Without the flag the draft is authored in English. (On `open` and
 `build`, `--lang` only overrides the chrome at render time; it does not rewrite
 authored prose.)
+
+Repository instructions from `AGENTS.md` and `CLAUDE.md` are loaded from the
+pinned pull-request commit. If the pull request adds or edits one of those
+files, balade leaves it out of the authoring prompt and prints a warning. After
+reviewing the changed instructions, pass `--trust-head-instructions` to apply
+them for that run. Files that contain a project-context closing tag are always
+rejected and reported.
 
 Generated frontmatter records the prompt, template, and rubric version under
 `meta.balade-authoring`. See the [authoring package](docs/authoring-package.md)
@@ -190,7 +198,7 @@ pr: 96                        # the pull request this narrates
 commit: 9f3c2ad…              # the stamped commit every reference resolves at
 meta:                         # scalar header chips
   module: acme_loan
-  balade-authoring: 1.8.0     # generated drafts record their authoring package
+  balade-authoring: 1.9.0     # generated drafts record their authoring package
 ---
 ```
 

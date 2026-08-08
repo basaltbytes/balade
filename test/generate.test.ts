@@ -12,6 +12,7 @@ import {
   AuthorModel as AuthorModelSchema,
   WalkthroughAuthor,
   type AuthorModel,
+  type AuthoringRequest,
   type AuthorProgress,
 } from "../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
@@ -59,7 +60,7 @@ async function piHarness(registerFaux = true, settingsManager = coding.SettingsM
     }),
     contextResolverLive,
   ).pipe(Layer.provideMerge(shellLayer));
-  return { credentials, faux, layer, modelRuntime, settingsManager };
+  return { credentials, faux, layer, modelRuntime, settingsManager, snapshotCacheRoot };
 }
 
 const harnessCleanups: Array<() => void> = [];
@@ -77,7 +78,7 @@ function authorRequest(
   model: AuthorModel,
   progress: (event: AuthorProgress) => void = () => {},
   progressMode: "compact" | "verbose" = "compact",
-) {
+): AuthoringRequest {
   return {
     root,
     pin,
@@ -96,6 +97,7 @@ function authorRequest(
     },
     files: [CHANGED_FILE],
     model,
+    headInstructionPolicy: "omit-changed",
     progressMode,
     progress,
   };
@@ -425,10 +427,16 @@ describe("the Pi adapter", () => {
       repo.write("AGENTS.md", "PINNED ROOT INSTRUCTIONS\n");
       repo.write("models/CLAUDE.md", "PINNED MODEL INSTRUCTIONS\n");
       repo.write("security/AGENTS.md", "UNRELATED SECURITY INSTRUCTIONS\n");
-      const contextPin = repo.commit("docs: add repository instructions");
+      repo.commit("docs: add repository instructions");
+      repo.write(
+        "models/planning_pool_item.py",
+        `${readFileSync(join(repo.dir, "models/planning_pool_item.py"), "utf8")}\n# context fixture\n`,
+      );
+      const contextPin = repo.commit("feat: update the pool model");
       repo.write("AGENTS.md", "WORKING TREE INSTRUCTIONS\n");
       repo.write("models/CLAUDE.md", "WORKING TREE MODEL INSTRUCTIONS\n");
       let systemPrompt = "";
+      const progress: AuthorProgress[] = [];
       harness.faux.setResponses([
         (context) => {
           systemPrompt = context.systemPrompt ?? "";
@@ -439,7 +447,9 @@ describe("the Pi adapter", () => {
       yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         const model = yield* fauxModel();
-        yield* author.start(authorRequest(repo.dir, contextPin, model));
+        yield* author.start(
+          authorRequest(repo.dir, contextPin, model, (event) => progress.push(event)),
+        );
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
 
       expect(systemPrompt).toContain("PINNED ROOT INSTRUCTIONS");
@@ -447,6 +457,7 @@ describe("the Pi adapter", () => {
       expect(systemPrompt).not.toContain("WORKING TREE INSTRUCTIONS");
       expect(systemPrompt).not.toContain("WORKING TREE MODEL INSTRUCTIONS");
       expect(systemPrompt).not.toContain("UNRELATED SECURITY INSTRUCTIONS");
+      expect(progress.some((event) => event._tag === "AuthorNotice")).toBe(false);
     }),
   );
 
@@ -581,6 +592,50 @@ describe("the Pi adapter", () => {
     }),
   );
 
+  it.effect("keeps an unavailable model as a typed startup failure", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => piHarness(false));
+      const unavailable = yield* Schema.decodeUnknownEffect(AuthorModelSchema)({
+        providerId: "missing-provider",
+        providerName: "Missing provider",
+        modelId: "missing-model",
+        modelName: "Missing model",
+      });
+
+      const error = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        return yield* Effect.flip(author.start(authorRequest(".", "invalid", unavailable)));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(error).toMatchObject({
+        _tag: "AuthorModelUnavailable",
+        provider: "missing-provider",
+        model: "missing-model",
+      });
+    }),
+  );
+
+  it.effect("keeps snapshot preparation failures in the typed Effect channel", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => piHarness());
+      const repo = yield* fixture;
+      rmSync(harness.snapshotCacheRoot, { recursive: true, force: true });
+      writeFileSync(harness.snapshotCacheRoot, "not a directory");
+
+      const error = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        return yield* Effect.flip(author.start(authorRequest(repo.dir, repo.pin, model)));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(error).toMatchObject({
+        _tag: "SnapshotOpenFailed",
+        repositoryRoot: repo.dir,
+        pin: repo.pin,
+      });
+    }),
+  );
+
   it.effect("keeps API-key login redacted and translates terminal cancellation", () =>
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() => piHarness());
@@ -704,11 +759,23 @@ describe("generation", () => {
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
+      repo.write("AGENTS.md", "TRUSTED THROUGH RUN GENERATION\n");
+      const pin = repo.commit("docs: change instructions for generation");
+      const preparedSource = prepared(repo.dir, pin);
+      const source: PullSnapshot = {
+        ...preparedSource,
+        files: [
+          ...preparedSource.files,
+          { path: "AGENTS.md", status: "A", additions: 1, deletions: 0, binary: false },
+        ],
+      };
       let initialContext = "";
       let repairContext = "";
+      let systemPrompt = "";
       harness.faux.setResponses([
         (context) => {
           initialContext = JSON.stringify(context.messages);
+          systemPrompt = context.systemPrompt ?? "";
           return submitted(invalidBody);
         },
         (context) => {
@@ -720,9 +787,10 @@ describe("generation", () => {
       const result = yield* Effect.gen(function* () {
         const model = yield* fauxModel();
         return yield* runGeneration({
-          source: prepared(repo.dir, repo.pin),
+          source,
           model,
           directory: "walkthroughs",
+          headInstructionPolicy: "trust-changed",
           progressMode: "compact",
           progress: (event) => {
             if (event._tag === "AuthorUsageUpdated") usageTurns.push(event.usage.total);
@@ -735,19 +803,20 @@ describe("generation", () => {
       expect(usageTurns).toHaveLength(2);
       expect(usageTurns[1]).toBeGreaterThan(usageTurns[0] ?? 0);
       expect(initialContext).toContain("feat: live planning pool items");
+      expect(systemPrompt).toContain("TRUSTED THROUGH RUN GENERATION");
       expect(initialContext).not.toContain('\\"pullRequest\\"');
       expect(repairContext).toContain("range-");
       expect(readFileSync(result.file, "utf8")).toBe(
-        renderDraft(prepared(repo.dir, repo.pin), {
+        renderDraft(source, {
           title: "Live planning pool",
           meta: { lang: "en", module: "acme_planning" },
           body: validBody,
         }),
       );
-      expect(readFileSync(result.file, "utf8")).toContain(`commit: ${repo.pin}`);
+      expect(readFileSync(result.file, "utf8")).toContain(`commit: ${pin}`);
       expect(
         execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo.dir, encoding: "utf8" }).trim(),
-      ).toBe(repo.pin);
+      ).toBe(pin);
       expect(
         execFileSync("git", ["diff", "--cached", "--name-only"], {
           cwd: repo.dir,
@@ -772,6 +841,7 @@ describe("generation", () => {
           source: prepared(repo.dir, repo.pin),
           model,
           directory: "drafts",
+          headInstructionPolicy: "omit-changed",
           progressMode: "compact",
           progress: () => {},
         });
@@ -802,6 +872,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "linked/walkthroughs",
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
           }),
@@ -811,6 +882,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: ".git/walkthroughs",
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
           }),
@@ -838,6 +910,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "walkthroughs",
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
           }),
@@ -868,6 +941,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "drafts",
+            headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: (event) => {
               if (event._tag === "AuthorUsageUpdated") usage.push(event.usage.total);

@@ -112,7 +112,9 @@ export const openPinnedRepositorySnapshot = Effect.fn("openPinnedRepositorySnaps
       Effect.catch((cause) => Effect.logWarning("Snapshot cache cleanup failed", cause)),
     );
     const root = yield* fs.realPath(tree);
-    return makeSnapshot(fs, path, root);
+    const snapshot = makeSnapshot(fs, path, root);
+    const listFiles = yield* Effect.cached(snapshot.listFiles);
+    return { ...snapshot, listFiles };
   });
 
   return yield* opened.pipe(

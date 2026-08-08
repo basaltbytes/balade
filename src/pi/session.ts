@@ -11,9 +11,14 @@ import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { Effect, FileSystem, Option, Path, Result } from "effect";
 import { CommandExecutor, gitOut } from "../shell.js";
-import type { AuthoringRequest } from "./author.js";
+import { AuthorSearchConfigurationFailed, type AuthoringRequest } from "./author.js";
 import { AUTHORING_LIMITS } from "../authoring/package.js";
 import { authoringSystemPrompt } from "./authoring.js";
+import {
+  loadPinnedProjectContext,
+  type PinnedProjectContext,
+  type ProjectContextFile,
+} from "./project-context.js";
 import {
   openPinnedRepositorySnapshot,
   type PinnedRepositorySnapshot,
@@ -38,40 +43,54 @@ const MAX_DIFF_LINES = 800;
 const MAX_SEARCH_MATCHES = 200;
 const MAX_TOOL_CHARACTERS = 80_000;
 const SESSION_ABORT_TIMEOUT = "1 second";
-const PROJECT_CONTEXT_FILE_NAMES = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
 
-interface ProjectContextFile {
-  readonly path: string;
-  readonly content: string;
+export interface PiSessionPreparation {
+  readonly snapshot: PinnedRepositorySnapshot;
+  readonly projectContext: PinnedProjectContext;
+  readonly searchConfiguration: string;
 }
+
+export const preparePiSession = Effect.fn("preparePiSession")(function* (
+  request: AuthoringRequest,
+  snapshotCacheRoot: string,
+) {
+  const changed = new Set(request.files.map((file) => file.path));
+  const snapshot = yield* openPinnedRepositorySnapshot({
+    cacheRoot: snapshotCacheRoot,
+    repositoryRoot: request.root,
+    pin: request.pin,
+  });
+  const prepared = yield* Effect.all(
+    {
+      projectContext: loadPinnedProjectContext(
+        {
+          pin: request.pin,
+          changedPaths: changed,
+          headInstructionPolicy: request.headInstructionPolicy,
+        },
+        snapshot,
+      ),
+      searchConfiguration: writeSearchConfiguration(snapshotCacheRoot),
+    },
+    { concurrency: "unbounded" },
+  );
+  return { snapshot, ...prepared } satisfies PiSessionPreparation;
+});
 
 export async function createPiSession(
   pi: PiSessionDependencies,
   model: Model<string>,
   request: AuthoringRequest,
   runSessionEffect: RunSessionEffect,
-  snapshotCacheRoot: string,
+  preparation: PiSessionPreparation,
 ) {
   let draft: unknown;
   let diffReads = 0;
   let searches = 0;
   let sourceReads = 0;
-  const snapshot = await runSessionEffect(
-    openPinnedRepositorySnapshot({
-      cacheRoot: snapshotCacheRoot,
-      repositoryRoot: request.root,
-      pin: request.pin,
-    }),
-  );
-  let sourcePathLoad: Promise<readonly string[]> | undefined;
-  const sourcePaths = (): Promise<readonly string[]> => {
-    if (sourcePathLoad === undefined) {
-      sourcePathLoad = runSessionEffect(snapshot.listFiles);
-    }
-    return sourcePathLoad;
-  };
   const changed = new Set(request.files.map((file) => file.path));
-  const projectContextFiles = await loadPinnedProjectContext(request, snapshot, sourcePaths);
+  const { snapshot, projectContext, searchConfiguration } = preparation;
+  for (const notice of projectContext.notices) request.progress(notice);
 
   const listChanges = pi.coding.defineTool({
     name: "list_pr_changes",
@@ -111,7 +130,9 @@ export async function createPiSession(
     }),
     execute: async (_id, params) => {
       const prefix = params.prefix?.replace(/^\.\//u, "") ?? "";
-      const matching = (await sourcePaths()).filter((path) => path.startsWith(prefix));
+      const matching = (await runSessionEffect(snapshot.listFiles)).filter((path) =>
+        path.startsWith(prefix),
+      );
       const offset = params.offset ?? 0;
       const limit = params.limit ?? MAX_TREE_FILES;
       const visible = matching.slice(offset, offset + limit);
@@ -124,7 +145,6 @@ export async function createPiSession(
   });
 
   const grep = pi.coding.createGrepToolDefinition(snapshot.root);
-  const searchConfiguration = await runSessionEffect(writeSearchConfiguration(snapshotCacheRoot));
   const searchSource = pi.coding.defineTool({
     name: "search_source",
     label: "Search pinned source",
@@ -220,7 +240,7 @@ export async function createPiSession(
       to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
     }),
     execute: async (_id, params) => {
-      if (!(await sourcePaths()).includes(params.path)) {
+      if (!(await runSessionEffect(snapshot.listFiles)).includes(params.path)) {
         throw new Error(`${params.path} does not exist at ${request.pin}.`);
       }
       if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
@@ -297,7 +317,7 @@ export async function createPiSession(
     resourceLoader: minimalResourceLoader(
       pi.coding,
       authoringSystemPrompt(request.preset),
-      projectContextFiles,
+      projectContext.files,
     ),
     tools: [
       "list_pr_changes",
@@ -504,43 +524,6 @@ function minimalResourceLoader(
   };
 }
 
-async function loadPinnedProjectContext(
-  request: AuthoringRequest,
-  snapshot: PinnedRepositorySnapshot,
-  sourcePaths: () => Promise<readonly string[]>,
-): Promise<readonly ProjectContextFile[]> {
-  const available = new Set(await sourcePaths());
-  const directories = new Set([""]);
-  for (const file of request.files) {
-    const parts = file.path.split("/");
-    parts.pop();
-    let directory = "";
-    for (const part of parts) {
-      directory = directory === "" ? part : `${directory}/${part}`;
-      directories.add(directory);
-    }
-  }
-  const orderedDirectories = [...directories].sort((left, right) => {
-    const depth = pathDepth(left) - pathDepth(right);
-    return depth === 0 ? left.localeCompare(right) : depth;
-  });
-  const paths = orderedDirectories.flatMap((directory) => {
-    const prefix = directory === "" ? "" : `${directory}/`;
-    const selected = PROJECT_CONTEXT_FILE_NAMES.find((name) => available.has(`${prefix}${name}`));
-    return selected === undefined ? [] : [`${prefix}${selected}`];
-  });
-  return Promise.all(
-    paths.map(async (path) => ({
-      path: `${request.pin}:${path}`,
-      content: await Effect.runPromise(snapshot.readFile(path)),
-    })),
-  );
-}
-
-function pathDepth(path: string): number {
-  return path === "" ? 0 : path.split("/").length;
-}
-
 function limitCharacters(value: string): string {
   return value.length <= MAX_TOOL_CHARACTERS
     ? value
@@ -573,7 +556,9 @@ const writeSearchConfiguration = Effect.fn("writeSearchConfiguration")(function*
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = path.join(cacheRoot, "ripgrep.conf");
-  yield* fs.writeFileString(file, "--no-ignore\n--no-follow\n");
+  yield* fs
+    .writeFileString(file, "--no-ignore\n--no-follow\n")
+    .pipe(Effect.mapError((cause) => new AuthorSearchConfigurationFailed({ file, cause })));
   return file;
 });
 

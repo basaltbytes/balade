@@ -69,6 +69,10 @@ const verbose = Flag.boolean("verbose").pipe(
   Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
 );
 
+const trustHeadInstructions = Flag.boolean("trust-head-instructions").pipe(
+  Flag.withDescription("Apply AGENTS.md or CLAUDE.md files changed by the pull request"),
+);
+
 const noOpen = Flag.boolean("no-open").pipe(
   Flag.withDescription("Generate only: print the path and open hint without starting a server"),
 );
@@ -84,7 +88,19 @@ const port = Flag.integer("port").pipe(
 
 export const generateCommand = Command.make(
   "generate",
-  { pr: target, provider, model, preset, lang, directory, verbose, noOpen, noBrowser, port },
+  {
+    pr: target,
+    provider,
+    model,
+    preset,
+    lang,
+    directory,
+    verbose,
+    trustHeadInstructions,
+    noOpen,
+    noBrowser,
+    port,
+  },
   (config) =>
     Effect.gen(function* () {
       const pull = parsePrTarget(config.pr);
@@ -117,6 +133,7 @@ export const generateCommand = Command.make(
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         directory: config.directory,
+        headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
       });
@@ -331,6 +348,9 @@ export function makeGenerationProgress(
   const announced = new Set<string>();
   return (event) => {
     switch (event._tag) {
+      case "AuthorNotice":
+        write(`warning ${event.code}\n  ${event.message}\n  fix ${event.hint}\n`);
+        break;
       case "AuthorUsageUpdated": {
         turn++;
         const usage = event.usage;
