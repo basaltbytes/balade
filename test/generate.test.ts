@@ -180,6 +180,8 @@ describe("the Pi adapter", () => {
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
+      repo.write(".env", "DATABASE_URL=postgres://reviewer-secret\n");
+      const pin = repo.commit("test: add a credential read fixture at the pin");
       repo.write("models/planning_pool_item.py", "working tree content only\n");
       let secondRequest = "";
       const progress: AuthorProgress[] = [];
@@ -192,6 +194,7 @@ describe("the Pi adapter", () => {
               from: 1,
               to: 3,
             }),
+            ai.fauxToolCall("read_source", { path: ".env", from: 1, to: 1 }),
           ],
           { stopReason: "toolUse" },
         ),
@@ -205,7 +208,7 @@ describe("the Pi adapter", () => {
         const author = yield* WalkthroughAuthor;
         const model = yield* fauxModel();
         const session = yield* author.start(
-          authorRequest(repo.dir, repo.pin, model, (event) => progress.push(event), "verbose"),
+          authorRequest(repo.dir, pin, model, (event) => progress.push(event), "verbose"),
         );
         return session.initial;
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
@@ -214,6 +217,8 @@ describe("the Pi adapter", () => {
       expect(turn.usage.total).toBeGreaterThan(0);
       expect(secondRequest).toContain(PINNED_LINE);
       expect(secondRequest).not.toContain("working tree content only");
+      expect(secondRequest).toContain(".env is not a contained repo-relative path");
+      expect(secondRequest).not.toContain("reviewer-secret");
       expect(secondRequest).toContain("submit_walkthrough");
       expect(secondRequest).not.toContain('"bash"');
       expect(secondRequest).not.toContain('"write_file"');
@@ -243,6 +248,17 @@ describe("the Pi adapter", () => {
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
+      const pinnedSource = readFileSync(join(repo.dir, "models/planning_pool_item.py"), "utf8");
+      const baseSource = execFileSync(
+        "git",
+        ["show", `${repo.pin}^:models/planning_pool_item.py`],
+        { cwd: repo.dir, encoding: "utf8" },
+      );
+      repo.write(".env", "DATABASE_URL=postgres://base-secret\n");
+      repo.write("models/planning_pool_item.py", baseSource);
+      repo.commit("test: add a credential read fixture at the base");
+      repo.write("models/planning_pool_item.py", pinnedSource);
+      const pin = repo.commit("test: create a pin above the credential fixture");
       repo.write("models/planning_slot.py", "dirty working tree only\n");
       let searchContext = "";
       let baseContext = "";
@@ -257,11 +273,14 @@ describe("the Pi adapter", () => {
         (context) => {
           searchContext = JSON.stringify({ messages: context.messages, tools: context.tools });
           return ai.fauxAssistantMessage(
-            ai.fauxToolCall("read_base_source", {
-              path: "models/planning_pool_item.py",
-              from: 1,
-              to: 4,
-            }),
+            [
+              ai.fauxToolCall("read_base_source", {
+                path: "models/planning_pool_item.py",
+                from: 1,
+                to: 4,
+              }),
+              ai.fauxToolCall("read_base_source", { path: ".env", from: 1, to: 1 }),
+            ],
             { stopReason: "toolUse" },
           );
         },
@@ -274,7 +293,7 @@ describe("the Pi adapter", () => {
       yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         const model = yield* fauxModel();
-        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+        yield* author.start(authorRequest(repo.dir, pin, model));
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
 
       expect(searchContext).toContain("models/planning_allocation.py");
@@ -288,6 +307,8 @@ describe("the Pi adapter", () => {
       expect(searchContext).not.toContain('"name":"grep"');
       expect(baseContext).toContain("from odoo import fields, models");
       expect(baseContext).not.toContain("from odoo import api, fields, models");
+      expect(baseContext).toContain(".env is not a contained repo-relative path");
+      expect(baseContext).not.toContain("base-secret");
     }),
   );
 
@@ -371,7 +392,7 @@ describe("the Pi adapter", () => {
     }),
   );
 
-  it.effect("ignores a user ripgrep configuration and keeps search inside the snapshot", () =>
+  it.effect("keeps concurrent searches on the balade ripgrep configuration", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
@@ -398,7 +419,18 @@ describe("the Pi adapter", () => {
       let searchContext = "";
       harness.faux.setResponses([
         ai.fauxAssistantMessage(
-          ai.fauxToolCall("search_source", { query: "planning.slot", mode: "fixed" }),
+          [
+            ai.fauxToolCall("search_source", {
+              query: "planning.slot",
+              mode: "fixed",
+              path: "models/planning_slot.py",
+            }),
+            ai.fauxToolCall("search_source", {
+              query: "planning.pool.item",
+              mode: "fixed",
+              path: "models/planning_pool_item.py",
+            }),
+          ],
           { stopReason: "toolUse" },
         ),
         (context) => {
@@ -414,9 +446,10 @@ describe("the Pi adapter", () => {
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
 
       expect(searchContext).toContain("models/planning_slot.py");
+      expect(searchContext).toContain("models/planning_pool_item.py");
       expect(searchContext).not.toContain("LEAKED_OUTSIDE");
       expect(searchContext).not.toContain("leak_link.py");
-      expect(process.env.RIPGREP_CONFIG_PATH).toBe(userConfiguration);
+      expect(process.env.RIPGREP_CONFIG_PATH).toBe(join(harness.snapshotCacheRoot, "ripgrep.conf"));
     }),
   );
 
