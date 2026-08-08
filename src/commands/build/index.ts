@@ -3,7 +3,7 @@
 import { Effect, Match, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { printSoft, size, stopMessage, stopReports, writeStdout } from "../../terminal.js";
-import { buildErrorMessage, runBuild } from "./pipeline.js";
+import { buildErrorMessage, exportContentsMessage, runBuild } from "./pipeline.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
   Flag.withDescription("Chrome language; overrides meta.lang"),
@@ -42,10 +42,11 @@ export const buildCommand = Command.make(
       );
       if (Option.isNone(result)) return;
       return yield* Match.valueTags(result.value, {
-        Built: ({ reports, file, bytes }) =>
+        Built: ({ reports, file, bytes, changedFiles }) =>
           Effect.sync(() => {
             printSoft(reports);
             writeStdout(`balade wrote ${file} (${size(bytes)})\n`);
+            writeStdout(`${exportContentsMessage(changedFiles)}\n`);
           }),
         BuildNotRun: ({ message }) => Effect.sync(() => stopMessage(message)),
         BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),

@@ -327,19 +327,42 @@ grammars, or a payload-driven grammar subset — the language ids are known at
 compile time, so `build` could bake only the ones a walkthrough uses, at the
 cost of a per-walkthrough bundling step the CLI does not otherwise need.
 
+## Export and served pages declare separate content-security policies
+
+Decided on [#67](https://github.com/basaltbytes/balade/issues/67). The static
+export puts a CSP meta element before either inline script. It sets
+`default-src 'none'`, admits only inline script and style, permits data images,
+and forbids programmatic connections, frames, form actions and base URLs. The
+inline script permission is explicit because an omitted `script-src` would inherit
+`default-src 'none'` and stop the app from rendering.
+
+The served Vite page owns a different meta policy: scripts and styles may load
+from its origin, inline styles remain available to the renderer, and
+`connect-src 'self'` admits the `/api/*` requests. The policies stay at their
+two HTML generation boundaries rather than sharing a constant, so a future
+network need in served mode cannot silently weaken exports. `frame-ancestors`
+is absent because browsers ignore it in a meta policy; the real response header
+belongs to the server hardening in #63.
+
+An export still embeds the complete old and new contents of every changed file.
+`build` reports that file count and the README inventories the source and
+metadata before users share the HTML. Export review state stays resumable in
+`localStorage`; the README also records the `file://` partition exposure and
+the dedicated-origin option instead of weakening persistence.
+
 ## The inlined bundle is escaped, the baked payload is JSON-escaped
 
 Both scripts in the export sit in HTML script data, where `</script` ends the
 element and `<!--` opens an escaped state in which a later `<script>` makes the
 closing tag stop closing. The payload is data: every `<` leaves as `\u003c`,
 which is a JSON escape, so no walkthrough can end its own payload — prose about
-HTML included. The bundle is code and cannot be re-encoded, so `src/commands/build/html.ts`
-inserts a backslash the JavaScript grammar ignores: `<\/script` and `<\!--`.
-Both sequences can only occur inside a string, a template or a comment (an
-unescaped `/` would close a regular expression literal), and `\!` under a `/u`
-flag is a syntax error rather than a silent change of meaning. Today's bundle
-holds eleven `<!--` and four `<script`, in grammar data and in react-dom, so
-this is load-bearing, not defensive. Base64 in a `data:` URI would need no
+HTML included. The bundle is code and cannot be re-encoded, so
+`src/commands/build/html.ts` uses escapes the JavaScript grammar preserves:
+`<\/script` and `\x3c!--`. The hex escape also works inside Unicode regular
+expressions and inside strings that are later compiled as regular expressions;
+the older `<\!--` spelling made both forms invalid under the `/u` flag. Today's
+bundle holds eleven `<!--` and four `<script`, in grammar data and in react-dom,
+so this is load-bearing, not defensive. Base64 in a `data:` URI would need no
 escaping and would cost a third of the file size.
 
 ## The two `as` casts in `diff-highlighter.ts` are type-level, not data

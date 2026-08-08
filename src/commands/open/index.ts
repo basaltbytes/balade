@@ -35,7 +35,7 @@ const locateSelection = Effect.fn("locateSelection")(function* (target: PrTarget
   const locator = yield* PrLocator;
   return yield* locator
     .locate(process.cwd(), target)
-    .pipe(Effect.map((located): Selection => ({ kind: "located", ...located })));
+    .pipe(Effect.map((located): Selection => ({ kind: "located", pr: target.number, ...located })));
 });
 
 export const openCommand = Command.make(

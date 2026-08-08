@@ -19,6 +19,7 @@ export function exportHtml(payload: Payload, assets: ExportAssets): string {
     "<head>",
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'\">",
     `<title>${escapeText(payload.title)}</title>`,
     `<style>${styleText(assets.css)}</style>`,
     "</head>",
@@ -49,16 +50,16 @@ function bake(value: unknown): string {
 
 /**
  * Code cannot be escaped the way data can, so the two sequences that end or
- * derail script data take a backslash the JavaScript grammar ignores:
+ * derail script data use escapes that preserve their JavaScript values:
  *
  * - `</script` can only sit inside a string, a template or a comment — a bare
  *   `/` would close a regular expression literal — and `\/` is `/` in all three.
  * - `<!--` opens the tokenizer's escaped state, where a later `<script>` makes
- *   the closing tag stop closing. `\!` is `!` in a string and in a regular
- *   expression; under a `/u` flag it is a syntax error, never a silent change.
+ *   the closing tag stop closing. `\x3c` is `<` in strings, templates and
+ *   regular expressions, including expressions with the `/u` flag.
  */
 function scriptText(js: string): string {
-  return js.replaceAll(/<\/script/gi, "<\\/script").replaceAll("<!--", "<\\!--");
+  return js.replaceAll(/<\/script/gi, "<\\/script").replaceAll("<!--", "\\x3c!--");
 }
 
 /** `<style>` is raw text: only its own end tag closes it. */

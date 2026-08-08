@@ -34,7 +34,7 @@ import { ServerRepo, type ServerRepoError } from "./repo.js";
 export type Selection =
   | { kind: "files"; paths: readonly string[] }
   | { kind: "discovered" }
-  | { kind: "located"; root: string; paths: readonly string[]; at?: string };
+  | { kind: "located"; root: string; paths: readonly string[]; pr: number; at?: string };
 
 export interface SessionOptions {
   cwd: string;

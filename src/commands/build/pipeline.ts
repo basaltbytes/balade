@@ -37,6 +37,7 @@ export interface Built {
   readonly _tag: "Built";
   readonly file: string;
   readonly bytes: number;
+  readonly changedFiles: number;
   readonly reports: readonly CheckReport[];
 }
 
@@ -115,9 +116,17 @@ export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) 
     _tag: "Built",
     file,
     bytes: Buffer.byteLength(html),
+    changedFiles: loaded.payload.files.length,
     reports: [report],
   } satisfies Built;
 });
+
+export function exportContentsMessage(changedFiles: number): string {
+  return (
+    `contains the full contents of all ${changedFiles} changed ` +
+    `${changedFiles === 1 ? "file" : "files"} at both revisions`
+  );
+}
 
 /** Zero arguments list what discovery found (#21): the index is served-mode
     only, so `build` never picks for the author. */

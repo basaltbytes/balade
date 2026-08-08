@@ -6,9 +6,14 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runInNewContext } from "node:vm";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
-import { runBuild as runBuildEffect, type BuildOptions } from "../src/commands/build/pipeline.js";
+import {
+  exportContentsMessage,
+  runBuild as runBuildEffect,
+  type BuildOptions,
+} from "../src/commands/build/pipeline.js";
 import type { Payload } from "../src/contract/types.js";
 import { provideLive } from "./support/effect.js";
 import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
@@ -21,7 +26,7 @@ const runBuild = (options: BuildOptions) => provideLive(runBuildEffect(options))
  * parser stop honouring the closing tag.
  */
 const STUB_JS = `const marks = { end: "</script>", comment: "<!--", open: "<script>" };
-window.__BALADE_STUB__ = marks;
+window.__BALADE_STUB__ = { marks, regexMatches: /<!--/imu.test(marks.comment) };
 `;
 
 function stubBundle(): string {
@@ -39,6 +44,13 @@ function bakedPayload(html: string): Payload {
   expect(start).toBeGreaterThan(-1);
   const from = start + BAKE.length;
   return JSON.parse(html.slice(from, html.indexOf("</script>", from))) as Payload;
+}
+
+function inlinedBundle(html: string): string {
+  const open = '<script type="module">';
+  const from = html.indexOf(open) + open.length;
+  expect(from).toBeGreaterThan(open.length - 1);
+  return html.slice(from, html.indexOf("</script>", from));
 }
 
 describe("build", () => {
@@ -79,6 +91,8 @@ describe("build", () => {
 
       const html = readFileSync(result.file, "utf8");
       const payload = bakedPayload(html);
+      expect(result.changedFiles).toBe(payload.files.length);
+      expect(result.changedFiles).toBeGreaterThan(0);
       expect(payload.walkthrough).toBe(1);
       expect(payload.title).toBe("Add live planning pool items");
       expect(payload.sourcePath).toBe("walkthroughs/valid.md");
@@ -87,6 +101,34 @@ describe("build", () => {
       expect(payload.storageKey).toContain("walkthroughs/valid.md");
     }),
   );
+
+  it.effect("declares the export CSP before either inline script", () =>
+    Effect.gen(function* () {
+      const result = yield* build(["walkthroughs/valid.md"]);
+      if (result._tag !== "Built") throw new Error(`build refused: ${JSON.stringify(result)}`);
+      const html = readFileSync(result.file, "utf8");
+      const policy =
+        "default-src 'none'; img-src data:; script-src 'unsafe-inline'; " +
+        "style-src 'unsafe-inline'; connect-src 'none'; frame-src 'none'; " +
+        "form-action 'none'; base-uri 'none'";
+      const policyAt = html.indexOf(
+        `<meta http-equiv="Content-Security-Policy" content="${policy}">`,
+      );
+
+      expect(policyAt).toBeGreaterThan(-1);
+      expect(policyAt).toBeLessThan(html.indexOf(BAKE));
+      expect(policyAt).toBeLessThan(html.indexOf('<script type="module">'));
+    }),
+  );
+
+  it("states how many changed files the export discloses", () => {
+    expect(exportContentsMessage(1)).toBe(
+      "contains the full contents of all 1 changed file at both revisions",
+    );
+    expect(exportContentsMessage(12)).toBe(
+      "contains the full contents of all 12 changed files at both revisions",
+    );
+  });
 
   it.effect("names no file but itself", () =>
     Effect.gen(function* () {
@@ -155,7 +197,10 @@ describe("build", () => {
       expect(html.match(/<\/script/g)).toHaveLength(2);
       expect(html).not.toContain("<!--");
       expect(html).toContain('"<\\/script>"');
-      expect(html).toContain('"<\\!--"');
+      expect(html).toContain('"\\x3c!--"');
+      expect(runInNewContext(inlinedBundle(html), { window: {} })).toMatchObject({
+        regexMatches: true,
+      });
       /* The title is HTML text, not script data. */
       expect(html).toContain("<title>Close the &lt;/script&gt; hole</title>");
     }),

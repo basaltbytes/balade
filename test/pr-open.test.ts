@@ -174,7 +174,7 @@ describe("a served PR without a checkout", () => {
       const prepared = yield* provideLive(
         prepareSession({
           cwd: clone.dir,
-          selection: { kind: "located", ...located },
+          selection: { kind: "located", pr: 42, ...located },
           useGh: false,
         }),
       );
