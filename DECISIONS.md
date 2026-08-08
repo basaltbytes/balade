@@ -801,3 +801,16 @@ changeset stdout. Two version lines stay out of changesets' hands by design:
 policy and must never be wired in. What would move this: npm dropping
 per-workflow trusted-publisher pinning, or the repository adopting a bot
 identity whose pushes may trigger workflows.
+
+## CI installs ripgrep itself and forbids Pi's download fallback
+
+Decided on [#82](https://github.com/basaltbytes/balade/issues/82). Pi resolves
+`rg` by checking `PATH` and otherwise downloading it, resolving the version
+through an unauthenticated `api.github.com` call — which shared runner IPs
+rate-limit unpredictably, so ubuntu test jobs failed by lottery. `ci.yml` now
+installs ripgrep from each OS package manager (apt/brew/choco) and runs
+`pnpm test` with `PI_OFFLINE=1`, so search never reaches the fallback and a
+missing binary fails deterministically with Pi's own unavailable error rather
+than by network luck. The offline switch is safe because balade instantiates
+only Pi's grep tool (`src/pi/session.ts`); nothing needs `fd`. What would move
+this: Pi authenticating its tool downloads, or runner images shipping ripgrep.
