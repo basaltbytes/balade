@@ -435,8 +435,13 @@ account, authentication and global settings, while `pi/session.ts` owns the
 scoped authoring session, its read-only tool policy and provider-event
 forwarding. `pi/project-context.ts` owns repository-instruction selection and
 the system-prompt trust boundary. Project-context loading composes the pinned
-snapshot's typed effects directly. The immutable snapshot memoizes its
-source-file listing as an Effect and shares it with Pi's Promise-based tool
+snapshot's typed effects directly. Session preparation stays inside the
+`WalkthroughAuthor.start` Effect, preserving snapshot and project-context
+failures as typed errors and translating search-configuration failures at the
+filesystem boundary. Only calls into Pi's Promise-based SDK cross through
+`Effect.tryPromise`; unknown SDK exceptions become `AuthorSessionStartFailed`.
+The immutable snapshot memoizes
+its source-file listing as an Effect and shares it with Pi's Promise-based tool
 callbacks, where the runtime boundary belongs.
 This keeps preference durability independent from the security-sensitive tool
 sandbox and session lifecycle.

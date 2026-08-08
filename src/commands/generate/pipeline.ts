@@ -10,7 +10,6 @@ import type { Lang, CheckReport } from "../../contract/types.js";
 import type { PullHeadError, PullSnapshot } from "../../git/pr.js";
 import { escapesRoot } from "../../contract/paths.js";
 import {
-  AuthorSessionStartFailed,
   DraftMalformed,
   ProviderRequestFailed,
   WalkthroughAuthor,
@@ -18,6 +17,7 @@ import {
   type AuthorModel,
   type AuthorProgress,
   type AuthorProgressMode,
+  type AuthorStartupError,
   type AuthorUsage,
   type AuthoringPreset,
   type HeadInstructionPolicy,
@@ -82,7 +82,7 @@ export type GenerationResult = Generated | GeneratedWithDiagnostics;
 
 export type GenerateError =
   | PullHeadError
-  | AuthorSessionStartFailed
+  | AuthorStartupError
   | ProviderRequestFailed
   | DraftMalformed
   | OutputOutsideRepository
@@ -308,8 +308,20 @@ export function generateErrorMessage(error: GenerateError): string {
     case "NotARepository":
     case "CommandFailed":
       return discoveryErrorMessage(error);
+    case "AuthorRuntimeLoadFailed":
+      return "Could not load the authoring runtime. Check the balade installation and authoring-state permissions, then retry.";
+    case "AuthorModelUnavailable":
+      return `${error.provider}/${error.model} is no longer available. Select an available model and try again.`;
+    case "SnapshotOpenFailed":
+      return `Could not prepare pinned source ${error.pin} from ${error.repositoryRoot}. Check repository and snapshot-cache permissions, then retry.`;
+    case "SnapshotReadFailed":
+      return `Could not read ${error.path} from the pinned source. Verify the repository state and retry.`;
+    case "SnapshotPathRejected":
+      return `Refused pinned source path ${error.path}: ${error.reason}`;
+    case "AuthorSearchConfigurationFailed":
+      return `Could not configure pinned-source search at ${error.file}. Check snapshot-cache permissions, then retry.`;
     case "AuthorSessionStartFailed":
-      return `Could not start ${error.provider}/${error.model}. Refresh authentication and try again.`;
+      return `Could not start ${error.provider}/${error.model}. Check provider setup and authentication, then retry.`;
     case "ProviderRequestFailed":
       return `${error.provider}/${error.model} stopped while drafting: ${error.detail}`;
     case "DraftMalformed":

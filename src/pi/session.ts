@@ -11,11 +11,19 @@ import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { Effect, FileSystem, Option, Path, Result } from "effect";
 import { CommandExecutor, gitOut } from "../shell.js";
-import type { AuthoringRequest } from "./author.js";
+import { AuthorSearchConfigurationFailed, type AuthoringRequest } from "./author.js";
 import { AUTHORING_LIMITS } from "../authoring/package.js";
 import { authoringSystemPrompt } from "./authoring.js";
-import { loadPinnedProjectContext, type ProjectContextFile } from "./project-context.js";
-import { openPinnedRepositorySnapshot, type ResolvedSnapshotPath } from "./snapshot.js";
+import {
+  loadPinnedProjectContext,
+  type PinnedProjectContext,
+  type ProjectContextFile,
+} from "./project-context.js";
+import {
+  openPinnedRepositorySnapshot,
+  type PinnedRepositorySnapshot,
+  type ResolvedSnapshotPath,
+} from "./snapshot.js";
 
 export type CodingAgentSdk = typeof import("@earendil-works/pi-coding-agent");
 export type AiSdk = typeof import("@earendil-works/pi-ai");
@@ -35,42 +43,53 @@ const MAX_DIFF_LINES = 800;
 const MAX_SEARCH_MATCHES = 200;
 const MAX_TOOL_CHARACTERS = 80_000;
 const SESSION_ABORT_TIMEOUT = "1 second";
+
+export interface PiSessionPreparation {
+  readonly snapshot: PinnedRepositorySnapshot;
+  readonly projectContext: PinnedProjectContext;
+  readonly searchConfiguration: string;
+}
+
+export const preparePiSession = Effect.fn("preparePiSession")(function* (
+  request: AuthoringRequest,
+  snapshotCacheRoot: string,
+) {
+  const changed = new Set(request.files.map((file) => file.path));
+  const snapshot = yield* openPinnedRepositorySnapshot({
+    cacheRoot: snapshotCacheRoot,
+    repositoryRoot: request.root,
+    pin: request.pin,
+  });
+  const prepared = yield* Effect.all(
+    {
+      projectContext: loadPinnedProjectContext(
+        {
+          pin: request.pin,
+          changedPaths: changed,
+          headInstructionPolicy: request.headInstructionPolicy,
+        },
+        snapshot,
+      ),
+      searchConfiguration: writeSearchConfiguration(snapshotCacheRoot),
+    },
+    { concurrency: "unbounded" },
+  );
+  return { snapshot, ...prepared } satisfies PiSessionPreparation;
+});
+
 export async function createPiSession(
   pi: PiSessionDependencies,
   model: Model<string>,
   request: AuthoringRequest,
   runSessionEffect: RunSessionEffect,
-  snapshotCacheRoot: string,
+  preparation: PiSessionPreparation,
 ) {
   let draft: unknown;
   let diffReads = 0;
   let searches = 0;
   let sourceReads = 0;
   const changed = new Set(request.files.map((file) => file.path));
-  const { snapshot, projectContext, searchConfiguration } = await runSessionEffect(
-    Effect.gen(function* () {
-      const snapshot = yield* openPinnedRepositorySnapshot({
-        cacheRoot: snapshotCacheRoot,
-        repositoryRoot: request.root,
-        pin: request.pin,
-      });
-      const prepared = yield* Effect.all(
-        {
-          projectContext: loadPinnedProjectContext(
-            {
-              pin: request.pin,
-              changedPaths: changed,
-              headInstructionPolicy: request.headInstructionPolicy,
-            },
-            snapshot,
-          ),
-          searchConfiguration: writeSearchConfiguration(snapshotCacheRoot),
-        },
-        { concurrency: "unbounded" },
-      );
-      return { snapshot, ...prepared };
-    }).pipe(Effect.withSpan("PiSession.prepare")),
-  );
+  const { snapshot, projectContext, searchConfiguration } = preparation;
   for (const notice of projectContext.notices) request.progress(notice);
 
   const listChanges = pi.coding.defineTool({
@@ -537,7 +556,9 @@ const writeSearchConfiguration = Effect.fn("writeSearchConfiguration")(function*
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = path.join(cacheRoot, "ripgrep.conf");
-  yield* fs.writeFileString(file, "--no-ignore\n--no-follow\n");
+  yield* fs
+    .writeFileString(file, "--no-ignore\n--no-follow\n")
+    .pipe(Effect.mapError((cause) => new AuthorSearchConfigurationFailed({ file, cause })));
   return file;
 });
 

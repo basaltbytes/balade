@@ -1,11 +1,26 @@
 /** Pure output policy at the interactive generation command boundary. */
 
 import { describe, expect, it } from "@effect/vitest";
+import { Schema } from "effect";
 import {
   generationSummaryText,
   generationSuccessText,
   makeGenerationProgress,
 } from "../src/commands/generate/index.js";
+import { generateErrorMessage } from "../src/commands/generate/pipeline.js";
+import {
+  AuthorModelId,
+  AuthorModelUnavailable,
+  AuthorProviderId,
+  AuthorRuntimeLoadFailed,
+  AuthorSearchConfigurationFailed,
+  AuthorSessionStartFailed,
+} from "../src/pi/author.js";
+import {
+  SnapshotOpenFailed,
+  SnapshotPathRejected,
+  SnapshotReadFailed,
+} from "../src/pi/snapshot.js";
 import { sanitizeTerminalText } from "../src/terminal.js";
 
 describe("generation command output", () => {
@@ -101,6 +116,56 @@ describe("generation command output", () => {
       '[read_source] {"path":"src/example.ts","from":1,"to":2}\n',
       "1 | export const value = 1;\n",
       "[/read_source]\n",
+    ]);
+  });
+
+  it("gives each startup failure an action-specific message", () => {
+    const provider = Schema.decodeUnknownSync(AuthorProviderId)("faux");
+    const model = Schema.decodeUnknownSync(AuthorModelId)("faux-model");
+
+    expect([
+      generateErrorMessage(new AuthorRuntimeLoadFailed({ cause: new Error("load") })),
+      generateErrorMessage(new AuthorModelUnavailable({ provider, model })),
+      generateErrorMessage(
+        new SnapshotOpenFailed({
+          repositoryRoot: "/repo",
+          pin: "abc123",
+          cause: new Error("snapshot"),
+        }),
+      ),
+      generateErrorMessage(
+        new SnapshotReadFailed({
+          path: "AGENTS.md",
+          cause: new Error("read"),
+        }),
+      ),
+      generateErrorMessage(
+        new SnapshotPathRejected({
+          path: "AGENTS.md",
+          reason: "The path escapes the pinned snapshot.",
+        }),
+      ),
+      generateErrorMessage(
+        new AuthorSearchConfigurationFailed({
+          file: "/cache/ripgrep.conf",
+          cause: new Error("write"),
+        }),
+      ),
+      generateErrorMessage(
+        new AuthorSessionStartFailed({
+          provider,
+          model,
+          cause: new Error("session"),
+        }),
+      ),
+    ]).toEqual([
+      "Could not load the authoring runtime. Check the balade installation and authoring-state permissions, then retry.",
+      "faux/faux-model is no longer available. Select an available model and try again.",
+      "Could not prepare pinned source abc123 from /repo. Check repository and snapshot-cache permissions, then retry.",
+      "Could not read AGENTS.md from the pinned source. Verify the repository state and retry.",
+      "Refused pinned source path AGENTS.md: The path escapes the pinned snapshot.",
+      "Could not configure pinned-source search at /cache/ripgrep.conf. Check snapshot-cache permissions, then retry.",
+      "Could not start faux/faux-model. Check provider setup and authentication, then retry.",
     ]);
   });
 });

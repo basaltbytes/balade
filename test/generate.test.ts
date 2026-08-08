@@ -60,7 +60,7 @@ async function piHarness(registerFaux = true, settingsManager = coding.SettingsM
     }),
     contextResolverLive,
   ).pipe(Layer.provideMerge(shellLayer));
-  return { credentials, faux, layer, modelRuntime, settingsManager };
+  return { credentials, faux, layer, modelRuntime, settingsManager, snapshotCacheRoot };
 }
 
 const harnessCleanups: Array<() => void> = [];
@@ -589,6 +589,50 @@ describe("the Pi adapter", () => {
           expect.objectContaining({ providerId: "openai", method: "api_key" }),
         ]),
       );
+    }),
+  );
+
+  it.effect("keeps an unavailable model as a typed startup failure", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => piHarness(false));
+      const unavailable = yield* Schema.decodeUnknownEffect(AuthorModelSchema)({
+        providerId: "missing-provider",
+        providerName: "Missing provider",
+        modelId: "missing-model",
+        modelName: "Missing model",
+      });
+
+      const error = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        return yield* Effect.flip(author.start(authorRequest(".", "invalid", unavailable)));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(error).toMatchObject({
+        _tag: "AuthorModelUnavailable",
+        provider: "missing-provider",
+        model: "missing-model",
+      });
+    }),
+  );
+
+  it.effect("keeps snapshot preparation failures in the typed Effect channel", () =>
+    Effect.gen(function* () {
+      const harness = yield* Effect.promise(() => piHarness());
+      const repo = yield* fixture;
+      rmSync(harness.snapshotCacheRoot, { recursive: true, force: true });
+      writeFileSync(harness.snapshotCacheRoot, "not a directory");
+
+      const error = yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        return yield* Effect.flip(author.start(authorRequest(repo.dir, repo.pin, model)));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(error).toMatchObject({
+        _tag: "SnapshotOpenFailed",
+        repositoryRoot: repo.dir,
+        pin: repo.pin,
+      });
     }),
   );
 

@@ -24,9 +24,11 @@ import {
   AuthorDraft,
   AuthorLoginMethod,
   AuthorModel,
+  AuthorModelUnavailable,
   AuthorModelPreference,
   AuthorPreferenceReadFailed,
   AuthorPreferenceWriteFailed,
+  AuthorRuntimeLoadFailed,
   AuthorSessionStartFailed,
   AuthorUsage,
   DraftMalformed,
@@ -43,7 +45,12 @@ import {
   type LoginSecretPrompt,
 } from "./author.js";
 import { initialAuthoringPrompt, repairAuthoringPrompt } from "./authoring.js";
-import { createPiSession, releasePiSession, type PiSessionDependencies } from "./session.js";
+import {
+  createPiSession,
+  preparePiSession,
+  releasePiSession,
+  type PiSessionDependencies,
+} from "./session.js";
 
 export interface PiAdapterDependencies extends PiSessionDependencies {
   readonly settingsManager: SettingsManager;
@@ -267,21 +274,23 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
       });
 
       const start = Effect.fn("WalkthroughAuthor.start")(function* (request: AuthoringRequest) {
+        const pi = yield* Effect.tryPromise({
+          try: dependencies,
+          catch: (cause) => new AuthorRuntimeLoadFailed({ cause }),
+        });
+        const model = pi.modelRuntime.getModel(request.model.providerId, request.model.modelId);
+        if (model === undefined) {
+          return yield* new AuthorModelUnavailable({
+            provider: request.model.providerId,
+            model: request.model.modelId,
+          });
+        }
+        const preparation = yield* preparePiSession(request, snapshotCacheRoot).pipe(
+          Effect.provide(sessionContext),
+        );
         const acquired = yield* Effect.acquireRelease(
           Effect.tryPromise({
-            try: async () => {
-              const pi = await dependencies();
-              const model = pi.modelRuntime.getModel(
-                request.model.providerId,
-                request.model.modelId,
-              );
-              if (model === undefined) {
-                throw new Error(
-                  `Model ${request.model.providerId}/${request.model.modelId} is no longer available.`,
-                );
-              }
-              return createPiSession(pi, model, request, runSessionEffect, snapshotCacheRoot);
-            },
+            try: () => createPiSession(pi, model, request, runSessionEffect, preparation),
             catch: (cause) =>
               new AuthorSessionStartFailed({
                 provider: request.model.providerId,

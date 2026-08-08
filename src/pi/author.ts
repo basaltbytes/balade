@@ -7,6 +7,7 @@
 import { Context, Effect, Option, Redacted, Schema, Scope } from "effect";
 import type { PullIntentClaims } from "../git/intent.js";
 import type { Lang } from "../contract/types.js";
+import type { SnapshotOpenFailed, SnapshotPathRejected, SnapshotReadFailed } from "./snapshot.js";
 
 export const AuthorProviderId = Schema.NonEmptyString.pipe(
   Schema.brand("@balade/AuthorProviderId"),
@@ -201,6 +202,27 @@ export class LoginCancelled extends Schema.TaggedErrorClass<LoginCancelled>()(
   {},
 ) {}
 
+export class AuthorRuntimeLoadFailed extends Schema.TaggedErrorClass<AuthorRuntimeLoadFailed>()(
+  "AuthorRuntimeLoadFailed",
+  { cause: Schema.Defect() },
+) {}
+
+export class AuthorModelUnavailable extends Schema.TaggedErrorClass<AuthorModelUnavailable>()(
+  "AuthorModelUnavailable",
+  {
+    provider: AuthorProviderId,
+    model: AuthorModelId,
+  },
+) {}
+
+export class AuthorSearchConfigurationFailed extends Schema.TaggedErrorClass<AuthorSearchConfigurationFailed>()(
+  "AuthorSearchConfigurationFailed",
+  {
+    file: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
 export class AuthorSessionStartFailed extends Schema.TaggedErrorClass<AuthorSessionStartFailed>()(
   "AuthorSessionStartFailed",
   {
@@ -223,6 +245,15 @@ export class DraftMalformed extends Schema.TaggedErrorClass<DraftMalformed>()("D
   detail: Schema.String,
 }) {}
 
+export type AuthorStartupError =
+  | AuthorRuntimeLoadFailed
+  | AuthorModelUnavailable
+  | SnapshotOpenFailed
+  | SnapshotReadFailed
+  | SnapshotPathRejected
+  | AuthorSearchConfigurationFailed
+  | AuthorSessionStartFailed;
+
 export type AuthorTurnError = ProviderRequestFailed | DraftMalformed;
 
 export interface AuthoringSession {
@@ -244,7 +275,7 @@ export interface WalkthroughAuthorShape {
   ) => Effect.Effect<void, LoginFailed | LoginCancelled>;
   readonly start: (
     request: AuthoringRequest,
-  ) => Effect.Effect<AuthoringSession, AuthorSessionStartFailed | AuthorTurnError, Scope.Scope>;
+  ) => Effect.Effect<AuthoringSession, AuthorStartupError | AuthorTurnError, Scope.Scope>;
 }
 
 export class WalkthroughAuthor extends Context.Service<WalkthroughAuthor, WalkthroughAuthorShape>()(
