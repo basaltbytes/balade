@@ -2,7 +2,7 @@
 
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { parseOpenTarget, type PrTarget } from "../../git/pr.js";
+import { parseOpenTarget } from "../../git/pr.js";
 import { locateErrorMessage, PrLocator } from "./locator.js";
 import { runReviewSession } from "../../server/review.js";
 import type { Selection } from "../../server/session.js";
@@ -30,14 +30,6 @@ const openTargets = Argument.variadic(
   ),
 );
 
-/** A PR target answers a located selection; the command boundary prints typed failures. */
-const locateSelection = Effect.fn("locateSelection")(function* (target: PrTarget) {
-  const locator = yield* PrLocator;
-  return yield* locator
-    .locate(process.cwd(), target)
-    .pipe(Effect.map((located): Selection => ({ kind: "located", pr: target.number, ...located })));
-});
-
 export const openCommand = Command.make(
   "open",
   { files: openTargets, lang: langFlag, port: portFlag, noBrowser: noBrowserFlag },
@@ -48,18 +40,21 @@ export const openCommand = Command.make(
         stopMessage(target.message);
         return;
       }
-      const selection =
-        target.kind === "pr"
-          ? yield* locateSelection(target.pr).pipe(
-              Effect.map(Option.some),
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  stopMessage(locateErrorMessage(error));
-                  return Option.none<Selection>();
-                }),
-              ),
-            )
-          : Option.some<Selection>(target);
+      let selection: Option.Option<Selection>;
+      if (target.kind === "pr") {
+        const locator = yield* PrLocator;
+        selection = yield* locator.locate(process.cwd(), target.pr).pipe(
+          Effect.map(Option.some),
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              stopMessage(locateErrorMessage(error));
+              return Option.none<Selection>();
+            }),
+          ),
+        );
+      } else {
+        selection = Option.some<Selection>(target);
+      }
       if (Option.isNone(selection)) return;
       return yield* runReviewSession({
         session: {

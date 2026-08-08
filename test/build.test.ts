@@ -91,8 +91,8 @@ describe("build", () => {
 
       const html = readFileSync(result.file, "utf8");
       const payload = bakedPayload(html);
-      expect(result.changedFiles).toBe(payload.files.length);
-      expect(result.changedFiles).toBeGreaterThan(0);
+      expect(result.changedFileCount).toBe(payload.files.length);
+      expect(result.changedFileCount).toBeGreaterThan(0);
       expect(payload.walkthrough).toBe(1);
       expect(payload.title).toBe("Add live planning pool items");
       expect(payload.sourcePath).toBe("walkthroughs/valid.md");

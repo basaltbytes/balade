@@ -262,6 +262,11 @@ reappear when the branch is eventually checked out. The locator is an Effect
 service (`src/commands/open/locator.ts`) with typed errors and captures the same filesystem,
 path and command services as the rest of the shell.
 
+The locator and review selection model working-tree and fetched-head sources as
+separate variants. A fetched-head selection therefore always carries both its
+PR number and commit; neither can appear as optional baggage on a working-tree
+selection.
+
 ## Resolution shells out through the `CommandExecutor` layer
 
 The live layer still uses `spawnSync`. One resolve costs 2576 ms across 25

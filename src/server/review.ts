@@ -108,9 +108,9 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
 );
 
 export const unreviewedPullNotice = (selection: Selection): Option.Option<string> =>
-  selection.kind === "located" && selection.at !== undefined
+  selection.kind === "pullHead"
     ? Option.some(
-        `Rendering walkthrough content from PR #${selection.pr}'s head commit ` +
+        `Rendering walkthrough content from PR #${selection.number}'s head commit ` +
           `${selection.at.slice(0, 7)} — content you have not reviewed.\n`,
       )
     : Option.none();

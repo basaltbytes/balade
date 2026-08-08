@@ -8,7 +8,7 @@ import { Effect, Option } from "effect";
 import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
+import { afterAll, assert, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { Payload } from "../src/contract/types.js";
 import { locateErrorMessage, PrLocator } from "../src/commands/open/locator.js";
 import { PULL_COMMIT_SUBJECT_LIMIT } from "../src/git/intent.js";
@@ -99,8 +99,8 @@ describe("the locator", () => {
   it.effect("finds the walkthrough in the working tree when the branch is checked out", () =>
     Effect.gen(function* () {
       const located = yield* locate(origin.dir, 42, null);
+      expect(located.kind).toBe("workingTree");
       expect(located.paths).toEqual(["walkthroughs/valid.md"]);
-      expect(located.at).toBeUndefined();
     }),
   );
 
@@ -122,6 +122,7 @@ describe("the locator", () => {
   it.effect("fetches pull/<n>/head when the working tree has nothing", () =>
     Effect.gen(function* () {
       const located = yield* locate(clone.dir, 42, null);
+      assert(located.kind === "pullHead", `expected a fetched pull head, got ${located.kind}`);
       /* Git and Node can spell the same path differently across platforms. */
       expect(realpathSync.native(located.root)).toBe(realpathSync.native(clone.dir));
       expect(located.paths).toEqual(["walkthroughs/valid.md"]);
@@ -171,10 +172,11 @@ describe("a served PR without a checkout", () => {
   it.effect("serves the walkthrough read at the fetched commit", () =>
     Effect.gen(function* () {
       const located = yield* locate(clone.dir, 42, null);
+      assert(located.kind === "pullHead", `expected a fetched pull head, got ${located.kind}`);
       const prepared = yield* provideLive(
         prepareSession({
           cwd: clone.dir,
-          selection: { kind: "located", pr: 42, ...located },
+          selection: located,
           useGh: false,
         }),
       );

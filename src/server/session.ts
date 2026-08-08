@@ -27,14 +27,18 @@ import { PayloadCache } from "./cache.js";
 import { ServerRepo, type ServerRepoError } from "./repo.js";
 
 /**
- * Where the served set comes from: the command line, discovery, or the PR
- * locator. A located selection already answers repo-relative paths; `at` is the
- * fetched commit the sources are read from when the branch is not checked out.
+ * Where the served set comes from: the command line, discovery, the working
+ * tree, or a fetched PR head. Located selections already answer repo-relative
+ * paths; only the pull-head variant carries remote-source facts.
  */
+export type LocatedSelection =
+  | { kind: "workingTree"; root: string; paths: readonly string[] }
+  | { kind: "pullHead"; root: string; paths: readonly string[]; number: number; at: string };
+
 export type Selection =
   | { kind: "files"; paths: readonly string[] }
   | { kind: "discovered" }
-  | { kind: "located"; root: string; paths: readonly string[]; pr: number; at?: string };
+  | LocatedSelection;
 
 export interface SessionOptions {
   cwd: string;
@@ -74,7 +78,7 @@ export interface SessionFailed {
 export type Prepared = SessionReady | SessionNotStarted | SessionFailed;
 
 type Selected =
-  | { readonly _tag: "SessionSelected"; root: string; paths: readonly string[]; at?: string }
+  | { readonly _tag: "SessionSelected"; selection: LocatedSelection }
   | SessionNotStarted;
 
 export type SessionError = DiscoveryError | LoadError | PathResolutionFailed | ServerRepoError;
@@ -98,14 +102,8 @@ export function sessionErrorMessage(error: SessionError): string {
 /** Named files are made repo-relative; discovery and the locator already answer in that shape. */
 const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
   const pathService = yield* Path.Path;
-  if (options.selection.kind === "located") {
-    const { root, paths, at } = options.selection;
-    return {
-      _tag: "SessionSelected",
-      root,
-      paths,
-      ...(at === undefined ? {} : { at }),
-    } satisfies Selected;
+  if (options.selection.kind === "workingTree" || options.selection.kind === "pullHead") {
+    return { _tag: "SessionSelected", selection: options.selection } satisfies Selected;
   }
 
   if (options.selection.kind === "discovered") {
@@ -114,7 +112,10 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
         (found): Selected =>
           found.paths.length === 0
             ? { _tag: "SessionNotStarted", message: NO_WALKTHROUGH }
-            : { _tag: "SessionSelected", root: found.repoRoot, paths: found.paths },
+            : {
+                _tag: "SessionSelected",
+                selection: { kind: "workingTree", root: found.repoRoot, paths: found.paths },
+              },
       ),
       Effect.catchTag("NotARepository", () =>
         Effect.succeed<Selected>({ _tag: "SessionNotStarted", message: NOT_A_REPO }),
@@ -140,7 +141,7 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
   return (
     paths.length === 0
       ? { _tag: "SessionNotStarted", message: NO_WALKTHROUGH }
-      : { _tag: "SessionSelected", root, paths }
+      : { _tag: "SessionSelected", selection: { kind: "workingTree", root, paths } }
   ) satisfies Selected;
 });
 
@@ -148,7 +149,8 @@ export const prepareSession = Effect.fn("prepareSession")(function* (options: Se
   const pathService = yield* Path.Path;
   const selected = yield* select(options);
   if (selected._tag === "SessionNotStarted") return selected;
-  const { root, paths, at } = selected;
+  const { root, paths } = selected.selection;
+  const at = selected.selection.kind === "pullHead" ? selected.selection.at : undefined;
 
   const repoLayer = ServerRepo.layer({
     root,

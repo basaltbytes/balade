@@ -50,12 +50,12 @@ it("keeps the served page on its own same-origin CSP", () => {
   expect(policyAt).toBeLessThan(html.indexOf('<script type="module"'));
 });
 
-it("warns only when a located selection is read from a fetched pull head", () => {
+it("warns only when a selection is read from a fetched pull head", () => {
   const remote = unreviewedPullNotice({
-    kind: "located",
+    kind: "pullHead",
     root: "/repo",
     paths: ["walkthroughs/review.md"],
-    pr: 67,
+    number: 67,
     at: "0123456789abcdef0123456789abcdef01234567",
   });
   expect(remote).toEqual(
@@ -66,10 +66,9 @@ it("warns only when a located selection is read from a fetched pull head", () =>
   );
   expect(
     unreviewedPullNotice({
-      kind: "located",
+      kind: "workingTree",
       root: "/repo",
       paths: ["walkthroughs/review.md"],
-      pr: 67,
     }),
   ).toEqual(Option.none());
   expect(unreviewedPullNotice({ kind: "files", paths: ["walkthroughs/review.md"] })).toEqual(

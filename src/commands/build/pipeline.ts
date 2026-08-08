@@ -37,7 +37,7 @@ export interface Built {
   readonly _tag: "Built";
   readonly file: string;
   readonly bytes: number;
-  readonly changedFiles: number;
+  readonly changedFileCount: number;
   readonly reports: readonly CheckReport[];
 }
 
@@ -116,15 +116,15 @@ export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) 
     _tag: "Built",
     file,
     bytes: Buffer.byteLength(html),
-    changedFiles: loaded.payload.files.length,
+    changedFileCount: loaded.payload.files.length,
     reports: [report],
   } satisfies Built;
 });
 
-export function exportContentsMessage(changedFiles: number): string {
+export function exportContentsMessage(changedFileCount: number): string {
   return (
-    `contains the full contents of all ${changedFiles} changed ` +
-    `${changedFiles === 1 ? "file" : "files"} at both revisions`
+    `contains the full contents of all ${changedFileCount} changed ` +
+    `${changedFileCount === 1 ? "file" : "files"} at both revisions`
   );
 }
 

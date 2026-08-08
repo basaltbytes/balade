@@ -42,11 +42,11 @@ export const buildCommand = Command.make(
       );
       if (Option.isNone(result)) return;
       return yield* Match.valueTags(result.value, {
-        Built: ({ reports, file, bytes, changedFiles }) =>
+        Built: ({ reports, file, bytes, changedFileCount }) =>
           Effect.sync(() => {
             printSoft(reports);
             writeStdout(`balade wrote ${file} (${size(bytes)})\n`);
-            writeStdout(`${exportContentsMessage(changedFiles)}\n`);
+            writeStdout(`${exportContentsMessage(changedFileCount)}\n`);
           }),
         BuildNotRun: ({ message }) => Effect.sync(() => stopMessage(message)),
         BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),

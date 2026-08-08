@@ -21,6 +21,7 @@ import {
   WrongRepository,
   type PrTarget,
 } from "../../git/pr.js";
+import type { LocatedSelection } from "../../server/session.js";
 
 export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughForPull>()(
   "NoWalkthroughForPull",
@@ -65,21 +66,15 @@ export function locateErrorMessage(error: LocateError): string {
   }
 }
 
-export interface Located {
-  /** Absolute repository root. */
-  root: string;
-  /** Repo-relative walkthrough paths naming the PR, sorted. */
-  paths: readonly string[];
-  /** The commit the sources are read at; absent when the working tree holds them. */
-  at?: string;
-}
-
 type LocatorDependencies = FileSystem.FileSystem | Path.Path | CommandExecutor;
 
 export class PrLocator extends Context.Service<
   PrLocator,
   {
-    readonly locate: (cwd: string, target: PrTarget) => Effect.Effect<Located, LocateError>;
+    readonly locate: (
+      cwd: string,
+      target: PrTarget,
+    ) => Effect.Effect<LocatedSelection, LocateError>;
   }
 >()("@balade/PrLocator") {
   static readonly layer = Layer.effect(
@@ -109,7 +104,9 @@ const locate = (cwd: string, target: PrTarget) =>
     const checkedOut = yield* naming(target.number, discovered.paths, (path) =>
       read(fs, pathService.join(root, path)),
     );
-    if (checkedOut.length > 0) return { root, paths: checkedOut };
+    if (checkedOut.length > 0) {
+      return { kind: "workingTree", root, paths: checkedOut } satisfies LocatedSelection;
+    }
 
     const at = yield* fetchPullHead(root, target.number);
 
@@ -118,7 +115,13 @@ const locate = (cwd: string, target: PrTarget) =>
       gitOut(["show", `${at}:${path}`], root),
     );
     if (held.length === 0) return yield* new NoWalkthroughForPull({ number: target.number });
-    return { root, paths: held, at };
+    return {
+      kind: "pullHead",
+      root,
+      paths: held,
+      number: target.number,
+      at,
+    } satisfies LocatedSelection;
   });
 
 /** The walkthroughs whose frontmatter names this PR number. */
