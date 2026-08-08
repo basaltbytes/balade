@@ -1,5 +1,12 @@
 # balade
 
+## 0.6.3
+
+### Patch Changes
+
+- 054d9fa: Disclose the source embedded in static exports, warn when a fetched PR head supplies unreviewed walkthrough content, and restrict export and served pages with content-security policies.
+- 52ee0a0: Keep pull-request changes to `AGENTS.md` and `CLAUDE.md` out of the authoring prompt unless `generate --trust-head-instructions` explicitly enables them, reject project-context closing tags, and report authoring startup failures with action-specific guidance.
+
 ## 0.6.2
 
 ### Patch Changes
