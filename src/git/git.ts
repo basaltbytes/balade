@@ -18,7 +18,7 @@ import { langOf } from "../contract/lang.js";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../contract/types.js";
 import { CommandExecutor, firstLine, gh, gitOut, gitToplevel } from "../shell.js";
 import { changedLines, splitDiff } from "./diff.js";
-import type { PullNotice, PullRequestClaimsSource } from "./intent.js";
+import type { PullLinkedIssueReference, PullNotice, PullRequestClaimsSource } from "./intent.js";
 
 export interface PullFile {
   readonly path: string;
@@ -409,7 +409,9 @@ export const readPullRequest = (root: string, number: number) =>
                 commits: response.commits.length,
                 title: response.title,
                 body: response.body,
-                linkedIssueUrls: response.closingIssuesReferences.map(({ url }) => url),
+                linkedIssues: response.closingIssuesReferences.map(({ url }) =>
+                  linkedIssueReference(response.url, url),
+                ),
               }),
               notices: [],
             }),
@@ -417,6 +419,39 @@ export const readPullRequest = (root: string, number: number) =>
         ),
     }),
   );
+
+interface RepositoryLocation {
+  readonly host: string;
+  readonly slug: string;
+}
+
+function repositoryLocation(value: string): RepositoryLocation | undefined {
+  const match = /^https?:\/\/([^/]+)\/([^/]+)\/([^/?#]+)(?:[/?#]|$)/iu.exec(value);
+  const host = match?.[1];
+  const owner = match?.[2];
+  const repository = match?.[3];
+  return host === undefined || owner === undefined || repository === undefined
+    ? undefined
+    : { host, slug: `${owner}/${repository}` };
+}
+
+function linkedIssueReference(pullUrl: string, issueUrl: string): PullLinkedIssueReference {
+  const pull = repositoryLocation(pullUrl);
+  const issue = repositoryLocation(issueUrl);
+  if (
+    pull !== undefined &&
+    issue !== undefined &&
+    pull.host.toLowerCase() === issue.host.toLowerCase() &&
+    pull.slug.toLowerCase() === issue.slug.toLowerCase()
+  ) {
+    return { _tag: "SameRepositoryLinkedIssue", url: issueUrl };
+  }
+  return {
+    _tag: "ThirdPartyLinkedIssue",
+    url: issueUrl,
+    repository: issue?.slug ?? issueUrl,
+  };
+}
 
 function ghNotice(detail: string): PullNotice {
   return {

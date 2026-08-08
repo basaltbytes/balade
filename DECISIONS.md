@@ -612,6 +612,31 @@ the verified range count and generated path before entering the live review
 session. `--no-open` additionally prints the next `balade open` command and exits;
 full diagnostics remain visible when the generated draft still needs manual repair.
 
+## Authoring containment blocks credential reads and owns process search configuration
+
+Decided on [#59](https://github.com/basaltbytes/balade/issues/59). Source reads
+keep repository-wide context, including unchanged neighbouring files, because
+that context is part of useful walkthrough generation. The narrower boundary is
+a case-insensitive credential-path denylist shared by `read_source` and
+`read_base_source`: environment files, package and network auth files, private
+key formats, credential/secret names, and paths below `.aws/`, `.ssh/` or
+`.gnupg/` all fail through the same contained-path error. A prompt rule is only
+defence in depth: it tells the agent to describe a credential-bearing change
+without quoting the value and to make the omission visible to the reviewer.
+
+Cross-repository closing issues are still fetched. Legitimate projects keep
+requirements in central repositories, so silently dropping the text would lose
+useful context. The reference instead carries a same-repository or third-party
+variant from the `gh pr view` boundary onward. Same-repository claims retain the
+author-stated-intent framing; third-party claims render under their own untrusted
+heading and emit a notice naming the source repository.
+
+Pi spawns ripgrep from concurrent tool calls with the process environment and
+offers no per-spawn `env` seam. The balade-owned `RIPGREP_CONFIG_PATH` is
+therefore set once when the session is created and is never restored. The CLI
+spawns ripgrep only through Pi, so leaving the configuration installed removes
+the race without taking a lock or serializing independent searches.
+
 ## Balade owns the versioned authoring package
 
 The section templates, tag catalog, rubric and inspection limits ship as typed

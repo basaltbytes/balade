@@ -43,6 +43,17 @@ const MAX_DIFF_LINES = 800;
 const MAX_SEARCH_MATCHES = 200;
 const MAX_TOOL_CHARACTERS = 80_000;
 const SESSION_ABORT_TIMEOUT = "1 second";
+const CREDENTIAL_FILE_BASENAME_PATTERNS = [
+  /^\.env(?:\..*)?$/iu,
+  /^\.npmrc$/iu,
+  /^\.netrc$/iu,
+  /\.(?:pem|key)$/iu,
+  /\.(?:p12|pfx|keystore|jks)$/iu,
+  /^id_(?:rsa|ed25519|ecdsa).*$/iu,
+  /^credentials(?:\..*)?$/iu,
+  /^secrets?\..*$/iu,
+];
+const CREDENTIAL_DIRECTORY_NAMES = new Set([".aws", ".ssh", ".gnupg"]);
 
 export interface PiSessionPreparation {
   readonly snapshot: PinnedRepositorySnapshot;
@@ -90,6 +101,7 @@ export async function createPiSession(
   let sourceReads = 0;
   const changed = new Set(request.files.map((file) => file.path));
   const { snapshot, projectContext, searchConfiguration } = preparation;
+  process.env.RIPGREP_CONFIG_PATH = searchConfiguration;
   for (const notice of projectContext.notices) request.progress(notice);
 
   const listChanges = pi.coding.defineTool({
@@ -168,19 +180,17 @@ export async function createPiSession(
       }
       const scope = await runSessionEffect(snapshot.resolvePath(params.path ?? "."));
       searches++;
-      const result = await withSearchConfiguration(searchConfiguration, () =>
-        grep.execute(
-          id,
-          {
-            pattern: params.query,
-            path: scope.absolute,
-            literal: (params.mode ?? "fixed") === "fixed",
-            limit: MAX_SEARCH_MATCHES,
-          },
-          signal,
-          onUpdate,
-          context,
-        ),
+      const result = await grep.execute(
+        id,
+        {
+          pattern: params.query,
+          path: scope.absolute,
+          literal: (params.mode ?? "fixed") === "fixed",
+          limit: MAX_SEARCH_MATCHES,
+        },
+        signal,
+        onUpdate,
+        context,
       );
       return {
         ...result,
@@ -240,8 +250,9 @@ export async function createPiSession(
       to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
     }),
     execute: async (_id, params) => {
-      if (!(await runSessionEffect(snapshot.listFiles)).includes(params.path)) {
-        throw new Error(`${params.path} does not exist at ${request.pin}.`);
+      const sourcePath = repositoryPath(params.path);
+      if (!(await runSessionEffect(snapshot.listFiles)).includes(sourcePath)) {
+        throw new Error(`${sourcePath} does not exist at ${request.pin}.`);
       }
       if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
         return toolText(
@@ -249,8 +260,8 @@ export async function createPiSession(
         );
       }
       sourceReads++;
-      const content = await runSessionEffect(snapshot.readFile(params.path));
-      return toolText(numberedLines(params.path, content, params.from, params.to));
+      const content = await runSessionEffect(snapshot.readFile(sourcePath));
+      return toolText(numberedLines(sourcePath, content, params.from, params.to));
     },
   });
 
@@ -530,14 +541,19 @@ function limitCharacters(value: string): string {
     : `${value.slice(0, MAX_TOOL_CHARACTERS)}\n… output capped at ${MAX_TOOL_CHARACTERS} characters.`;
 }
 
-function repositoryPath(sourcePath: string): string {
+export function repositoryPath(sourcePath: string): string {
   const normalized = sourcePath.replace(/^\.\//u, "");
   const segments = normalized.split("/");
+  const basename = segments.at(-1) ?? "";
   if (
     normalized === "" ||
     normalized.startsWith("/") ||
     normalized.includes("\\") ||
-    segments.some((segment) => segment === "" || segment === "." || segment === "..")
+    segments.some((segment) => segment === "" || segment === "." || segment === "..") ||
+    segments
+      .slice(0, -1)
+      .some((segment) => CREDENTIAL_DIRECTORY_NAMES.has(segment.toLowerCase())) ||
+    CREDENTIAL_FILE_BASENAME_PATTERNS.some((pattern) => pattern.test(basename))
   ) {
     throw new Error(`${sourcePath} is not a contained repo-relative path.`);
   }
@@ -561,25 +577,6 @@ const writeSearchConfiguration = Effect.fn("writeSearchConfiguration")(function*
     .pipe(Effect.mapError((cause) => new AuthorSearchConfigurationFailed({ file, cause })));
   return file;
 });
-
-/**
- * Pi spawns ripgrep with the inherited environment, so a user-level
- * RIPGREP_CONFIG_PATH could follow symlinks out of the snapshot or filter
- * matches. Every search runs under the balade-owned configuration instead.
- */
-async function withSearchConfiguration<A>(
-  configuration: string,
-  search: () => Promise<A>,
-): Promise<A> {
-  const previous = process.env.RIPGREP_CONFIG_PATH;
-  process.env.RIPGREP_CONFIG_PATH = configuration;
-  try {
-    return await search();
-  } finally {
-    if (previous === undefined) delete process.env.RIPGREP_CONFIG_PATH;
-    else process.env.RIPGREP_CONFIG_PATH = previous;
-  }
-}
 
 function normalizeSearchOutput(
   value: string,
