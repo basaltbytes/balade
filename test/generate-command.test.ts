@@ -19,6 +19,12 @@ describe("generation command output", () => {
     const output: string[] = [];
     const progress = makeGenerationProgress((value) => output.push(value));
 
+    progress({
+      _tag: "AuthorNotice",
+      code: "head-instructions-skipped",
+      message: 'Skipped "AGENTS.md" because this pull request changes it.',
+      hint: 'Review "AGENTS.md", then pass --trust-head-instructions to apply it during generation.',
+    });
     progress({ _tag: "AuthorToolStarted", name: "list_pr_changes", input: "{}" });
     progress({ _tag: "AuthorToolStarted", name: "search_source", input: "{}" });
     progress({ _tag: "AuthorToolStarted", name: "read_pr_diff", input: "{}" });
@@ -40,6 +46,9 @@ describe("generation command output", () => {
     });
 
     expect(output).toEqual([
+      "warning head-instructions-skipped\n" +
+        '  Skipped "AGENTS.md" because this pull request changes it.\n' +
+        '  fix Review "AGENTS.md", then pass --trust-head-instructions to apply it during generation.\n',
       "Inspecting pull-request changes…\n",
       "Searching pinned source…\n",
       "Reading relevant diffs…\n",

@@ -63,11 +63,12 @@ attack*.
 into the prompt. These are explicitly framed as untrusted claims, never
 instructions (`src/pi/authoring.ts:40`, `:129`).
 
-Repository instruction files (`AGENTS.md` / `CLAUDE.md`) are handled
-differently — they are loaded as instructions the agent is told to follow
-(`src/pi/authoring.ts:33`, `src/pi/session.ts:507-538`). They are currently read
-from the **PR head**, which an attacker controls: see
-[#61](https://github.com/basaltbytes/balade/issues/61).
+Repository instruction files (`AGENTS.md` / `CLAUDE.md`) come from the pinned
+PR head. An instruction file changed by the PR is omitted and reported unless
+the reviewer passes `--trust-head-instructions` after inspecting it. Files that
+contain a project-context closing tag are rejected regardless of that flag
+(`src/pi/authoring.ts`, `src/pi/project-context.ts`; see
+[#61](https://github.com/basaltbytes/balade/issues/61)).
 
 Linked issues are fetched with the reviewer's own GitHub token and are not
 restricted to the same repository:
@@ -207,8 +208,11 @@ they describe.
 
 **Authoring sandbox**
 
-- A seven-tool allowlist, all read-only (`src/pi/session.ts:302-319`). No shell,
+- A seven-tool allowlist, all read-only (`src/pi/session.ts:301-309`). No shell,
   no write, no network. The agent cannot execute anything.
+- PR-head `AGENTS.md` and `CLAUDE.md` files enter the system prompt only when
+  unchanged by the PR or explicitly trusted with `--trust-head-instructions`.
+  Project-context closing tags are rejected before interpolation.
 - The snapshot is `git archive <pin>` with lexical, symlink and realpath
   containment (`src/pi/snapshot.ts:135-172`, tested in
   `test/snapshot.test.ts:34-71`).

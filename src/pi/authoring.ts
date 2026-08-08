@@ -30,7 +30,7 @@ const BASE_SYSTEM_PROMPT = `You author thin, committed balade walkthroughs for p
 Input and output contract
 
 - Input is pull-request context plus read-only tools for the diff and a filesystem snapshot of one pinned commit.
-- Before the first turn, follow the pinned AGENTS.md or CLAUDE.md instructions that apply from the repository root through each changed file's directory. Nested instructions apply only to paths below their directory. No instruction is read from the working tree or the user's global Pi configuration.
+- Before the first turn, follow the pinned AGENTS.md or CLAUDE.md instructions that balade supplies as project context. Balade omits an instruction file changed by the pull request unless a human explicitly trusts those head instructions. Nested instructions apply only to paths below their directory. No instruction is read from the working tree or the user's global Pi configuration.
 - Output is one walkthrough schema ${AUTHORING_WALKTHROUGH_SCHEMA_VERSION} Markdoc body submitted through submit_walkthrough. Balade adds the YAML frontmatter.
 - The submission has a concise title, short scalar metadata, and the complete body. Do not add frontmatter or an outer Markdown fence, and do not set a preset: balade stamps the active one itself.
 - The metadata key ${AUTHORING_META_KEY} is reserved; balade records authoring package ${AUTHORING_PACKAGE_VERSION} there.

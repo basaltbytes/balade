@@ -46,6 +46,7 @@ describe(`authoring package ${AUTHORING_PACKAGE_VERSION} paid evaluation`, () =>
               source: repo.source,
               model,
               directory: "walkthroughs",
+              trustHeadInstructions: false,
               progressMode: "compact",
               progress: () => {},
             });

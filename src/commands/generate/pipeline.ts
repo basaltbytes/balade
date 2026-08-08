@@ -57,6 +57,8 @@ export interface RunGenerationOptions {
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
   readonly lang?: Lang;
+  /** Apply instruction files that the pull request itself changes. */
+  readonly trustHeadInstructions: boolean;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
 }
@@ -110,6 +112,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       model: options.model,
       ...(options.preset === undefined ? {} : { preset: options.preset }),
       ...(options.lang === undefined ? {} : { lang: options.lang }),
+      trustHeadInstructions: options.trustHeadInstructions,
       progressMode: options.progressMode,
       progress: options.progress,
     });

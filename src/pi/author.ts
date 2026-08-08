@@ -86,7 +86,18 @@ export interface LoginInteraction {
   readonly notify: (event: LoginNotification) => void;
 }
 
+export interface AuthorNotice {
+  readonly _tag: "AuthorNotice";
+  readonly code:
+    | "head-instructions-skipped"
+    | "head-instructions-trusted"
+    | "project-instructions-rejected";
+  readonly message: string;
+  readonly hint: string;
+}
+
 export type AuthorProgress =
+  | AuthorNotice
   | { readonly _tag: "AuthorAssistantText"; readonly text: string }
   | { readonly _tag: "AuthorToolStarted"; readonly name: string; readonly input: string }
   | {
@@ -132,6 +143,8 @@ export interface AuthoringRequest {
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
   readonly lang?: Lang;
+  /** Apply instruction files that the pull request itself changes. */
+  readonly trustHeadInstructions: boolean;
   readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;
 }

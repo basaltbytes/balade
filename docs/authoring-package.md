@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.8.0`. Its major version matches the
+The current package version is `1.9.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -31,8 +31,11 @@ only when inspected evidence supports it.
 Before the first model turn, the authoring session loads the first `AGENTS.md`
 or `CLAUDE.md` spelling at the repository root and at each changed path's
 ancestor directories. These files come from the pinned commit, not the current
-checkout. Nested instructions apply only below their directory, and unrelated
-monorepo instructions are omitted.
+checkout. An instruction file changed by the pull request is omitted with a
+warning unless the run explicitly passes `--trust-head-instructions`; unchanged
+instructions keep the default behavior. A file containing a project-context
+closing tag is always rejected with a warning. Nested instructions apply only
+below their directory, and unrelated monorepo instructions are omitted.
 
 The session adds seven balade-owned read-only tools. They list the change and
 pinned tree, search the pinned snapshot with fixed text or a regular expression,
@@ -60,7 +63,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.8.0
+  balade-authoring: 1.9.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file

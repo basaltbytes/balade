@@ -433,7 +433,8 @@ Codex-SDK-plus-API-key pair of adapters instead.
 The adapter itself is split at the session boundary: `pi/client.ts` owns
 account, authentication and global settings, while `pi/session.ts` owns the
 scoped authoring session, its read-only tool policy and provider-event
-forwarding.
+forwarding. `pi/project-context.ts` owns repository-instruction selection and
+the system-prompt trust boundary.
 This keeps preference durability independent from the security-sensitive tool
 sandbox and session lifecycle.
 
@@ -458,7 +459,7 @@ Preference read and write failures are typed warnings and do not prevent a
 generation run.
 
 The session runs in memory with a resource loader that exposes no Pi extensions,
-skills, prompts, themes, global context, or working-tree context. It does expose
+skills, prompts, themes, global context, or working-tree context. It exposes
 repository instructions from the pinned PR commit before the first turn. For
 each changed path, the loader selects Pi's first matching `AGENTS.md` or
 `CLAUDE.md` spelling at the root and each ancestor directory. This preserves
@@ -466,6 +467,17 @@ nested scope without putting unrelated monorepo instructions into the prompt,
 and it cannot leak a different checked-out branch into analysis. Instruction
 loading is outside the source-read budget; documents that an instruction names
 are read through the normal pinned source tool and count toward that budget.
+
+Decided on [#61](https://github.com/basaltbytes/balade/issues/61): an instruction
+file the PR adds or edits is a claim until a human explicitly passes
+`--trust-head-instructions`. Balade omits it by default and reports the path;
+unchanged instructions retain the existing behavior. Loading the base version
+was rejected because a PR that intentionally changes its instructions must be
+testable under the new rules. Interactive confirmation was rejected because
+`generate` remains scriptable. A project-context closing tag always rejects the
+file with a notice, even when the file is otherwise trusted, and attribute
+characters in its untrusted repository path are escaped before Pi interpolates
+the path into the system prompt.
 
 The allowlist contains only seven balade-owned tools: list PR changes, list
 pinned paths, search pinned source, read a pinned diff, read numbered lines at

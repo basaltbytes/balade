@@ -35,6 +35,7 @@ describe(`authoring package ${AUTHORING_PACKAGE_VERSION} offline evaluation`, ()
                 source: repo.source,
                 model,
                 directory: "walkthroughs",
+                trustHeadInstructions: false,
                 progressMode: "compact",
                 progress: () => {},
               });

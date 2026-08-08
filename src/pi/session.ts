@@ -14,11 +14,8 @@ import { CommandExecutor, gitOut } from "../shell.js";
 import type { AuthoringRequest } from "./author.js";
 import { AUTHORING_LIMITS } from "../authoring/package.js";
 import { authoringSystemPrompt } from "./authoring.js";
-import {
-  openPinnedRepositorySnapshot,
-  type PinnedRepositorySnapshot,
-  type ResolvedSnapshotPath,
-} from "./snapshot.js";
+import { loadPinnedProjectContext, type ProjectContextFile } from "./project-context.js";
+import { openPinnedRepositorySnapshot, type ResolvedSnapshotPath } from "./snapshot.js";
 
 export type CodingAgentSdk = typeof import("@earendil-works/pi-coding-agent");
 export type AiSdk = typeof import("@earendil-works/pi-ai");
@@ -38,13 +35,6 @@ const MAX_DIFF_LINES = 800;
 const MAX_SEARCH_MATCHES = 200;
 const MAX_TOOL_CHARACTERS = 80_000;
 const SESSION_ABORT_TIMEOUT = "1 second";
-const PROJECT_CONTEXT_FILE_NAMES = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
-
-interface ProjectContextFile {
-  readonly path: string;
-  readonly content: string;
-}
-
 export async function createPiSession(
   pi: PiSessionDependencies,
   model: Model<string>,
@@ -71,7 +61,16 @@ export async function createPiSession(
     return sourcePathLoad;
   };
   const changed = new Set(request.files.map((file) => file.path));
-  const projectContextFiles = await loadPinnedProjectContext(request, snapshot, sourcePaths);
+  const projectContext = await loadPinnedProjectContext(
+    {
+      pin: request.pin,
+      changedPaths: changed,
+      trustHeadInstructions: request.trustHeadInstructions,
+    },
+    snapshot,
+    sourcePaths,
+  );
+  for (const notice of projectContext.notices) request.progress(notice);
 
   const listChanges = pi.coding.defineTool({
     name: "list_pr_changes",
@@ -297,7 +296,7 @@ export async function createPiSession(
     resourceLoader: minimalResourceLoader(
       pi.coding,
       authoringSystemPrompt(request.preset),
-      projectContextFiles,
+      projectContext.files,
     ),
     tools: [
       "list_pr_changes",
@@ -502,43 +501,6 @@ function minimalResourceLoader(
     extendResources: () => {},
     reload: async () => {},
   };
-}
-
-async function loadPinnedProjectContext(
-  request: AuthoringRequest,
-  snapshot: PinnedRepositorySnapshot,
-  sourcePaths: () => Promise<readonly string[]>,
-): Promise<readonly ProjectContextFile[]> {
-  const available = new Set(await sourcePaths());
-  const directories = new Set([""]);
-  for (const file of request.files) {
-    const parts = file.path.split("/");
-    parts.pop();
-    let directory = "";
-    for (const part of parts) {
-      directory = directory === "" ? part : `${directory}/${part}`;
-      directories.add(directory);
-    }
-  }
-  const orderedDirectories = [...directories].sort((left, right) => {
-    const depth = pathDepth(left) - pathDepth(right);
-    return depth === 0 ? left.localeCompare(right) : depth;
-  });
-  const paths = orderedDirectories.flatMap((directory) => {
-    const prefix = directory === "" ? "" : `${directory}/`;
-    const selected = PROJECT_CONTEXT_FILE_NAMES.find((name) => available.has(`${prefix}${name}`));
-    return selected === undefined ? [] : [`${prefix}${selected}`];
-  });
-  return Promise.all(
-    paths.map(async (path) => ({
-      path: `${request.pin}:${path}`,
-      content: await Effect.runPromise(snapshot.readFile(path)),
-    })),
-  );
-}
-
-function pathDepth(path: string): number {
-  return path === "" ? 0 : path.split("/").length;
 }
 
 function limitCharacters(value: string): string {
