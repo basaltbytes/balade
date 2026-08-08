@@ -100,7 +100,8 @@ export function frontmatterBlock(source: string): string | null {
 export function frontmatterLine(raw: string, key: string): number {
   const lines = raw.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    if (new RegExp(`^${key}\\s*:`).test(lines[i] ?? "")) return i + 2;
+    const line = lines[i] ?? "";
+    if (line.startsWith(key) && line.slice(key.length).trimStart().startsWith(":")) return i + 2;
   }
   return 1;
 }

@@ -6,12 +6,12 @@
 
 import { processAST, type DiffAST, type DiffFileHighlighter } from "@git-diff-view/react";
 import { useEffect, useState } from "react";
-import { ensureLangs, resolveLang, THEME } from "./shiki";
+import { ensureLangs, highlightLanguage, resolveLang, THEME } from "./shiki";
 import type { HighlighterCore } from "shiki/core";
 
 /* The two settings `@git-diff-view` writes back live per highlighter, in this
    closure — never as module state a second instance would share. */
-const build = (highlighter: HighlighterCore): DiffFileHighlighter => {
+export const createDiffHighlighter = (highlighter: HighlighterCore): DiffFileHighlighter => {
   let maxLineToIgnoreSyntax = 2000;
   const ignoreSyntaxHighlightList: (string | RegExp)[] = [];
 
@@ -33,34 +33,41 @@ const build = (highlighter: HighlighterCore): DiffFileHighlighter => {
     },
     getAST: (raw: string, _fileName?: string, lang?: string): DiffAST =>
       highlighter.codeToHast(raw, {
-        lang: resolveLang(lang ?? "text"),
+        lang: highlightLanguage(raw, lang ?? "text"),
         theme: THEME,
       }) as DiffAST,
     processAST: (ast: DiffAST) => processAST(ast),
-    hasRegisteredCurrentLang: (lang: string) =>
-      highlighter.getLoadedLanguages().includes(resolveLang(lang)),
+    hasRegisteredCurrentLang: (lang: string) => {
+      const resolved = resolveLang(lang);
+      return resolved === "text" || highlighter.getLoadedLanguages().includes(resolved);
+    },
   } as DiffFileHighlighter;
 };
+
+interface LoadedDiffHighlighter {
+  readonly key: string;
+  readonly highlighter: DiffFileHighlighter;
+}
 
 /**
  * Resolves once the grammars of `langs` are in. Until then the diff renders
  * unhighlighted rather than blocking on the network.
  */
 export function useDiffHighlighter(langs: string[]): DiffFileHighlighter | undefined {
-  const [registered, setRegistered] = useState<DiffFileHighlighter | undefined>(undefined);
+  const [loaded, setLoaded] = useState<LoadedDiffHighlighter | null>(null);
   const key = langs.join(",");
   useEffect(() => {
     let alive = true;
     ensureLangs(key.length > 0 ? key.split(",") : [])
       .then((highlighter) => {
-        if (alive) setRegistered(build(highlighter));
+        if (alive) setLoaded({ key, highlighter: createDiffHighlighter(highlighter) });
       })
       .catch(() => {
-        if (alive) setRegistered(undefined);
+        if (alive) setLoaded(null);
       });
     return () => {
       alive = false;
     };
   }, [key]);
-  return registered;
+  return loaded?.key === key ? loaded.highlighter : undefined;
 }

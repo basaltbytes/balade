@@ -67,6 +67,11 @@ const NODE_BORDER: Record<DiagramNode["change"], string> = {
   ctx: "border-border",
 };
 
+const MAX_DIAGRAM_GRID_SIZE = 64;
+
+const gridCoordinate = (coordinate: number): number =>
+  Math.min(MAX_DIAGRAM_GRID_SIZE, Math.max(1, coordinate));
+
 export function Diagram({
   intro,
   hint,
@@ -83,8 +88,17 @@ export function Diagram({
   const nodeRefs = useRef(new Map<string, HTMLElement>());
   const labelRefs = useRef(new Map<number, HTMLElement>());
   const [spots, setSpots] = useState<ReadonlyMap<number, LabelSpot>>(new Map());
-  const cols = Math.max(1, ...nodes.map((node) => node.col));
-  const rows = Math.max(1, ...nodes.map((node) => node.row));
+  const gridNodes = useMemo(
+    () =>
+      nodes.map((node) => ({
+        ...node,
+        col: gridCoordinate(node.col),
+        row: gridCoordinate(node.row),
+      })),
+    [nodes],
+  );
+  const cols = Math.max(1, ...gridNodes.map((node) => node.col));
+  const rows = Math.max(1, ...gridNodes.map((node) => node.row));
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -109,10 +123,10 @@ export function Diagram({
     return () => observer.disconnect();
   }, [edges]);
   /* Every hover change re-renders the grid; the lookups hold still. */
-  const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const byId = useMemo(() => new Map(gridNodes.map((node) => [node.id, node])), [gridNodes]);
   const byCell = useMemo(
-    () => new Map(nodes.map((node) => [`${node.row}:${node.col}`, node])),
-    [nodes],
+    () => new Map(gridNodes.map((node) => [`${node.row}:${node.col}`, node])),
+    [gridNodes],
   );
   const neighbours = useMemo(() => {
     const map = new Map<string, Set<string>>();
