@@ -188,10 +188,12 @@ they describe.
   the residual DoS.
 - `?path=` never reaches the filesystem: it is allowlist membership against the
   served set (`src/server/api.ts:124-137`). State filenames keep only the
-  basename (`src/state.ts:63-67`). Two independent barriers; **no arbitrary file
+  basename (`src/state.ts:64-68`). Two independent barriers; **no arbitrary file
   write exists.**
-- The `.balade/` line appended to `.git/info/exclude` is a module constant
-  (`src/state.ts:39`) — **no injection into that file is possible.**
+- The `.balade/` line appended to the clone's `info/exclude` is a module
+  constant (`src/state.ts:40`) — **no injection into that file is possible.**
+  Its destination directory is `git rev-parse --git-common-dir` output for the
+  local clone (`src/shell.ts`), local git metadata a PR head cannot influence.
 - Static serving is not traversable: decode → null-reject → normalize →
   prefix-confine (`effect` `HttpStaticServer`), and it registers `GET` only.
   That path does **not** resolve symlinks, so a symlink inside the served root

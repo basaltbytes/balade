@@ -4,7 +4,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Path } from "effect";
 import { CommandFailed, NotARepository } from "./contract/context.js";
 
 type ExecError = CommandFailed | NotARepository;
@@ -78,6 +78,19 @@ export function firstLine(output: string): string {
       ?.trim() ?? "no output"
   );
 }
+
+/**
+ * Absolute git common directory of the repository at `root` — where the
+ * clone's shared `info/exclude` lives. In a linked worktree or a submodule
+ * `<root>/.git` is a pointer file, so the directory is asked of git rather
+ * than joined onto the root.
+ */
+export const gitCommonDir = Effect.fn("gitCommonDir")(function* (root: string) {
+  const path = yield* Path.Path;
+  const out = yield* gitOut(["rev-parse", "--git-common-dir"], root);
+  /* Relative in a plain clone (`.git`), absolute in a linked worktree. */
+  return path.resolve(root, out.trim());
+});
 
 /** Absolute repository root holding `cwd`. */
 export const gitToplevel = Effect.fn("gitToplevel")(function* (cwd: string) {

@@ -4,8 +4,9 @@
  * `.balade/` at the repository root, named after the walkthrough file
  * (`pr-96-loan-refactor.md` → `pr-96-loan-refactor.review.json`).
  *
- * The state directory is excluded through `.git/info/exclude` rather than the
- * committed `.gitignore`, so a reviewer's marks never touch the repository.
+ * The state directory is excluded through the clone's `info/exclude` (in the
+ * git common directory) rather than the committed `.gitignore`, so a
+ * reviewer's marks never touch the repository.
  * A missing or mismatched file is legitimate absence. Unreadable, corrupt and
  * unwritable state stays in the typed error channel for the server boundary to
  * report or log deliberately.
@@ -91,6 +92,12 @@ export type StateReadError = StateReadFailed | StateInvalid;
 export interface FileStoreOptions {
   /** Repository root; the state directory is `<repoRoot>/.balade/`. */
   repoRoot: string;
+  /**
+   * Absolute git common directory — where `info/exclude` lives. In a linked
+   * worktree or a submodule `<repoRoot>/.git` is a pointer file, so the caller
+   * resolves the real directory (`git rev-parse --git-common-dir`).
+   */
+  gitCommonDir: string;
 }
 
 function makeReviewStateStore(
@@ -131,7 +138,7 @@ function makeReviewStateStore(
       yield* fs
         .writeFileString(file, `${JSON.stringify(state, null, 2)}\n`)
         .pipe(Effect.mapError((cause) => new StateWriteFailed({ path: file, cause })));
-      yield* excludeStateDir(fs, path, options.repoRoot).pipe(
+      yield* excludeStateDir(fs, path, options.gitCommonDir).pipe(
         Effect.catchTag("StateExcludeFailed", (error) =>
           Effect.logWarning(
             `balade: could not add .balade/ to ${error.path}; add it yourself to keep review state out of git.`,
@@ -144,16 +151,17 @@ function makeReviewStateStore(
 }
 
 /**
- * Appends `.balade/` to `.git/info/exclude` when it is not already there. The
- * file belongs to the clone, not to the repository, so writing it commits the
- * reviewer to nothing.
+ * Appends `.balade/` to the clone's `info/exclude` when it is not already
+ * there. The file belongs to the clone, not to the repository, so writing it
+ * commits the reviewer to nothing. It sits in the git common directory, which
+ * a linked worktree shares with the main checkout, so one line covers both.
  */
 function excludeStateDir(
   fs: FileSystem.FileSystem,
   path: Path.Path,
-  repoRoot: string,
+  gitCommonDir: string,
 ): Effect.Effect<void, StateExcludeFailed> {
-  const info = path.join(repoRoot, ".git", "info");
+  const info = path.join(gitCommonDir, "info");
   const file = path.join(info, "exclude");
 
   return Effect.gen(function* () {

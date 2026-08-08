@@ -19,7 +19,7 @@ import { softReport } from "../walkthrough/checker.js";
 import type { LoadError } from "../walkthrough/pipeline.js";
 import { describeFailure } from "../failure.js";
 import type { Lang, CheckReport } from "../contract/types.js";
-import { gitToplevel } from "../shell.js";
+import { gitCommonDir, gitToplevel } from "../shell.js";
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
 import { ReviewStateStore } from "../state.js";
 import { createApi, type Api } from "./api.js";
@@ -145,6 +145,7 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
 });
 
 export const prepareSession = Effect.fn("prepareSession")(function* (options: SessionOptions) {
+  const pathService = yield* Path.Path;
   const selected = yield* select(options);
   if (selected._tag === "SessionNotStarted") return selected;
   const { root, paths, at } = selected;
@@ -156,7 +157,15 @@ export const prepareSession = Effect.fn("prepareSession")(function* (options: Se
     ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
   });
   const payloadLayer = PayloadCache.layer.pipe(Layer.provideMerge(repoLayer));
-  const stateLayer = ReviewStateStore.layer({ repoRoot: root });
+  /* Exclusion is advisory: a failed resolution degrades to the plain-clone
+     layout, whose failed exclude write the store already logs as a warning
+     instead of failing the session. */
+  const stateLayer = ReviewStateStore.layer({
+    repoRoot: root,
+    gitCommonDir: yield* gitCommonDir(root).pipe(
+      Effect.catchTag("CommandFailed", () => Effect.succeed(pathService.join(root, ".git"))),
+    ),
+  });
   const sessionLayer = Layer.mergeAll(payloadLayer, stateLayer);
 
   return yield* Effect.gen(function* () {

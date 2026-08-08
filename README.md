@@ -203,8 +203,9 @@ touch anything the walkthrough shows. Re-stamp with a newer SHA to clear it.
 
 Marks — a checkmark per section, a "Viewed" checkbox per file — are stored in
 one JSON file per walkthrough under `.balade/` at the repository root. On first
-write the CLI appends `.balade/` to `.git/info/exclude`, so the state is
-ignored without touching the committed `.gitignore`. State is local to the
+write the CLI appends `.balade/` to the clone's `.git/info/exclude` (the shared
+git directory when reviewing from a linked worktree), so the state is ignored
+without touching the committed `.gitignore`. State is local to the
 clone and to the reviewer; it is not shared. A mark records the content hash it
 was made against, so a re-stamp keeps the marks whose content is unchanged and
 resets the rest.

@@ -5,6 +5,7 @@
  */
 
 import { Effect, Layer, Option } from "effect";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,9 +17,10 @@ import { ServerRepo } from "../src/server/repo.js";
 import { startReviewSession } from "../src/server/review.js";
 import { findAppBundle, serve } from "../src/server/http.js";
 import { prepareSession, type Session } from "../src/server/session.js";
+import { gitCommonDir } from "../src/shell.js";
 import { ReviewStateStore, stateFileName } from "../src/state.js";
 import { provideLive } from "./support/effect.js";
-import { createFixtureRepo, type FixtureRepo } from "./support/repo.js";
+import { addSubmodule, addWorktree, createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
 /** A stand-in for the vite bundle: the static server only needs an entry file. */
 function stubBundle(): string {
@@ -362,6 +364,10 @@ describe("review-state files", () => {
   });
   afterAll(() => repo.cleanup());
 
+  /** A store rooted in the plain fixture clone, where `.git` is a directory. */
+  const storeLayer = () =>
+    ReviewStateStore.layer({ repoRoot: repo.dir, gitCommonDir: join(repo.dir, ".git") });
+
   const state: ReviewState = {
     version: 1,
     walkthrough: "walkthroughs/valid.md",
@@ -370,6 +376,17 @@ describe("review-state files", () => {
     sections: { overview: { hash: "sha256:aa", at: "2026-08-01T10:12:00.000Z" } },
     files: {},
   };
+
+  /** One state write through a store rooted at `repoRoot`, excluding into `gitDir`. */
+  const writeStateAt = (repoRoot: string, gitDir: string) =>
+    Effect.gen(function* () {
+      const store = yield* ReviewStateStore;
+      yield* store.write("walkthroughs/valid.md", state);
+    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot, gitCommonDir: gitDir })));
+
+  /** What git itself answers from `dir` — the proof the exclude line exists for. */
+  const checkIgnore = (dir: string): string =>
+    execFileSync("git", ["check-ignore", ".balade"], { cwd: dir, encoding: "utf8" }).trim();
 
   it.effect("writes one file per walkthrough and excludes the directory once", () =>
     Effect.gen(function* () {
@@ -389,7 +406,7 @@ describe("review-state files", () => {
       yield* store.write("walkthroughs/valid.md", state);
       const again = readFileSync(join(repo.dir, ".git/info/exclude"), "utf8");
       expect(again).toBe(exclude);
-    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
+    }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
   it.effect("returns a typed error for corrupt JSON", () =>
@@ -404,7 +421,7 @@ describe("review-state files", () => {
       const error = yield* Effect.flip(store.read("walkthroughs/broken.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
       expect(error.path).toContain("broken.review.json");
-    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
+    }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
   it.effect("returns a typed error for schema-invalid state", () =>
@@ -423,7 +440,7 @@ describe("review-state files", () => {
       const error = yield* Effect.flip(store.read("walkthroughs/invalid.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
       expect(error.path).toContain("invalid.review.json");
-    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
+    }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
   it.effect("ignores a file that names another walkthrough", () =>
@@ -431,7 +448,52 @@ describe("review-state files", () => {
       const store = yield* ReviewStateStore;
       yield* store.write("walkthroughs/valid.md", state);
       expect(yield* store.read("docs/valid.md")).toMatchObject({ _tag: "None" });
-    }).pipe(Effect.provide(ReviewStateStore.layer({ repoRoot: repo.dir })), provideLive),
+    }).pipe(Effect.provide(storeLayer()), provideLive),
+  );
+
+  it.effect("excludes through the shared git directory from a linked worktree", () =>
+    Effect.gen(function* () {
+      const origin = createFixtureRepo();
+      const worktree = addWorktree(origin, "main");
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          worktree.cleanup();
+          origin.cleanup();
+        }),
+      );
+
+      /* `.git` at the worktree root is a pointer file; the helper resolves past it. */
+      const commonDir = yield* gitCommonDir(worktree.dir);
+      yield* writeStateAt(worktree.dir, commonDir);
+
+      /* The line lands in the shared exclude, and git in the worktree honours it. */
+      const exclude = readFileSync(join(origin.dir, ".git/info/exclude"), "utf8");
+      expect(exclude.split("\n")).toContain(".balade/");
+      expect(checkIgnore(worktree.dir)).toBe(".balade");
+    }).pipe(provideLive),
+  );
+
+  it.effect("excludes through the module git directory from a submodule", () =>
+    Effect.gen(function* () {
+      const origin = createFixtureRepo();
+      const submodule = addSubmodule(origin);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          submodule.cleanup();
+          origin.cleanup();
+        }),
+      );
+
+      /* The pointer file resolves into the host's `.git/modules/` store. */
+      const commonDir = yield* gitCommonDir(submodule.dir);
+      expect(commonDir).toContain(join(".git", "modules"));
+      yield* writeStateAt(submodule.dir, commonDir);
+
+      expect(readFileSync(join(commonDir, "info/exclude"), "utf8").split("\n")).toContain(
+        ".balade/",
+      );
+      expect(checkIgnore(submodule.dir)).toBe(".balade");
+    }).pipe(provideLive),
   );
 });
 
