@@ -14,7 +14,7 @@ import type { LoadResult } from "../src/walkthrough/pipeline.js";
 import type { IndexPayload, Payload, ReviewState } from "../src/contract/types.js";
 import { PayloadCache } from "../src/server/cache.js";
 import { ServerRepo } from "../src/server/repo.js";
-import { startReviewSession } from "../src/server/review.js";
+import { startReviewSession, unreviewedPullNotice } from "../src/server/review.js";
 import { findAppBundle, serve } from "../src/server/http.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { gitCommonDir } from "../src/shell.js";
@@ -36,6 +36,45 @@ it.effect("keeps a missing served-app bundle in the error channel", () =>
     expect((yield* Effect.flip(provideLive(findAppBundle())))._tag).toBe("AppBundleMissing");
   }),
 );
+
+it("keeps the served page on its own same-origin CSP", () => {
+  const html = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+  const policy =
+    "default-src 'none'; img-src data:; script-src 'self'; " +
+    "style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src 'none'; " +
+    "form-action 'none'; base-uri 'none'";
+  const policyAt = html.indexOf('http-equiv="Content-Security-Policy"');
+
+  expect(policyAt).toBeGreaterThan(-1);
+  expect(html.indexOf(`content="${policy}"`, policyAt)).toBeGreaterThan(policyAt);
+  expect(policyAt).toBeLessThan(html.indexOf('<script type="module"'));
+});
+
+it("warns only when a selection is read from a fetched pull head", () => {
+  const remote = unreviewedPullNotice({
+    kind: "pullHead",
+    root: "/repo",
+    paths: ["walkthroughs/review.md"],
+    number: 67,
+    at: "0123456789abcdef0123456789abcdef01234567",
+  });
+  expect(remote).toEqual(
+    Option.some(
+      "Rendering walkthrough content from PR #67's head commit 0123456 — " +
+        "content you have not reviewed.\n",
+    ),
+  );
+  expect(
+    unreviewedPullNotice({
+      kind: "workingTree",
+      root: "/repo",
+      paths: ["walkthroughs/review.md"],
+    }),
+  ).toEqual(Option.none());
+  expect(unreviewedPullNotice({ kind: "files", paths: ["walkthroughs/review.md"] })).toEqual(
+    Option.none(),
+  );
+});
 
 describe("the served API", () => {
   let repo: FixtureRepo;

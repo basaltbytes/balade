@@ -86,8 +86,9 @@ Markdoc registers no variables, functions or partials
 (`src/walkthrough/config.ts:11-16`); and compilation is a pure transform into a
 JSON payload of plain data. The exposure is the browser origin.
 
-The reviewer is currently given no signal that this is happening:
-[#67](https://github.com/basaltbytes/balade/issues/67).
+When the walkthrough comes from a fetched PR head, the CLI names the PR and
+head commit and labels the content unreviewed before serving it. A walkthrough
+read from the working tree carries no such notice.
 
 ### 3. The local review server
 
@@ -103,8 +104,10 @@ and no request header is validated:
 `balade build` inlines the app and payload into one HTML file, meant to be
 opened over `file://` ([DECISIONS.md](../DECISIONS.md), "The export bundle
 carries every grammar"). It embeds the **full contents of every changed file at
-both revisions** — see [#67](https://github.com/basaltbytes/balade/issues/67)
-for the complete inventory and the sharing position.
+both revisions**. The CLI reports the number of embedded files after writing the
+export, and the README names the remaining source and metadata it carries. Its
+meta CSP forbids programmatic network connections; a shared file still
+discloses all of its embedded data to its recipient.
 
 ### 5. Supply chain and CI
 
@@ -224,12 +227,16 @@ they describe.
 
 **Export**
 
-- The `</script>` and `<!--` escaping in `src/commands/build/html.ts:37-62` is
+- The `</script>` and `<!--` escaping in `src/commands/build/html.ts:39-62` is
   sound and **load-bearing** — today's bundle contains eleven `<!--` and four
   `<script>` sequences. See the DECISIONS entry "The inlined bundle is escaped,
-  the baked payload is JSON-escaped" and `test/build.test.ts:144`.
+  the baked payload is JSON-escaped" and `test/build.test.ts:186`.
 - `payload.lang` interpolated into `<html lang>` is constrained to `"en" | "fr"`
   (`src/contract/schema.ts:339`).
+- The export's meta CSP admits its inline script and style but sets
+  `connect-src 'none'`; the served page has a separate policy admitting scripts,
+  styles and API calls only from its own origin. Neither policy admits frames,
+  forms or a base URL.
 
 **CI**
 

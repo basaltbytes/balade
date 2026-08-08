@@ -43,6 +43,15 @@ npx balade check  .agents/walkthroughs/pr-96-loan-refactor.md   # validate; exit
 - `check` with no file validates every discovered walkthrough. `--json` prints
   the report as JSON.
 
+### What an export contains
+
+An export contains the full contents of every changed file at both revisions,
+including files the walkthrough never narrates. The same HTML also carries each
+full unified diff, the raw lines used by code blocks, and review metadata such as
+the repository, PR, author, branches, commit SHA, walkthrough path, file paths,
+author-supplied metadata, and check messages. Treat the export as a copy of the
+changed repository source when deciding where to share it.
+
 Each code excerpt links from its header to that file and starting line in the
 pull request's GitHub diff, so the authoritative hunk and commenting controls
 stay one click away. Live reviews and self-contained exports both include it.
@@ -219,7 +228,11 @@ was made against, so a re-stamp keeps the marks whose content is unchanged and
 resets the rest.
 
 The static export has no server to write to and keeps the same state in
-`localStorage`, under the key the payload carries.
+`localStorage`, under the key the payload carries. When opened directly over
+`file://`, Chrome makes that state readable to other local `file://` pages in
+the same browser profile. The state contains no source code, but it identifies
+the repository, PR, walkthrough, commit, and changed-file paths. Serve the
+export from a dedicated HTTP origin when those details are sensitive.
 
 ## CI
 

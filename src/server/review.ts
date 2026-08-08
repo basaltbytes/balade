@@ -3,7 +3,7 @@
  * the complete CLI review lifecycle shared by `open` and successful generation.
  */
 
-import { Effect, Match, Schema } from "effect";
+import { Effect, Match, Option, Schema } from "effect";
 import {
   printSoft,
   served,
@@ -20,6 +20,7 @@ import {
   type Session,
   type SessionError,
   type SessionOptions,
+  type Selection,
 } from "./session.js";
 
 interface ReviewSessionStarted {
@@ -80,6 +81,10 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
       ReviewSessionStarted: (started) =>
         Effect.gen(function* () {
           printSoft(started.session.reports);
+          Option.match(unreviewedPullNotice(options.session.selection), {
+            onNone: () => undefined,
+            onSome: writeStdout,
+          });
           writeStdout(`balade is serving ${served(started.session.paths)} at ${started.url}\n`);
           /* Launch failure is a notice: the scoped server remains available. */
           yield* launchBrowser(options.browserMode, started.url).pipe(
@@ -101,6 +106,14 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
     Effect.catch((error) => Effect.sync(() => stopMessage(reviewSessionErrorMessage(error)))),
   ),
 );
+
+export const unreviewedPullNotice = (selection: Selection): Option.Option<string> =>
+  selection.kind === "pullHead"
+    ? Option.some(
+        `Rendering walkthrough content from PR #${selection.number}'s head commit ` +
+          `${selection.at.slice(0, 7)} — content you have not reviewed.\n`,
+      )
+    : Option.none();
 
 const reviewSessionErrorMessage = (error: ReviewSessionError): string =>
   Match.valueTags(error, {

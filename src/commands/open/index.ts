@@ -2,10 +2,9 @@
 
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { parseOpenTarget, type PrTarget } from "../../git/pr.js";
+import { parseOpenTarget } from "../../git/pr.js";
 import { locateErrorMessage, PrLocator } from "./locator.js";
 import { runReviewSession } from "../../server/review.js";
-import type { Selection } from "../../server/session.js";
 import { stopMessage } from "../../terminal.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
@@ -30,14 +29,6 @@ const openTargets = Argument.variadic(
   ),
 );
 
-/** A PR target answers a located selection; the command boundary prints typed failures. */
-const locateSelection = Effect.fn("locateSelection")(function* (target: PrTarget) {
-  const locator = yield* PrLocator;
-  return yield* locator
-    .locate(process.cwd(), target)
-    .pipe(Effect.map((located): Selection => ({ kind: "located", ...located })));
-});
-
 export const openCommand = Command.make(
   "open",
   { files: openTargets, lang: langFlag, port: portFlag, noBrowser: noBrowserFlag },
@@ -50,25 +41,19 @@ export const openCommand = Command.make(
       }
       const selection =
         target.kind === "pr"
-          ? yield* locateSelection(target.pr).pipe(
-              Effect.map(Option.some),
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  stopMessage(locateErrorMessage(error));
-                  return Option.none<Selection>();
-                }),
-              ),
-            )
-          : Option.some<Selection>(target);
-      if (Option.isNone(selection)) return;
+          ? yield* PrLocator.use((locator) => locator.locate(process.cwd(), target.pr))
+          : target;
       return yield* runReviewSession({
         session: {
           cwd: process.cwd(),
-          selection: selection.value,
+          selection,
           ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         },
         port: config.port,
         browserMode: config.noBrowser ? "headless" : "launch",
       });
-    }).pipe(Effect.scoped),
+    }).pipe(
+      Effect.catch((error) => Effect.sync(() => stopMessage(locateErrorMessage(error)))),
+      Effect.scoped,
+    ),
 ).pipe(Command.withDescription("Serve a live review session and open it in your default browser"));

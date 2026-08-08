@@ -37,6 +37,7 @@ export interface Built {
   readonly _tag: "Built";
   readonly file: string;
   readonly bytes: number;
+  readonly changedFileCount: number;
   readonly reports: readonly CheckReport[];
 }
 
@@ -56,7 +57,7 @@ export type BuildOutcome = Built | BuildFailed | BuildNotRun;
 
 export class ExportBundleReadFailed extends Schema.TaggedErrorClass<ExportBundleReadFailed>()(
   "ExportBundleReadFailed",
-  { dir: Schema.String, cause: Schema.Defect() },
+  { dir: Schema.String, file: Schema.String, cause: Schema.Defect() },
 ) {}
 
 export class ExportWriteFailed extends Schema.TaggedErrorClass<ExportWriteFailed>()(
@@ -69,18 +70,19 @@ export type BuildError = DiscoveryError | LoadError | ExportBundleReadFailed | E
 /** The export bundle ships beside the compiled CLI: `dist/cli.js` next to `dist/export/`. */
 const BUNDLE_DIR = fileURLToPath(new URL("../../export/", import.meta.url));
 
-const EXPORT_BUNDLE_MISSING =
-  `balade: no export bundle at ${BUNDLE_DIR}. In a checkout, run \`pnpm run build:app\`; ` +
-  "in an install, reinstall balade.";
+const EXPORT_BUNDLE_REPAIR =
+  " In a checkout, run `pnpm run build:app`; in an install, reinstall balade.";
 
 /** The two files the export vite mode emits, read as text. */
 const readExportBundle = Effect.fn("readExportBundle")(function* (dir: string = BUNDLE_DIR) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const read = (name: string) =>
-    fs
-      .readFileString(path.join(dir, name))
-      .pipe(Effect.mapError((cause) => new ExportBundleReadFailed({ dir, cause })));
+  const read = (name: string) => {
+    const file = path.join(dir, name);
+    return fs
+      .readFileString(file)
+      .pipe(Effect.mapError((cause) => new ExportBundleReadFailed({ dir, file, cause })));
+  };
   return {
     js: yield* read("app.js"),
     css: yield* read("app.css"),
@@ -115,9 +117,17 @@ export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) 
     _tag: "Built",
     file,
     bytes: Buffer.byteLength(html),
+    changedFileCount: loaded.payload.files.length,
     reports: [report],
   } satisfies Built;
 });
+
+export function exportContentsMessage(changedFileCount: number): string {
+  return (
+    `contains the full contents of all ${changedFileCount} changed ` +
+    `${changedFileCount === 1 ? "file" : "files"} at both revisions`
+  );
+}
 
 /** Zero arguments list what discovery found (#21): the index is served-mode
     only, so `build` never picks for the author. */
@@ -160,8 +170,9 @@ function outputPath(path: Path.Path, options: BuildOptions, target: string): str
 
 export function buildErrorMessage(error: BuildError): string {
   return Match.valueTags(error, {
-    ExportBundleReadFailed: ({ dir }) =>
-      dir === BUNDLE_DIR ? EXPORT_BUNDLE_MISSING : `balade: no export bundle at ${dir}.`,
+    ExportBundleReadFailed: ({ dir, file, cause }) =>
+      `balade: could not read export bundle ${file} (${describeFailure(cause)}).` +
+      (dir === BUNDLE_DIR ? EXPORT_BUNDLE_REPAIR : ""),
     ExportWriteFailed: ({ path, cause }) =>
       `balade: could not write ${path} (${describeFailure(cause)}).`,
     WalkthroughFileReadFailed: ({ path, cause }) =>

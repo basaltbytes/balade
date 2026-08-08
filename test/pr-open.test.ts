@@ -4,19 +4,23 @@
  * ref — and a served session that never needed the branch checked out.
  */
 
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
+import { afterAll, assert, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { Payload } from "../src/contract/types.js";
-import { locateErrorMessage, PrLocator } from "../src/commands/open/locator.js";
+import {
+  locateErrorMessage,
+  PrLocator,
+  PullSourceReadFailed,
+} from "../src/commands/open/locator.js";
 import { PULL_COMMIT_SUBJECT_LIMIT } from "../src/git/intent.js";
-import { parseOpenTarget, parsePrTarget } from "../src/git/pr.js";
+import { fetchPullHead, parseOpenTarget, parsePrTarget, resolvePullHead } from "../src/git/pr.js";
 import { CommandFailed } from "../src/contract/context.js";
 import { repoName, repoSlug } from "../src/git/git.js";
-import { resolvePullHead } from "../src/git/pr.js";
 import { prepareSession } from "../src/server/session.js";
+import { CommandExecutor } from "../src/shell.js";
 import { commandLayerWithGh, unavailableGhLayer } from "./support/command.js";
 import { provideLive } from "./support/effect.js";
 import {
@@ -99,8 +103,8 @@ describe("the locator", () => {
   it.effect("finds the walkthrough in the working tree when the branch is checked out", () =>
     Effect.gen(function* () {
       const located = yield* locate(origin.dir, 42, null);
+      expect(located.kind).toBe("workingTree");
       expect(located.paths).toEqual(["walkthroughs/valid.md"]);
-      expect(located.at).toBeUndefined();
     }),
   );
 
@@ -122,6 +126,7 @@ describe("the locator", () => {
   it.effect("fetches pull/<n>/head when the working tree has nothing", () =>
     Effect.gen(function* () {
       const located = yield* locate(clone.dir, 42, null);
+      assert(located.kind === "pullHead", `expected a fetched pull head, got ${located.kind}`);
       /* Git and Node can spell the same path differently across platforms. */
       expect(realpathSync.native(located.root)).toBe(realpathSync.native(clone.dir));
       expect(located.paths).toEqual(["walkthroughs/valid.md"]);
@@ -136,6 +141,39 @@ describe("the locator", () => {
       expect(locateErrorMessage(error)).toContain("pull/99/head");
     }),
   );
+
+  it.effect("preserves the command failure when fetching the pull head fails", () =>
+    Effect.gen(function* () {
+      const failure = new CommandFailed({
+        file: "git",
+        args: ["ls-remote"],
+        cwd: clone.dir,
+        stderr: "network unavailable",
+        code: 128,
+      });
+      const commandLayer = Layer.succeed(CommandExecutor, {
+        exec: Effect.fn("CommandExecutor.fetchFailure")(function* () {
+          return yield* failure;
+        }),
+      });
+
+      const error = yield* Effect.flip(fetchPullHead(clone.dir, 42)).pipe(
+        Effect.provide(commandLayer),
+      );
+      expect(error).toBe(failure);
+    }),
+  );
+
+  it("includes the underlying source-read failure in the CLI message", () => {
+    const message = locateErrorMessage(
+      new PullSourceReadFailed({
+        path: "/repo/walkthroughs/review.md",
+        cause: new Error("permission denied"),
+      }),
+    );
+
+    expect(message).toContain("permission denied");
+  });
 
   it.effect("says when the fetched PR carries no walkthrough", () =>
     Effect.gen(function* () {
@@ -171,10 +209,11 @@ describe("a served PR without a checkout", () => {
   it.effect("serves the walkthrough read at the fetched commit", () =>
     Effect.gen(function* () {
       const located = yield* locate(clone.dir, 42, null);
+      assert(located.kind === "pullHead", `expected a fetched pull head, got ${located.kind}`);
       const prepared = yield* provideLive(
         prepareSession({
           cwd: clone.dir,
-          selection: { kind: "located", ...located },
+          selection: located,
           useGh: false,
         }),
       );

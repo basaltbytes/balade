@@ -3,7 +3,7 @@
 import { Effect, Match, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { printSoft, size, stopMessage, stopReports, writeStdout } from "../../terminal.js";
-import { buildErrorMessage, runBuild } from "./pipeline.js";
+import { buildErrorMessage, exportContentsMessage, runBuild } from "./pipeline.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
   Flag.withDescription("Chrome language; overrides meta.lang"),
@@ -31,26 +31,20 @@ export const buildCommand = Command.make(
         paths: config.files,
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         ...(Option.isSome(config.out) ? { out: config.out.value } : {}),
-      }).pipe(
-        Effect.map(Option.some),
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            stopMessage(buildErrorMessage(error));
-            return Option.none();
-          }),
-        ),
-      );
-      if (Option.isNone(result)) return;
-      return yield* Match.valueTags(result.value, {
-        Built: ({ reports, file, bytes }) =>
+      });
+      return yield* Match.valueTags(result, {
+        Built: ({ reports, file, bytes, changedFileCount }) =>
           Effect.sync(() => {
             printSoft(reports);
-            writeStdout(`balade wrote ${file} (${size(bytes)})\n`);
+            writeStdout(
+              `balade wrote ${file} (${size(bytes)})\n` +
+                `${exportContentsMessage(changedFileCount)}\n`,
+            );
           }),
         BuildNotRun: ({ message }) => Effect.sync(() => stopMessage(message)),
         BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
       });
-    }),
+    }).pipe(Effect.catch((error) => Effect.sync(() => stopMessage(buildErrorMessage(error))))),
 ).pipe(
   Command.withDescription(
     "Export one self-contained HTML review; no server, state stays in the browser",
