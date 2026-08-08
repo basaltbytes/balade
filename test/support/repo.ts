@@ -256,6 +256,34 @@ export interface FixtureClone {
   cleanup(): void;
 }
 
+/**
+ * A linked worktree of the fixture repository: `.git` at its root is a pointer
+ * file, and the real git directory stays with the main checkout.
+ */
+export function addWorktree(origin: FixtureRepo, branch: string): FixtureClone {
+  const dir = mkdtempSync(join(tmpdir(), "balade-worktree-"));
+  run(origin.dir, ["worktree", "add", dir, branch]);
+  return {
+    dir,
+    /* The origin's cleanup removes the worktree registration with the rest. */
+    cleanup: () => removeRepo(dir),
+  };
+}
+
+/**
+ * A host repository embedding the fixture as a submodule: `.git` at the
+ * submodule root is a pointer file into the host's `.git/modules/`.
+ */
+export function addSubmodule(origin: FixtureRepo): FixtureClone {
+  const host = mkdtempSync(join(tmpdir(), "balade-submodule-"));
+  run(host, ["init", "-b", "main"]);
+  run(host, ["-c", "protocol.file.allow=always", "submodule", "add", origin.dir, "sub"]);
+  return {
+    dir: join(host, "sub"),
+    cleanup: () => removeRepo(host),
+  };
+}
+
 /** Advertises a commit as `pull/<n>/head`, the ref GitHub publishes for every PR. */
 export function advertisePull(origin: FixtureRepo, pull: number, commit: string): void {
   run(origin.dir, ["update-ref", `refs/pull/${pull}/head`, commit]);
