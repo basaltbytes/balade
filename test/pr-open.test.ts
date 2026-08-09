@@ -18,7 +18,7 @@ import {
 import { PULL_COMMIT_SUBJECT_LIMIT } from "../src/git/intent.js";
 import { fetchPullHead, parseOpenTarget, parsePrTarget, resolvePullHead } from "../src/git/pr.js";
 import { CommandFailed } from "../src/contract/context.js";
-import { repoName, repoSlug } from "../src/git/git.js";
+import { readPullRequest, repoName, repoSlug } from "../src/git/git.js";
 import { prepareSession } from "../src/server/session.js";
 import { CommandExecutor } from "../src/shell.js";
 import { commandLayerWithGh, unavailableGhLayer } from "./support/command.js";
@@ -253,6 +253,39 @@ const pullFixture = Effect.acquireRelease(Effect.sync(createFixtureRepo), (repo)
 );
 
 describe("pull-request authoring intent", () => {
+  it.effect("rejects linked-issue URLs that do not identify a repository", () =>
+    Effect.gen(function* () {
+      const malformedUrl = "https://github.com/acme";
+      const ghLayer = commandLayerWithGh(() =>
+        Effect.succeed(
+          JSON.stringify({
+            url: "https://github.com/acme/planning/pull/42",
+            state: "OPEN",
+            author: { login: "reviewer" },
+            baseRefName: "main",
+            headRefName: "feature/pool",
+            baseRefOid: "a".repeat(40),
+            headRefOid: "b".repeat(40),
+            commits: [],
+            title: "Malformed linked issue provenance",
+            body: "",
+            closingIssuesReferences: [{ url: malformedUrl }],
+          }),
+        ),
+      );
+
+      const result = yield* readPullRequest("/fixture", 42).pipe(Effect.provide(ghLayer));
+
+      expect(Option.isNone(result.pull)).toBe(true);
+      expect(result.notices).toEqual([
+        expect.objectContaining({
+          code: "gh-unavailable",
+          message: expect.stringContaining("did not match the requested fields"),
+        }),
+      ]);
+    }),
+  );
+
   it.effect("classifies GitHub claims and caps commit subjects from real Git", () =>
     Effect.gen(function* () {
       const repo = yield* pullFixture;
@@ -335,13 +368,16 @@ describe("pull-request authoring intent", () => {
         body: "Claims must be checked against the pinned implementation.",
         linkedIssues: [
           {
-            _tag: "SameRepositoryLinkedIssue",
+            reference: { _tag: "SameRepositoryLinkedIssue", url: linkedIssueUrl },
             title: "Keep generation available without gh",
             body: Option.some("Commit subjects remain available from the local repository."),
           },
           {
-            _tag: "ThirdPartyLinkedIssue",
-            repository: "otherowner/otherrepo",
+            reference: {
+              _tag: "ThirdPartyLinkedIssue",
+              url: foreignLinkedIssueUrl,
+              repository: "otherowner/otherrepo",
+            },
             title: "Requirement owned by another repository",
             body: Option.some(
               "This text remains useful context, but it is not author-stated intent.",

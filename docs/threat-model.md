@@ -219,6 +219,9 @@ they describe.
   formats and credential/secret names) plus `.aws/`, `.ssh/` and `.gnupg/`
   directory segments. The authoring prompt separately forbids reproducing
   credential values and requires an explicit omission note.
+- PR and linked-issue URLs from `gh` must parse to repository locations before
+  provenance is classified. A malformed location drops the optional GitHub
+  enrichment with a notice instead of becoming a guessed third-party label.
 - PR-head `AGENTS.md` and `CLAUDE.md` files enter the system prompt only when
   unchanged by the PR or explicitly trusted with `--trust-head-instructions`.
   Project-context closing tags are rejected before interpolation.

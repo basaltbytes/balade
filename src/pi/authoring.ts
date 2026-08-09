@@ -109,17 +109,17 @@ export function initialAuthoringPrompt(request: InitialAuthoringRequest): string
   const github = Option.getOrUndefined(request.claims.github);
   const sameRepositoryLinkedIssues =
     github?.linkedIssues.flatMap((issue) => {
-      if (issue._tag !== "SameRepositoryLinkedIssue") return [];
+      if (issue.reference._tag !== "SameRepositoryLinkedIssue") return [];
       const body = Option.getOrUndefined(issue.body);
       return [{ title: issue.title, ...(body === undefined ? {} : { body }) }];
     }) ?? [];
   const thirdPartyLinkedIssues =
     github?.linkedIssues.flatMap((issue) => {
-      if (issue._tag !== "ThirdPartyLinkedIssue") return [];
+      if (issue.reference._tag !== "ThirdPartyLinkedIssue") return [];
       const body = Option.getOrUndefined(issue.body);
       return [
         {
-          repository: issue.repository,
+          repository: issue.reference.repository,
           title: issue.title,
           ...(body === undefined ? {} : { body }),
         },

@@ -1,6 +1,6 @@
 /** Author-controlled pull-request claims collected for walkthrough generation. */
 
-import { Array as Arr, Effect, Match, Option, Schema } from "effect";
+import { Array as Arr, Effect, Option, Schema } from "effect";
 import { firstLine, gh, gitOut } from "../shell.js";
 
 export const PULL_COMMIT_SUBJECT_LIMIT = 20;
@@ -19,18 +19,11 @@ export type PullLinkedIssueReference =
       readonly repository: string;
     };
 
-export type PullLinkedIssueClaim =
-  | {
-      readonly _tag: "SameRepositoryLinkedIssue";
-      readonly title: string;
-      readonly body: Option.Option<string>;
-    }
-  | {
-      readonly _tag: "ThirdPartyLinkedIssue";
-      readonly repository: string;
-      readonly title: string;
-      readonly body: Option.Option<string>;
-    };
+export interface PullLinkedIssueClaim {
+  readonly reference: PullLinkedIssueReference;
+  readonly title: string;
+  readonly body: Option.Option<string>;
+}
 
 export interface PullRequestClaims {
   readonly title: string;
@@ -116,7 +109,10 @@ export const readPullIntentClaims = Effect.fn("readPullIntentClaims")(function* 
   });
 });
 
-const readLinkedIssueClaim = (root: string, reference: PullLinkedIssueReference) => {
+const readLinkedIssueClaim = Effect.fn("readLinkedIssueClaim")((
+  root: string,
+  reference: PullLinkedIssueReference,
+) => {
   const provenanceNotices =
     reference._tag === "ThirdPartyLinkedIssue" ? [thirdPartyIssueNotice(reference)] : [];
   return gh(["issue", "view", reference.url, "--json", "title,body"], root).pipe(
@@ -147,28 +143,18 @@ const readLinkedIssueClaim = (root: string, reference: PullLinkedIssueReference)
               notices: [...provenanceNotices, notice],
             }),
             onSuccess: (response): LinkedIssueClaimResult => ({
-              claim: Option.some(
-                Match.valueTags(reference, {
-                  SameRepositoryLinkedIssue: (): PullLinkedIssueClaim => ({
-                    _tag: "SameRepositoryLinkedIssue",
-                    title: response.title,
-                    body: Option.fromNullishOr(response.body),
-                  }),
-                  ThirdPartyLinkedIssue: ({ repository }): PullLinkedIssueClaim => ({
-                    _tag: "ThirdPartyLinkedIssue",
-                    repository,
-                    title: response.title,
-                    body: Option.fromNullishOr(response.body),
-                  }),
-                }),
-              ),
+              claim: Option.some({
+                reference,
+                title: response.title,
+                body: Option.fromNullishOr(response.body),
+              }),
               notices: provenanceNotices,
             }),
           }),
         ),
     }),
   );
-};
+});
 
 function thirdPartyIssueNotice(
   reference: Extract<PullLinkedIssueReference, { readonly _tag: "ThirdPartyLinkedIssue" }>,
@@ -184,6 +170,6 @@ function linkedIssueNotice(url: string, detail: string): PullNotice {
   return {
     code: "gh-unavailable",
     message: `gh unavailable — linked issue ${url} was omitted (${detail}).`,
-    hint: "Run `gh auth login` with access to the linked issue; generation can continue with the remaining author-stated intent.",
+    hint: "Run `gh auth login` with access to the linked issue; generation can continue with the remaining pull-request claims.",
   };
 }
