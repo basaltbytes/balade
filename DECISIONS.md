@@ -350,6 +350,15 @@ special languages from `getLoadedLanguages()`. Diff highlighting stays disabled
 until that adapter is ready, so `@git-diff-view` never gets a chance to run its
 bundled `highlightAuto` fallback over PR bytes.
 
+Shiki loading is a browser `SyntaxHighlighter` service in the app's single
+managed runtime. Chunk/grammar failures, registry inspection failures and
+synchronous render failures keep their external cause in distinct tagged
+errors; the boundary logs them before choosing the existing plaintext outcome.
+The diff library requires a
+synchronous `getAST`, so that one adapter uses `Result.try` instead of hiding an
+Effect runner in a callback. Its failure AST is a root containing only the raw
+text node: it preserves the diff while adding no content-derived properties.
+
 Diagram coordinates are clamped to 1–64 in the CLI transform and again in the
 renderer. The first boundary keeps generated payloads small and valid; the
 second protects ref-mode and exported payloads that did not pass through that

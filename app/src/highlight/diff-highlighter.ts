@@ -5,14 +5,36 @@
    "style" — the renderer reads `properties.style` off the wrapper node. */
 
 import { processAST, type DiffAST, type DiffFileHighlighter } from "@git-diff-view/react";
+import { Effect, Result } from "effect";
 import { useEffect, useState } from "react";
-import { ensureLangs, highlightLanguage, resolveLang, THEME } from "./shiki";
+import { reportAppEffect, runAppEffect } from "../data/runtime";
+import {
+  ensureLangs,
+  type HighlightFailure,
+  HighlightLanguageCheckFailed,
+  logHighlightFailure,
+  renderCodeAst,
+  resolveLang,
+  withHighlightFallback,
+} from "./shiki";
 import type { HighlighterCore } from "shiki/core";
 
 /* The two settings `@git-diff-view` writes back live per highlighter, in this
    closure — never as module state a second instance would share. */
-export const createDiffHighlighter = (highlighter: HighlighterCore): DiffFileHighlighter => {
+type DiffShiki = Pick<HighlighterCore, "codeToHast" | "getLoadedLanguages">;
+type ReportHighlightFailure = (error: HighlightFailure) => void;
+
+const plaintextAst = (raw: string): DiffAST => ({
+  type: "root",
+  children: [{ type: "text", value: raw }],
+});
+
+export const createDiffHighlighter = (
+  highlighter: DiffShiki,
+  reportFailure: ReportHighlightFailure,
+): DiffFileHighlighter => {
   let maxLineToIgnoreSyntax = 2000;
+  let registryAvailable = true;
   const ignoreSyntaxHighlightList: (string | RegExp)[] = [];
 
   return {
@@ -31,15 +53,29 @@ export const createDiffHighlighter = (highlighter: HighlighterCore): DiffFileHig
       ignoreSyntaxHighlightList.length = 0;
       ignoreSyntaxHighlightList.push(...value);
     },
-    getAST: (raw: string, _fileName?: string, lang?: string): DiffAST =>
-      highlighter.codeToHast(raw, {
-        lang: highlightLanguage(raw, lang ?? "text"),
-        theme: THEME,
-      }) as DiffAST,
+    getAST: (raw: string, _fileName?: string, lang?: string): DiffAST => {
+      if (!registryAvailable) return plaintextAst(raw);
+      const rendered = renderCodeAst(highlighter, raw, lang ?? "text");
+      if (Result.isFailure(rendered)) {
+        reportFailure(rendered.failure);
+        return plaintextAst(raw);
+      }
+      return rendered.success as DiffAST;
+    },
     processAST: (ast: DiffAST) => processAST(ast),
     hasRegisteredCurrentLang: (lang: string) => {
       const resolved = resolveLang(lang);
-      return resolved === "text" || highlighter.getLoadedLanguages().includes(resolved);
+      if (resolved === "text") return true;
+      const registered = Result.try({
+        try: () => highlighter.getLoadedLanguages().includes(resolved),
+        catch: (cause) => new HighlightLanguageCheckFailed({ language: resolved, cause }),
+      });
+      if (Result.isFailure(registered)) {
+        registryAvailable = false;
+        reportFailure(registered.failure);
+        return true;
+      }
+      return registered.success;
     },
   } as DiffFileHighlighter;
 };
@@ -57,17 +93,16 @@ export function useDiffHighlighter(langs: string[]): DiffFileHighlighter | undef
   const [loaded, setLoaded] = useState<LoadedDiffHighlighter | null>(null);
   const key = langs.join(",");
   useEffect(() => {
-    let alive = true;
-    ensureLangs(key.length > 0 ? key.split(",") : [])
-      .then((highlighter) => {
-        if (alive) setLoaded({ key, highlighter: createDiffHighlighter(highlighter) });
-      })
-      .catch(() => {
-        if (alive) setLoaded(null);
-      });
-    return () => {
-      alive = false;
+    const reportFailure: ReportHighlightFailure = (error) => {
+      reportAppEffect(logHighlightFailure(error));
     };
+    return runAppEffect(
+      ensureLangs(key.length > 0 ? key.split(",") : []).pipe(
+        Effect.map((highlighter) => createDiffHighlighter(highlighter, reportFailure)),
+        withHighlightFallback(undefined),
+      ),
+      (highlighter) => setLoaded(highlighter === undefined ? null : { key, highlighter }),
+    );
   }, [key]);
   return loaded?.key === key ? loaded.highlighter : undefined;
 }

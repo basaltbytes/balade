@@ -144,7 +144,7 @@ they describe.
 - `Rich` (`app/src/ui/rich.tsx`) renders every branch as a React text child. No
   `href`, no `style` from data, no HTML sink.
 - Exactly one `dangerouslySetInnerHTML` **in balade's own source**
-  (`app/src/widgets/code.tsx:137`), fed by shiki over payload text; grammars are
+  (`app/src/widgets/code.tsx:138`), fed by shiki over payload text; grammars are
   a closed 31-entry allowlist falling back to `"text"`
   (`app/src/highlight/shiki.ts:86-90`). `@git-diff-view/react` adds four more on
   the same attacker-controlled bytes — see below.
@@ -154,7 +154,7 @@ they describe.
   false`), with shiki calling `toHtml` with no options
   (`@shikijs/core@4.4.1/dist/index.mjs:1024`, `:1035`). Nothing balade passes
   can change that: only `lang`, `theme` and `transformers`
-  (`app/src/highlight/shiki.ts:160-164`), and its single transformer only adds
+  (`app/src/highlight/shiki.ts:171-186`), and its single transformer only adds
   static class names. `style` values come from the bundled theme, never from
   input.
 - No syntax grammar receives a line longer than 2,000 characters. Code excerpts
@@ -163,6 +163,13 @@ they describe.
   highlighter loads, and plaintext counts as registered, so the bundled
   highlight.js `highlightAuto` fallback never receives PR bytes
   (`app/src/highlight/shiki.ts`, `app/src/highlight/diff-highlighter.ts`).
+- Shiki initialization, grammar loading and HTML rendering cross typed Effect
+  errors before the app logs and chooses plaintext. The synchronous diff
+  adapter uses typed `Result` values for registry inspection and HAST rendering;
+  on failure it stays on the custom adapter and returns a root containing only
+  the raw text node, so no lowlight fallback or content-derived property is
+  introduced (`app/src/highlight/shiki.ts:96-229`,
+  `app/src/highlight/diff-highlighter.ts:24-80`).
 - Diagram coordinates are clamped to 1–64 by both the CLI transform and the
   renderer (`src/contract/diagram.ts`, `app/src/widgets/diagram.tsx`). No
   diagram can make the renderer materialize more than 4,096 grid cells.

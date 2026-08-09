@@ -3,8 +3,9 @@
 
 import { useEffect, useMemo } from "react";
 import type { ErrorCard, Payload, Section } from "../contract";
+import { runAppEffect } from "../data/runtime";
 import type { ReviewStoreTarget } from "../data/store";
-import { ensureLangs } from "../highlight/shiki";
+import { ensureLangs, withHighlightFallback } from "../highlight/shiki";
 import { Chip, MarkButton } from "../ui/bits";
 import {
   CompleteBanner,
@@ -35,7 +36,10 @@ function usePayloadLanguages(payload: Payload): void {
     for (const section of payload.sections) {
       for (const block of section.blocks) if (block.b === "code") langs.add(block.lang);
     }
-    void ensureLangs(langs);
+    return runAppEffect(
+      ensureLangs([...langs]).pipe(withHighlightFallback(undefined)),
+      () => undefined,
+    );
   }, [payload]);
 }
 

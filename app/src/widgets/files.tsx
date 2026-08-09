@@ -46,7 +46,7 @@ function FileRow({ entry }: { entry: FileEntry }) {
   const highlightSkipped =
     open &&
     entry.diff !== null &&
-    [entry.diff.oldContent, entry.diff.newContent].some(
+    [entry.diff.unified, entry.diff.oldContent, entry.diff.newContent].some(
       (content) => content !== null && hasOverlongHighlightLine(content),
     );
 

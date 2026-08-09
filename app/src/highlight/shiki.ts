@@ -3,7 +3,7 @@
    adding a language is one line in `LANGS` below. */
 
 import githubDarkDefault from "@shikijs/themes/github-dark-default";
-import { useEffect, useState } from "react";
+import { Context, Effect, Layer, Result, Schema } from "effect";
 import {
   createHighlighterCore,
   type HighlighterCore,
@@ -93,30 +93,140 @@ export const resolveLang = (lang: string): string => {
 export const highlightLanguage = (code: string, lang: string): string =>
   hasOverlongHighlightLine(code) ? "text" : resolveLang(lang);
 
-let instance: Promise<HighlighterCore> | null = null;
+export class HighlightLoadFailed extends Schema.TaggedErrorClass<HighlightLoadFailed>()(
+  "HighlightLoadFailed",
+  {
+    languages: Schema.Array(Schema.String),
+    cause: Schema.Defect(),
+  },
+) {}
 
-const getHighlighter = (): Promise<HighlighterCore> => {
-  instance ??= createHighlighterCore({
+export class HighlightRenderFailed extends Schema.TaggedErrorClass<HighlightRenderFailed>()(
+  "HighlightRenderFailed",
+  {
+    output: Schema.Literals(["html", "ast"]),
+    language: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
+export class HighlightLanguageCheckFailed extends Schema.TaggedErrorClass<HighlightLanguageCheckFailed>()(
+  "HighlightLanguageCheckFailed",
+  {
+    language: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
+export type HighlightFailure =
+  | HighlightLoadFailed
+  | HighlightRenderFailed
+  | HighlightLanguageCheckFailed;
+
+interface SyntaxHighlighterShape {
+  readonly ensureLanguages: (
+    languages: ReadonlyArray<string>,
+  ) => Effect.Effect<HighlighterCore, HighlightLoadFailed>;
+}
+
+export class SyntaxHighlighter extends Context.Service<SyntaxHighlighter, SyntaxHighlighterShape>()(
+  "@balade/app/SyntaxHighlighter",
+) {}
+
+type HighlighterFactory = () => Promise<HighlighterCore>;
+
+/** A layer factory is the real failure-injection seam for the Shiki adapter. */
+export const syntaxHighlighterLayer = (create: HighlighterFactory) =>
+  Layer.sync(SyntaxHighlighter, () => {
+    let highlighterPromise: Promise<HighlighterCore> | null = null;
+    const getHighlighter = (): Promise<HighlighterCore> => (highlighterPromise ??= create());
+
+    return {
+      ensureLanguages: Effect.fn("SyntaxHighlighter.ensureLanguages")(
+        (languages: ReadonlyArray<string>) => {
+          const resolved = [...new Set(languages.map(resolveLang))];
+          return Effect.tryPromise({
+            try: async () => {
+              const highlighter = await getHighlighter();
+              const loaded = new Set(highlighter.getLoadedLanguages());
+              const missing = resolved.filter((id) => id !== "text" && !loaded.has(id));
+              const loaders = missing.flatMap((id) => {
+                const loader = LANGS[id];
+                return loader === undefined ? [] : [loader];
+              });
+              if (loaders.length > 0) await highlighter.loadLanguage(...loaders);
+              return highlighter;
+            },
+            catch: (cause) => new HighlightLoadFailed({ languages: resolved, cause }),
+          });
+        },
+      ),
+    };
+  });
+
+export const shikiLayer = syntaxHighlighterLayer(() =>
+  createHighlighterCore({
     themes: [githubDarkDefault],
     langs: [],
     engine: createJavaScriptRegexEngine({ forgiving: true }),
+  }),
+);
+
+export const ensureLangs = Effect.fn("SyntaxHighlighter.loadLanguages")(function* (
+  languages: ReadonlyArray<string>,
+) {
+  const highlighter = yield* SyntaxHighlighter;
+  return yield* highlighter.ensureLanguages(languages);
+});
+
+export const renderCodeHtml = Effect.fn("SyntaxHighlighter.renderHtml")((
+  highlighter: Pick<HighlighterCore, "codeToHtml">,
+  code: string,
+  lang: string,
+  transformers: ReadonlyArray<ShikiTransformer>,
+) => {
+  const language = resolveLang(lang);
+  return Effect.try({
+    try: () =>
+      highlighter.codeToHtml(code, {
+        lang: language,
+        theme: THEME,
+        transformers: [...transformers],
+      }),
+    catch: (cause) => new HighlightRenderFailed({ output: "html", language, cause }),
   });
-  return instance;
+});
+
+export const highlightCode = Effect.fn("SyntaxHighlighter.highlightCode")(function* (
+  code: string,
+  lang: string,
+  transformers: ReadonlyArray<ShikiTransformer>,
+) {
+  const highlighter = yield* ensureLangs([lang]);
+  return yield* renderCodeHtml(highlighter, code, lang, transformers);
+});
+
+export const renderCodeAst = (
+  highlighter: Pick<HighlighterCore, "codeToHast">,
+  code: string,
+  lang: string,
+) => {
+  const language = highlightLanguage(code, lang);
+  return Result.try({
+    try: () => highlighter.codeToHast(code, { lang: language, theme: THEME }),
+    catch: (cause) => new HighlightRenderFailed({ output: "ast", language, cause }),
+  });
 };
 
-export async function ensureLangs(langs: Iterable<string>): Promise<HighlighterCore> {
-  const highlighter = await getHighlighter();
-  const loaded = new Set(highlighter.getLoadedLanguages());
-  const missing = [...new Set([...langs].map(resolveLang))].filter(
-    (id) => id !== "text" && !loaded.has(id),
-  );
-  const loaders = missing.flatMap((id) => {
-    const loader = LANGS[id];
-    return loader ? [loader] : [];
-  });
-  if (loaders.length > 0) await highlighter.loadLanguage(...loaders);
-  return highlighter;
-}
+export const logHighlightFailure = (error: HighlightFailure): Effect.Effect<void> =>
+  Effect.logWarning("balade: syntax highlighting failed; using plain text.", error);
+
+export const withHighlightFallback =
+  <Fallback>(fallback: Fallback) =>
+  <A, E extends HighlightFailure, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A | Fallback, never, R> =>
+    effect.pipe(Effect.catch((error) => logHighlightFailure(error).pipe(Effect.as(fallback))));
 
 /**
  * The two per-line marks the code block needs: the change overlay and the
@@ -138,38 +248,3 @@ export const lineMarks = (
     },
   };
 };
-
-/** Highlighted HTML, or `null` until the grammar has loaded. */
-export function useHighlighted(
-  code: string,
-  lang: string,
-  transformers: ShikiTransformer[],
-): string | null {
-  const [html, setHtml] = useState<string | null>(null);
-  const overlongLine = hasOverlongHighlightLine(code);
-  useEffect(() => {
-    if (overlongLine) {
-      setHtml(null);
-      return;
-    }
-    let alive = true;
-    ensureLangs([lang])
-      .then((highlighter) => {
-        if (!alive) return;
-        setHtml(
-          highlighter.codeToHtml(code, {
-            lang: resolveLang(lang),
-            theme: THEME,
-            transformers,
-          }),
-        );
-      })
-      .catch(() => {
-        if (alive) setHtml(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [code, lang, overlongLine, transformers]);
-  return overlongLine ? null : html;
-}
