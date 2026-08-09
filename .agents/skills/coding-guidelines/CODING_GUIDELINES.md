@@ -193,6 +193,19 @@ names what was walked.
 
 ## 6. Testing
 
+- **Every test names the regression it catches.** Before adding a test, identify
+  the realistic regression it would catch and why existing coverage would miss
+  it. A test justified only by coverage, symmetry, or "the code changed" is a
+  dead test: do not add it, and delete it when you find one in review.
+- **A bug fix comes with a regression test.** Write it at the level where the
+  bug was observed, when practical. It fails before the fix and passes after.
+- **Test absence only where absence is a contract** — a current API, security,
+  or persistence guarantee. A removal deletes its tests. A test that verifies
+  removed code, routes, or fields stay absent is a tombstone test; delete it.
+- **Extend existing tests before creating new ones.** Add assertions to the
+  existing test at the same behavior boundary. New files, fixtures, helpers, and
+  snapshots need the same justification as new production code; test
+  infrastructure stays simpler than the behavior it verifies.
 - **Test through real seams.** Constructor-injected fakes, in-memory adapters, a
   local database — never module mocking (`vi.mock`, `jest.mock`,
   `unittest.mock.patch`). Code that can only be tested by patching its imports is
@@ -200,13 +213,19 @@ names what was walked.
 - **Assert behavior, not interactions.** Returned value or typed error, persisted
   state, emitted event, rendered response, the message sitting in a fake adapter.
   Spy assertions (`toHaveBeenCalledWith`) only when the call itself is the
-  observable outcome.
+  observable outcome. A test that breaks on a behavior-preserving refactor is
+  asserting implementation details: literal values, mappings, control flow.
 - **Property tests where properties beat examples** — parsers, smart constructors,
   state machines, serialization roundtrips, normalization idempotence (fast-check,
   Hypothesis). Arbitraries live next to the domain module they generate.
 - **Tests never bypass construction.** Fixtures go through the same parsers and
   smart constructors as production code; a test that hand-builds an invalid
   instance is exercising a world the domain forbids.
+
+### Final check
+
+Done means every test the change adds or modifies names its regression, and
+every removal left no tests behind: none orphaned, none asserting absence.
 
 ## 7. Hygiene
 

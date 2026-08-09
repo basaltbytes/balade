@@ -1,6 +1,6 @@
 ---
 name: coding-guidelines
-description: Basaltbytes coding-guidelines charter — always-valid domain modeling, functional-core architecture, typed-error discipline, idempotent workflows, observability, testing through real seams, and hygiene. Use when designing or reviewing domain models, value objects, or state machines, when parsing at API/DB/env boundaries (pydantic strict, Zod, branded/newtype ids), when structuring error handling or choosing test seams and mocks, or when code shows primitive obsession, validation inside function bodies, scattered rechecks, assert/non-null narrowing, or raw payloads flowing into domain functions.
+description: Basaltbytes coding-guidelines charter — always-valid domain modeling, functional-core architecture, typed-error discipline, idempotent workflows, observability, test economy and real seams, and hygiene. Use when designing or reviewing domain models, value objects, or state machines, when parsing at API/DB/env boundaries (pydantic strict, Zod, branded/newtype ids), when structuring error handling, when deciding whether a change needs tests (or has dead ones to delete) or choosing test seams and mocks, or when code shows primitive obsession, validation inside function bodies, scattered rechecks, assert/non-null narrowing, or raw payloads flowing into domain functions.
 ---
 
 # Coding Guidelines

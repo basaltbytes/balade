@@ -35,7 +35,7 @@
       "source": "basaltbytes/skills",
       "sourceType": "github",
       "skillPath": "skills/coding-guidelines/SKILL.md",
-      "computedHash": "07f7e82a9800f42ee4661a738674aa0842dadd2ae50dee24cf8f518b7d4eff6d"
+      "computedHash": "bc261f9ef04372e4989f643a8f0e8a7b7e4ddba52859f467698b0b44ff8c31c3"
     },
     "diagnose": {
       "source": "mattpocock/skills",
