@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import type { CodeBlock } from "../contract";
 import { codeExcerptHunk } from "../data/diff";
 import { useDiffHighlighter } from "../highlight/diff-highlighter";
-import { lineMarks, useHighlighted } from "../highlight/shiki";
+import { hasOverlongHighlightLine, lineMarks } from "../highlight/shiki";
+import { useHighlighted } from "../highlight/use-highlighted";
 import { Octicon } from "../ui/octicon";
 import { usePayload } from "../ui/payload-context";
 import { useStrings } from "../ui/strings";
@@ -23,6 +24,7 @@ export function Code({ block }: { block: CodeBlock }) {
   const [open, setOpen] = useState(true);
 
   const code = useMemo(() => block.lines.join("\n"), [block.lines]);
+  const highlightSkipped = hasOverlongHighlightLine(code);
   const transformers = useMemo(
     () => [lineMarks(block.from, block.changed, block.mark ?? [])],
     [block.from, block.changed, block.mark],
@@ -90,6 +92,13 @@ export function Code({ block }: { block: CodeBlock }) {
         </div>
       )}
 
+      {highlightSkipped && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border-soft text-[12px] text-muted-foreground">
+          <Octicon name="info" size={14} className="shrink-0" />
+          <span>{strings.highlightSkippedLongLine}</span>
+        </div>
+      )}
+
       <div className="cbody">
         {view === "diff" && hunk !== null ? (
           <div className="code-diff text-[12px]" data-theme="dark">
@@ -107,7 +116,7 @@ export function Code({ block }: { block: CodeBlock }) {
               }}
               diffViewMode={DiffModeEnum.Split}
               diffViewTheme="dark"
-              diffViewHighlight
+              diffViewHighlight={highlighter !== undefined}
               diffViewFontSize={12}
               diffViewWrap={false}
               {...(highlighter ? { registerHighlighter: highlighter } : {})}

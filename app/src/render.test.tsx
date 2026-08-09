@@ -34,6 +34,74 @@ describe("the walkthrough route", () => {
     expect(html).toContain("expect mismatch");
   });
 
+  it("renders an oversized code line as plain text with a localized notice", () => {
+    const longLine = "<".repeat(6_000);
+    const payload: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "long-line",
+          title: "Long line",
+          hash: "sha256:long-line",
+          blocks: [
+            {
+              b: "code",
+              file: "scripts/adversarial.sh",
+              from: 1,
+              to: 1,
+              lang: "shellscript",
+              view: "plain",
+              lines: [longLine],
+              changed: [1],
+            },
+          ],
+        },
+      ],
+    };
+
+    const en = render(payload);
+    expect(en).toContain("Line too long to highlight; shown as plain text.");
+    expect(en).toContain("&lt;&lt;&lt;");
+
+    const fr = render({ ...payload, lang: "fr" }, "fr");
+    expect(fr).toContain(
+      "Ligne trop longue pour la coloration syntaxique ; affichée en texte brut.",
+    );
+  });
+
+  it("caps a payload-provided diagram at a 64 by 64 grid", () => {
+    const payload: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "large-diagram",
+          title: "Large diagram",
+          hash: "sha256:large-diagram",
+          blocks: [
+            {
+              b: "diagram",
+              nodes: [
+                {
+                  id: "far-away",
+                  model: "FarAway",
+                  change: "ctx",
+                  col: 999_999_999,
+                  row: 999_999_999,
+                  compartments: [],
+                },
+              ],
+              edges: [],
+            },
+          ],
+        },
+      ],
+    };
+
+    const rendered = render(payload);
+    expect(rendered).toContain("grid-template-columns:repeat(64, minmax(0, 1fr))");
+    expect(rendered).toContain("FarAway");
+  });
+
   it("renders toned callouts as localized banners and leaves neutral callouts plain", () => {
     const callouts: Payload = {
       ...pr96,

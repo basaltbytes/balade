@@ -8,6 +8,7 @@ import type { DiagramBlock, DiagramEdge, DiagramNode, Inline } from "./types.js"
 
 const CHANGES = ["new", "mod", "ctx"] as const;
 const EDGE_KINDS = ["new", "mod", "ctx", "derived"] as const;
+export const MAX_DIAGRAM_GRID_SIZE = 64;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -15,6 +16,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 function inlineRow(value: unknown): Inline[] {
   if (Array.isArray(value)) return value.map((item) => String(item));
   return [String(value)];
+}
+
+function gridCoordinate(value: unknown): number {
+  const coordinate = Number(value ?? 1);
+  if (Number.isNaN(coordinate)) return 1;
+  return Math.min(MAX_DIAGRAM_GRID_SIZE, Math.max(1, Math.trunc(coordinate)));
 }
 
 export function diagramNodes(value: unknown): DiagramNode[] {
@@ -37,8 +44,8 @@ export function diagramNodes(value: unknown): DiagramNode[] {
       id: String(record["id"] ?? `n-${index}`),
       model: String(record["model"] ?? ""),
       change,
-      col: Number(record["col"] ?? 1),
-      row: Number(record["row"] ?? 1),
+      col: gridCoordinate(record["col"]),
+      row: gridCoordinate(record["row"]),
       compartments,
       ...(typeof record["nlabel"] === "string" ? { nlabel: record["nlabel"] } : {}),
       ...(typeof record["badge"] === "string" ? { badge: record["badge"] } : {}),

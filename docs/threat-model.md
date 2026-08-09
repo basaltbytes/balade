@@ -130,7 +130,8 @@ they describe.
 - Both payload entry points decode with `onExcessProperty: "error"`
   (`app/src/data/source.ts:29-32`, baked `:124`, served `:112`);
   `window.__BALADE__` is typed `unknown`. Enforced, not conventional.
-- The schema is **shape-only** — no length, bound or protocol refinements. See
+- The schema is **shape-only** — no length, bound or protocol refinements.
+  Expensive consumers enforce their own limits, as recorded below and in
   [#74](https://github.com/basaltbytes/balade/issues/74).
 
 **Rendering**
@@ -143,9 +144,9 @@ they describe.
 - `Rich` (`app/src/ui/rich.tsx`) renders every branch as a React text child. No
   `href`, no `style` from data, no HTML sink.
 - Exactly one `dangerouslySetInnerHTML` **in balade's own source**
-  (`app/src/widgets/code.tsx:129`), fed by shiki over payload text; grammars are
+  (`app/src/widgets/code.tsx:138`), fed by shiki over payload text; grammars are
   a closed 31-entry allowlist falling back to `"text"`
-  (`app/src/highlight/shiki.ts:74-77`). `@git-diff-view/react` adds four more on
+  (`app/src/highlight/shiki.ts:86-90`). `@git-diff-view/react` adds four more on
   the same attacker-controlled bytes — see below.
 - **shiki's `codeToHtml` output is safe to inject.** Text nodes are escaped by
   `hast-util-to-html` via `stringifyEntities`, attribute values by
@@ -153,12 +154,25 @@ they describe.
   false`), with shiki calling `toHtml` with no options
   (`@shikijs/core@4.4.1/dist/index.mjs:1024`, `:1035`). Nothing balade passes
   can change that: only `lang`, `theme` and `transformers`
-  (`app/src/highlight/shiki.ts:138-142`), and its single transformer only adds
+  (`app/src/highlight/shiki.ts:171-186`), and its single transformer only adds
   static class names. `style` values come from the bundled theme, never from
   input.
-- **shiki's tokenizer is not DoS-bounded**, and highlighting runs synchronously
-  on the main thread with no input size cap:
-  [#74](https://github.com/basaltbytes/balade/issues/74).
+- No syntax grammar receives a line longer than 2,000 characters. Code excerpts
+  use React's escaped plaintext rendering and show a localized note; diff views
+  use Shiki's plaintext grammar. Diff highlighting remains off until the custom
+  highlighter loads, and plaintext counts as registered, so the bundled
+  highlight.js `highlightAuto` fallback never receives PR bytes
+  (`app/src/highlight/shiki.ts`, `app/src/highlight/diff-highlighter.ts`).
+- Shiki initialization, grammar loading and HTML rendering cross typed Effect
+  errors before the app logs and chooses plaintext. The synchronous diff
+  adapter uses typed `Result` values for registry inspection and HAST rendering;
+  on failure it stays on the custom adapter and returns a root containing only
+  the raw text node, so no lowlight fallback or content-derived property is
+  introduced (`app/src/highlight/shiki.ts:96-229`,
+  `app/src/highlight/diff-highlighter.ts:24-80`).
+- Diagram coordinates are clamped to 1–64 by both the CLI transform and the
+  renderer (`src/contract/diagram.ts`, `app/src/widgets/diagram.tsx`). No
+  diagram can make the renderer materialize more than 4,096 grid cells.
 - The only payload-derived `href` is `pr.url` (`app/src/ui/chrome.tsx:36`),
   which is GitHub-derived (`src/git/git.ts:229`) and additionally protected by
   React 19's `javascript:` blocking.
@@ -187,10 +201,12 @@ they describe.
   `src/server/repo.ts:158`). SHA-prefixed composites cannot begin with `-`: the
   SHA is gated by `/^[0-9a-f]{40,64}$/u` (`src/git/pr.ts:117`). Frontmatter
   `commit` is validated hex (`src/contract/schema.ts:441`).
-- `git rev-parse --verify --quiet` is inert for every dash-leading argument
-  shape — it spawns no process and writes no file. See
-  [#74](https://github.com/basaltbytes/balade/issues/74) for the evidence and
-  the residual DoS.
+- PR-controlled revision names follow `--end-of-options` in
+  `git rev-parse --verify --quiet`, so a leading dash remains revision data and
+  cannot abort resolution (`src/git/git.ts`).
+- Frontmatter key line lookup uses literal string operations. An unknown key
+  cannot become regular-expression source or escape the diagnostic channel
+  (`src/walkthrough/frontmatter.ts`).
 - `?path=` never reaches the filesystem: it is allowlist membership against the
   served set (`src/server/api.ts:124-137`). State filenames keep only the
   basename (`src/state.ts:64-68`). Two independent barriers; **no arbitrary file

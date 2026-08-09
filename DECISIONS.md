@@ -339,6 +339,38 @@ grammars, or a payload-driven grammar subset — the language ids are known at
 compile time, so `build` could bake only the ones a walkthrough uses, at the
 cost of a per-walkthrough bundling step the CLI does not otherwise need.
 
+## Untrusted rendering work is bounded where it becomes expensive
+
+Decided on [#74](https://github.com/basaltbytes/balade/issues/74). Syntax
+highlighting never sends a line longer than 2,000 characters through a grammar.
+A code excerpt with such a line renders through React's escaped text path and
+shows a localized note. The diff adapter sends the whole file through Shiki's
+plaintext grammar instead; `text` counts as registered even though Shiki omits
+special languages from `getLoadedLanguages()`. Diff highlighting stays disabled
+until that adapter is ready, so `@git-diff-view` never gets a chance to run its
+bundled `highlightAuto` fallback over PR bytes.
+
+Shiki loading is a browser `SyntaxHighlighter` service in the app's single
+managed runtime. Chunk/grammar failures, registry inspection failures and
+synchronous render failures keep their external cause in distinct tagged
+errors; the boundary logs them before choosing the existing plaintext outcome.
+The diff library requires a
+synchronous `getAST`, so that one adapter uses `Result.try` instead of hiding an
+Effect runner in a callback. Its failure AST is a root containing only the raw
+text node: it preserves the diff while adding no content-derived properties.
+
+Diagram coordinates are clamped to 1–64 in the CLI transform and again in the
+renderer. The first boundary keeps generated payloads small and valid; the
+second protects ref-mode and exported payloads that did not pass through that
+transform. A 64×64 grid already exceeds a readable walkthrough diagram, while
+bounding the renderer to 4,096 cells.
+
+The payload schema remains shape-only. These limits belong to the consumers
+whose cost they bound, so no contract field or compatibility path is added.
+The same consumer-boundary rule makes frontmatter key lookup literal instead of
+regular-expression based, and terminates `git rev-parse` options before a
+PR-controlled ref name.
+
 ## Export and served pages declare separate content-security policies
 
 Decided on [#67](https://github.com/basaltbytes/balade/issues/67). The static

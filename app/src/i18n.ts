@@ -49,6 +49,7 @@ export interface Strings {
   openDiffOnGitHub: string;
   expectMismatch: string;
   expectMismatchBody: (quote: string) => string;
+  highlightSkippedLongLine: string;
 
   /* files */
   files: {
@@ -130,6 +131,7 @@ const en: Strings = {
   expectMismatch: "expect mismatch",
   expectMismatchBody: (quote) =>
     `The first line of this range does not contain ${quote}. The lines below may be the wrong ones.`,
+  highlightSkippedLongLine: "Line too long to highlight; shown as plain text.",
 
   files: {
     header: (files, additions, deletions) =>
@@ -208,6 +210,8 @@ const fr: Strings = {
   expectMismatch: "expect incorrect",
   expectMismatchBody: (quote) =>
     `La première ligne de la plage ne contient pas ${quote}. Les lignes ci-dessous sont peut-être les mauvaises.`,
+  highlightSkippedLongLine:
+    "Ligne trop longue pour la coloration syntaxique ; affichée en texte brut.",
 
   files: {
     header: (files, additions, deletions) =>
