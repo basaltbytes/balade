@@ -55,7 +55,7 @@ it.effect("keeps a missing served-app bundle in the error channel", () =>
   }),
 );
 
-it("keeps the served page on its own same-origin CSP", () => {
+it("keeps the served page on its own same-origin CSP and embeds its favicon", () => {
   const html = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
   const policy =
     "default-src 'none'; img-src data:; script-src 'self'; " +
@@ -66,6 +66,9 @@ it("keeps the served page on its own same-origin CSP", () => {
   expect(policyAt).toBeGreaterThan(-1);
   expect(html.indexOf(`content="${policy}"`, policyAt)).toBeGreaterThan(policyAt);
   expect(policyAt).toBeLessThan(html.indexOf('<script type="module"'));
+  expect(html).toMatch(
+    /<link\s+rel="icon"\s+type="image\/png"\s+sizes="64x64"\s+href="data:image\/png;base64,/u,
+  );
 });
 
 it("keeps internal API failure causes out of public responses", () => {

@@ -144,6 +144,9 @@ describe("build", () => {
       expect(html).toContain("#root{color:#fff}");
       expect(html).toContain("window.__BALADE_STUB__");
       expect(html).toContain('<script type="module">');
+      expect(html).toContain(
+        '<link rel="icon" type="image/png" sizes="64x64" href="data:image/png;base64,',
+      );
     }),
   );
 
