@@ -7,7 +7,7 @@
  */
 
 import { NodeHttpServer } from "@effect/platform-node";
-import { Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Cause, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import {
   HttpRouter,
   HttpServer,
@@ -17,10 +17,28 @@ import {
 } from "effect/unstable/http";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
+import { sanitizeTerminalText } from "../terminal.js";
 import { ApiReviewStateInvalid, apiErrorResponse, type Api, type ApiError } from "./api.js";
 
 /** A review tool listens for the reviewer, not for the network. */
 const HOST = "127.0.0.1";
+const ALLOWED_HOSTS = new Set([HOST, "localhost", "[::1]"]);
+const REVIEW_STATE_BODY_LIMIT = FileSystem.MiB(4);
+
+const hostAllowed = (host: string | undefined): boolean =>
+  host !== undefined && ALLOWED_HOSTS.has(host.replace(/:\d+$/u, ""));
+
+const protectReviewServer = HttpRouter.middleware(
+  (httpEffect) =>
+    Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      if (!hostAllowed(request.headers["host"])) {
+        return HttpServerResponse.empty({ status: 403 });
+      }
+      return HttpServerResponse.setHeader(yield* httpEffect, "X-Frame-Options", "DENY");
+    }),
+  { global: true },
+);
 
 export interface ServeOptions {
   /** Directory holding the prebuilt SPA: an `index.html` and its assets. */
@@ -82,6 +100,7 @@ export const serve = (options: ServeOptions) =>
 
 const routes = (options: ServeOptions) =>
   Layer.mergeAll(
+    protectReviewServer,
     HttpRouter.add(
       "GET",
       "/api/walkthrough",
@@ -112,17 +131,29 @@ const queryPath = Effect.gen(function* () {
 });
 
 const answering = (answer: (path: string | null) => Effect.Effect<unknown, ApiError>) =>
-  Effect.flatMap(queryPath, answer).pipe(
-    Effect.match({ onFailure: respondError, onSuccess: respondJson }),
-  );
+  respond(Effect.flatMap(queryPath, answer));
 
 const putState = (api: Api) =>
-  Effect.gen(function* () {
-    const path = yield* queryPath;
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const body = yield* request.json.pipe(Effect.mapError(() => new ApiReviewStateInvalid({})));
-    return yield* api.writeState(path, body);
-  }).pipe(Effect.match({ onFailure: respondError, onSuccess: respondJson }));
+  respond(
+    Effect.gen(function* () {
+      const path = yield* queryPath;
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const body = yield* request.json.pipe(
+        Effect.provideService(HttpServerRequest.MaxBodySize, REVIEW_STATE_BODY_LIMIT),
+        Effect.mapError((cause) => new ApiReviewStateInvalid({ cause })),
+      );
+      return yield* api.writeState(path, body);
+    }),
+  );
+
+/** The single success/failure translation for every JSON endpoint. */
+const respond = <A, R>(effect: Effect.Effect<A, ApiError, R>) =>
+  effect.pipe(
+    Effect.matchEffect({
+      onFailure: respondError,
+      onSuccess: (body) => Effect.succeed(respondJson(body)),
+    }),
+  );
 
 /**
  * `jsonUnsafe` skips the serialisation error channel: every body here is a
@@ -132,7 +163,16 @@ const putState = (api: Api) =>
 const respondJson = (body: unknown): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.jsonUnsafe(body);
 
-const respondError = (error: ApiError): HttpServerResponse.HttpServerResponse => {
+const respondError = Effect.fn("Http.respondError")(function* (error: ApiError) {
   const response = apiErrorResponse(error);
+  if (response.status === 500) {
+    const context = "path" in error ? `${error._tag}: ${error.path}` : error._tag;
+    const cause = "cause" in error ? error.cause : error;
+    yield* Effect.logError(
+      sanitizeTerminalText(
+        `balade review server request failed (${context})\n${Cause.pretty(Cause.fail(cause))}`,
+      ),
+    );
+  }
   return HttpServerResponse.jsonUnsafe({ error: response.message }, { status: response.status });
-};
+});

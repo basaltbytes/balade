@@ -4,14 +4,20 @@
  * payload cache spends the resolver once per key.
  */
 
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { LoadResult } from "../src/walkthrough/pipeline.js";
 import type { IndexPayload, Payload, ReviewState } from "../src/contract/types.js";
+import {
+  ApiReviewStateUnavailable,
+  ApiWalkthroughUnavailable,
+  apiErrorResponse,
+} from "../src/server/api.js";
 import { PayloadCache } from "../src/server/cache.js";
 import { ServerRepo } from "../src/server/repo.js";
 import { startReviewSession, unreviewedPullNotice } from "../src/server/review.js";
@@ -31,6 +37,18 @@ function stubBundle(): string {
 
 const json = { "content-type": "application/json" };
 
+class ServerExerciseFailed extends Schema.TaggedErrorClass<ServerExerciseFailed>()(
+  "ServerExerciseFailed",
+  { cause: Schema.Defect() },
+) {}
+
+/** Promise APIs remain one interruptible, typed seam inside the Effect test. */
+const serverPromise = <A>(run: (signal: AbortSignal) => PromiseLike<A>) =>
+  Effect.tryPromise({
+    try: run,
+    catch: (cause) => new ServerExerciseFailed({ cause }),
+  });
+
 it.effect("keeps a missing served-app bundle in the error channel", () =>
   Effect.gen(function* () {
     expect((yield* Effect.flip(provideLive(findAppBundle())))._tag).toBe("AppBundleMissing");
@@ -48,6 +66,26 @@ it("keeps the served page on its own same-origin CSP", () => {
   expect(policyAt).toBeGreaterThan(-1);
   expect(html.indexOf(`content="${policy}"`, policyAt)).toBeGreaterThan(policyAt);
   expect(policyAt).toBeLessThan(html.indexOf('<script type="module"'));
+});
+
+it("keeps internal API failure causes out of public responses", () => {
+  const secret = "/private/reviewer/repository/.balade/state.review.json";
+  const errors = [
+    new ApiWalkthroughUnavailable({
+      path: "walkthroughs/valid.md",
+      cause: new Error(`Could not read ${secret}`),
+    }),
+    new ApiReviewStateUnavailable({
+      path: "walkthroughs/valid.md",
+      cause: new Error(`Could not read ${secret}`),
+    }),
+  ];
+
+  for (const error of errors) {
+    const response = apiErrorResponse(error);
+    expect(response.status).toBe(500);
+    expect(response.message).not.toContain(secret);
+  }
 });
 
 it("warns only when a selection is read from a fetched pull head", () => {
@@ -160,13 +198,23 @@ describe("the served API", () => {
     }),
   );
 
+  it.effect("keeps review-state validation details in the typed error cause", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(session.api.writeState(path, { version: 2 }));
+      expect(error).toMatchObject({
+        _tag: "ApiReviewStateInvalid",
+        cause: { _tag: "ReviewStateInvalid" },
+      });
+    }),
+  );
+
   it.live("answers the payload, the review state and the staleness badge", () =>
     Effect.scoped(
       provideLive(
         Effect.gen(function* () {
           const url = yield* serve({ appDir, port: 0, api: session.api });
           expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-          yield* Effect.promise(() => exercise(url, path));
+          yield* serverPromise((signal) => exercise(url, path, signal));
         }),
       ),
     ),
@@ -188,7 +236,9 @@ describe("the served API", () => {
           expect(review._tag).toBe("ReviewSessionStarted");
           if (review._tag !== "ReviewSessionStarted") return;
           expect(review.session.paths).toEqual(["walkthroughs/valid.md"]);
-          const page = yield* Effect.promise(async () => (await fetch(`${review.url}/`)).text());
+          const page = yield* serverPromise(async (signal) =>
+            (await fetch(`${review.url}/`, { signal })).text(),
+          );
           expect(page).toContain("balade");
         }),
       ),
@@ -241,22 +291,38 @@ it.live("invalidates a cached payload when the scoped watcher sees an edit", () 
   ),
 );
 
-async function exercise(url: string, path: string): Promise<void> {
+async function exercise(url: string, path: string, signal: AbortSignal): Promise<void> {
   const query = `?path=${encodeURIComponent(path)}`;
+  const send = (route: string, init?: RequestInit) => fetch(`${url}${route}`, { ...init, signal });
+
+  for (const [route, request] of [
+    ["/", { kind: "read" }],
+    ["/api/walkthrough", { kind: "read" }],
+    [`/api/state${query}`, { kind: "read" }],
+    [`/api/state${query}`, { kind: "write", body: "{}" }],
+    [`/api/staleness${query}`, { kind: "read" }],
+  ] satisfies ReadonlyArray<readonly [string, HostRequest]>) {
+    expect(await statusWithHost(`${url}${route}`, "evil.com", request, signal)).toBe(403);
+  }
+
+  const port = new URL(url).port;
+  for (const host of [`localhost:${port}`, `[::1]:${port}`]) {
+    expect(await statusWithHost(`${url}/`, host, { kind: "read" }, signal)).toBe(200);
+  }
 
   /* One walkthrough served: the bare endpoint is that walkthrough. */
-  const answer = await fetch(`${url}/api/walkthrough`);
+  const answer = await send("/api/walkthrough");
   expect(answer.status).toBe(200);
   const payload = (await answer.json()) as Payload;
   expect(payload.walkthrough).toBe(1);
   expect(payload.sourcePath).toBe(path);
   expect(payload.sections.map((section) => section.id)).toContain("overview");
 
-  const unknown = await fetch(`${url}/api/walkthrough?path=walkthroughs/nope.md`);
+  const unknown = await send("/api/walkthrough?path=walkthroughs/nope.md");
   expect(unknown.status).toBe(404);
 
   /* 404 means the CLI holds nothing — the browser copy answers instead. */
-  expect((await fetch(`${url}/api/state${query}`)).status).toBe(404);
+  expect((await send(`/api/state${query}`)).status).toBe(404);
 
   const first = payload.sections[0];
   if (first === undefined) throw new Error("the fixture payload has no section");
@@ -269,14 +335,21 @@ async function exercise(url: string, path: string): Promise<void> {
     files: {},
   };
 
-  const put = await fetch(`${url}/api/state${query}`, {
+  const put = await send(`/api/state${query}`, {
     method: "PUT",
     headers: json,
     body: JSON.stringify(state),
   });
   expect(put.status).toBe(200);
 
-  const stored = await fetch(`${url}/api/state${query}`);
+  const tooLarge = await send(`/api/state${query}`, {
+    method: "PUT",
+    headers: json,
+    body: "x".repeat(4 * 1024 * 1024 + 1),
+  });
+  expect(tooLarge.status).toBe(400);
+
+  const stored = await send(`/api/state${query}`);
   expect(stored.status).toBe(200);
   expect(await stored.json()).toEqual(state);
 
@@ -289,20 +362,68 @@ async function exercise(url: string, path: string): Promise<void> {
       sections: { overview: { hash: 7, at: "2026-08-01T10:12:00.000Z" } },
     }),
   ]) {
-    const refused = await fetch(`${url}/api/state${query}`, { method: "PUT", headers: json, body });
+    const refused = await send(`/api/state${query}`, { method: "PUT", headers: json, body });
     expect(refused.status).toBe(400);
   }
 
-  const staleness = await fetch(`${url}/api/staleness${query}`);
+  const staleness = await send(`/api/staleness${query}`);
   expect(staleness.status).toBe(200);
   expect((await staleness.json()) as { headDistance: unknown }).toEqual({
     headDistance: expect.any(Number),
   });
 
   /* The SPA sits under the API and still answers the root. */
-  const spa = await fetch(`${url}/`);
+  const spa = await send("/");
   expect(spa.status).toBe(200);
+  expect(spa.headers.get("x-frame-options")).toBe("DENY");
   expect(await spa.text()).toContain("balade");
+}
+
+type HostRequest = { kind: "read" } | { kind: "write"; body: string };
+
+function statusWithHost(
+  url: string,
+  host: string,
+  request: HostRequest,
+  signal: AbortSignal,
+): Promise<number> {
+  const details =
+    request.kind === "read"
+      ? { method: "GET", headers: { host }, body: undefined }
+      : {
+          method: "PUT",
+          headers: {
+            host,
+            "content-length": Buffer.byteLength(request.body),
+            "content-type": "application/json",
+          },
+          body: request.body,
+        };
+
+  return new Promise((resolve, reject) => {
+    const connection = httpRequest(
+      url,
+      {
+        method: details.method,
+        headers: details.headers,
+        signal,
+      },
+      (response) => {
+        response.on("error", reject);
+        response.resume();
+        response.on("end", () => {
+          const status = response.statusCode;
+          if (status === undefined) {
+            reject(new Error(`No HTTP status received from ${url}`));
+          } else {
+            resolve(status);
+          }
+        });
+      },
+    );
+    connection.on("error", reject);
+    connection.end(details.body);
+  });
 }
 
 describe("the index", () => {
@@ -390,6 +511,7 @@ describe("the index", () => {
       expect(error).toMatchObject({
         _tag: "ApiReviewStateUnavailable",
         path: "walkthroughs/second.md",
+        cause: { _tag: "StateInvalid" },
       });
     }),
   );

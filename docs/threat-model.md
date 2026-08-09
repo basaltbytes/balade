@@ -93,12 +93,18 @@ read from the working tree carries no such notice.
 
 ### 3. The local review server
 
-Binds `127.0.0.1` with no host flag (`src/server/http.ts:22-23`). Five routes;
-one mutating endpoint, `PUT /api/state`.
+Binds `127.0.0.1` with no host flag (`src/server/http.ts`). Five routes; one
+mutating endpoint, `PUT /api/state`.
 
-Loopback binding stops off-machine connections. It does not stop DNS rebinding,
-and no request header is validated:
-[#63](https://github.com/basaltbytes/balade/issues/63).
+A global middleware accepts only the loopback authorities `127.0.0.1`,
+`localhost` and `[::1]`, ignoring a numeric port. This rejects DNS-rebinding
+requests before route handling because their `Host` header still names the
+attacker's origin. The state endpoint limits its JSON body to 4 MiB, and
+responses admitted by the host guard carry `X-Frame-Options: DENY` so another
+site cannot frame the review UI. Typed API failures retain their internal cause
+for server-side diagnostics, while `500` responses expose only stable messages
+and never filesystem or exception details
+([#63](https://github.com/basaltbytes/balade/issues/63)).
 
 ### 4. The export bundle
 
@@ -192,6 +198,19 @@ they describe.
 
 **Process and filesystem**
 
+- The local server rejects a missing or non-loopback `Host` before any static or
+  API handler runs. The allowlist is exact and port-insensitive; it contains
+  `127.0.0.1`, `localhost` and `[::1]` (`src/server/http.ts`).
+- `PUT /api/state` provides Effect's `MaxBodySize` at 4 MiB around the JSON read.
+  Oversized bodies become the existing `ApiReviewStateInvalid` response instead
+  of growing the Node string without a bound.
+- Responses admitted by the host guard carry `X-Frame-Options: DENY`. The served
+  UI cannot be framed even though `frame-ancestors` cannot be enforced from its
+  meta CSP.
+- API errors retain their typed causes until the HTTP boundary. Internal `500`
+  failures log their complete Effect cause chain there after terminal-control
+  sanitization, but their JSON responses contain no exception text or absolute
+  filesystem paths.
 - **No shell strings anywhere.** Every git, gh and browser invocation goes
   through `spawnSync(file, [...args])` with no `shell: true`
   (`src/shell.ts:41-46`, `src/server/browser.ts:73`). Terminal output is

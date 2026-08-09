@@ -9,7 +9,6 @@
  */
 
 import { Effect, Match, Option, Schema } from "effect";
-import { describeFailure } from "../failure.js";
 import { parseReviewState } from "../contract/review-parser.js";
 import type {
   CheckDiagnostic,
@@ -34,7 +33,7 @@ export class ApiTargetNotServed extends Schema.TaggedErrorClass<ApiTargetNotServ
 
 export class ApiWalkthroughUnavailable extends Schema.TaggedErrorClass<ApiWalkthroughUnavailable>()(
   "ApiWalkthroughUnavailable",
-  { path: Schema.String, detail: Schema.String },
+  { path: Schema.String, cause: Schema.Defect() },
 ) {}
 
 export class ApiReviewStateNotFound extends Schema.TaggedErrorClass<ApiReviewStateNotFound>()(
@@ -44,7 +43,7 @@ export class ApiReviewStateNotFound extends Schema.TaggedErrorClass<ApiReviewSta
 
 export class ApiReviewStateInvalid extends Schema.TaggedErrorClass<ApiReviewStateInvalid>()(
   "ApiReviewStateInvalid",
-  {},
+  { cause: Schema.Defect() },
 ) {}
 
 export class ApiReviewStateMismatch extends Schema.TaggedErrorClass<ApiReviewStateMismatch>()(
@@ -54,7 +53,7 @@ export class ApiReviewStateMismatch extends Schema.TaggedErrorClass<ApiReviewSta
 
 export class ApiReviewStateUnavailable extends Schema.TaggedErrorClass<ApiReviewStateUnavailable>()(
   "ApiReviewStateUnavailable",
-  { path: Schema.String, detail: Schema.String },
+  { path: Schema.String, cause: Schema.Defect() },
 ) {}
 
 export class ApiStampUnreadable extends Schema.TaggedErrorClass<ApiStampUnreadable>()(
@@ -148,7 +147,7 @@ function makeApi(ports: ApiPorts): Api {
       if (loaded.payload === null) {
         return yield* new ApiWalkthroughUnavailable({
           path: target.path,
-          detail: firstFailure(loaded.diagnostics),
+          cause: firstFailure(loaded.diagnostics),
         });
       }
       return loaded.payload;
@@ -169,7 +168,7 @@ function makeApi(ports: ApiPorts): Api {
       const target = yield* oneOf(path);
 
       const state = yield* parseReviewState(body).pipe(
-        Effect.mapError(() => new ApiReviewStateInvalid({})),
+        Effect.mapError((cause) => new ApiReviewStateInvalid({ cause })),
       );
       if (state.walkthrough !== target) {
         return yield* new ApiReviewStateMismatch({
@@ -232,10 +231,10 @@ const buildIndex = Effect.fn("Api.buildIndex")(function* (ports: ApiPorts) {
 });
 
 const walkthroughUnavailable = (path: string) => (error: unknown) =>
-  new ApiWalkthroughUnavailable({ path, detail: describeFailure(error) });
+  new ApiWalkthroughUnavailable({ path, cause: error });
 
 const reviewStateUnavailable = (path: string) => (error: unknown) =>
-  new ApiReviewStateUnavailable({ path, detail: describeFailure(error) });
+  new ApiReviewStateUnavailable({ path, cause: error });
 
 function firstFailure(diagnostics: readonly CheckDiagnostic[]): string {
   const failure = diagnostics.find((diagnostic) => diagnostic.level === "error");
@@ -276,13 +275,13 @@ export function apiErrorResponse(error: ApiError): ApiErrorResponse {
       status: 404,
       message: `The stamp \`${pin}\` is not in this clone.`,
     }),
-    ApiWalkthroughUnavailable: ({ detail }): ApiErrorResponse => ({
+    ApiWalkthroughUnavailable: ({ path }): ApiErrorResponse => ({
       status: 500,
-      message: detail,
+      message: `Walkthrough \`${path}\` is unavailable.`,
     }),
-    ApiReviewStateUnavailable: ({ path, detail }): ApiErrorResponse => ({
+    ApiReviewStateUnavailable: ({ path }): ApiErrorResponse => ({
       status: 500,
-      message: `Review state for \`${path}\` is unavailable (${detail}).`,
+      message: `Review state for \`${path}\` is unavailable.`,
     }),
   });
 }
