@@ -101,7 +101,9 @@ A global middleware accepts only the loopback authorities `127.0.0.1`,
 requests before route handling because their `Host` header still names the
 attacker's origin. The state endpoint limits its JSON body to 4 MiB, and
 responses admitted by the host guard carry `X-Frame-Options: DENY` so another
-site cannot frame the review UI
+site cannot frame the review UI. Typed API failures retain their internal cause
+for server-side diagnostics, while `500` responses expose only stable messages
+and never filesystem or exception details
 ([#63](https://github.com/basaltbytes/balade/issues/63)).
 
 ### 4. The export bundle
@@ -191,6 +193,10 @@ they describe.
 - Responses admitted by the host guard carry `X-Frame-Options: DENY`. The served
   UI cannot be framed even though `frame-ancestors` cannot be enforced from its
   meta CSP.
+- API errors retain their typed causes until the HTTP boundary. Internal `500`
+  failures log their complete Effect cause chain there after terminal-control
+  sanitization, but their JSON responses contain no exception text or absolute
+  filesystem paths.
 - **No shell strings anywhere.** Every git, gh and browser invocation goes
   through `spawnSync(file, [...args])` with no `shell: true`
   (`src/shell.ts:41-46`, `src/server/browser.ts:73`). Terminal output is

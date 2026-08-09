@@ -382,6 +382,13 @@ review-state response and leaves the process alive. The limit is generous for a
 review state while staying far below the Node string-size failure found during
 the security audit.
 
+API failures retain their original cause as `Schema.Defect()` until one shared
+HTTP translation pipeline handles them. That boundary logs internal `500`
+failures with Effect's complete nested cause rendering after terminal-control
+sanitization, then returns a stable public message; exception text and absolute
+paths never enter an HTTP response. Expected `400` and `404` outcomes remain
+typed recoveries and are not logged as server failures.
+
 ## The inlined bundle is escaped, the baked payload is JSON-escaped
 
 Both scripts in the export sit in HTML script data, where `</script` ends the
