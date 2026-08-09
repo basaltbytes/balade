@@ -35,7 +35,7 @@ import {
 } from "./selection.js";
 
 const target = Argument.string("pr").pipe(
-  Argument.withDescription("Pull request URL, #number, or bare number"),
+  Argument.withDescription("Bare pull request number, URL, or quoted '#number'"),
 );
 
 const provider = Flag.string("provider").pipe(
@@ -105,7 +105,9 @@ export const generateCommand = Command.make(
     Effect.gen(function* () {
       const pull = parsePrTarget(config.pr);
       if (pull === null) {
-        stopMessage("Name one GitHub pull request: `balade generate <pr-url|#n>`.");
+        stopMessage(
+          "Name one GitHub pull request: `balade generate 96` or `balade generate <pr-url>`.",
+        );
         return;
       }
       const active = Option.getOrUndefined(config.preset);

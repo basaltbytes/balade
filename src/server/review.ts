@@ -81,7 +81,7 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
       ReviewSessionStarted: (started) =>
         Effect.gen(function* () {
           printSoft(started.session.reports);
-          Option.match(unreviewedPullNotice(options.session.selection), {
+          Option.match(reviewSelectionNotice(options.session.selection, started.session.paths), {
             onNone: () => undefined,
             onSome: writeStdout,
           });
@@ -107,13 +107,26 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
   ),
 );
 
-export const unreviewedPullNotice = (selection: Selection): Option.Option<string> =>
-  selection.kind === "pullHead"
-    ? Option.some(
+export const reviewSelectionNotice = (
+  selection: Selection,
+  paths: readonly string[],
+): Option.Option<string> => {
+  switch (selection.kind) {
+    case "discovered":
+      return Option.some(
+        `No target given — serving ${paths.length} discovered ` +
+          `walkthrough${paths.length === 1 ? "" : "s"}.\n`,
+      );
+    case "pullHead":
+      return Option.some(
         `Rendering walkthrough content from PR #${selection.number}'s head commit ` +
           `${selection.at.slice(0, 7)} — content you have not reviewed.\n`,
-      )
-    : Option.none();
+      );
+    case "files":
+    case "workingTree":
+      return Option.none();
+  }
+};
 
 const reviewSessionErrorMessage = (error: ReviewSessionError): string =>
   Match.valueTags(error, {

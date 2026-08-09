@@ -20,7 +20,7 @@ import {
 } from "../src/server/api.js";
 import { PayloadCache } from "../src/server/cache.js";
 import { ServerRepo } from "../src/server/repo.js";
-import { startReviewSession, unreviewedPullNotice } from "../src/server/review.js";
+import { reviewSelectionNotice, startReviewSession } from "../src/server/review.js";
 import { findAppBundle, serve } from "../src/server/http.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { gitCommonDir } from "../src/shell.js";
@@ -91,14 +91,24 @@ it("keeps internal API failure causes out of public responses", () => {
   }
 });
 
-it("warns only when a selection is read from a fetched pull head", () => {
-  const remote = unreviewedPullNotice({
-    kind: "pullHead",
-    root: "/repo",
-    paths: ["walkthroughs/review.md"],
-    number: 67,
-    at: "0123456789abcdef0123456789abcdef01234567",
-  });
+it("announces discovered mode and warns for a fetched pull head", () => {
+  expect(reviewSelectionNotice({ kind: "discovered" }, ["a.md", "b.md"])).toEqual(
+    Option.some("No target given — serving 2 discovered walkthroughs.\n"),
+  );
+  expect(reviewSelectionNotice({ kind: "discovered" }, ["a.md"])).toEqual(
+    Option.some("No target given — serving 1 discovered walkthrough.\n"),
+  );
+
+  const remote = reviewSelectionNotice(
+    {
+      kind: "pullHead",
+      root: "/repo",
+      paths: ["walkthroughs/review.md"],
+      number: 67,
+      at: "0123456789abcdef0123456789abcdef01234567",
+    },
+    ["walkthroughs/review.md"],
+  );
   expect(remote).toEqual(
     Option.some(
       "Rendering walkthrough content from PR #67's head commit 0123456 — " +
@@ -106,15 +116,20 @@ it("warns only when a selection is read from a fetched pull head", () => {
     ),
   );
   expect(
-    unreviewedPullNotice({
-      kind: "workingTree",
-      root: "/repo",
-      paths: ["walkthroughs/review.md"],
-    }),
+    reviewSelectionNotice(
+      {
+        kind: "workingTree",
+        root: "/repo",
+        paths: ["walkthroughs/review.md"],
+      },
+      ["walkthroughs/review.md"],
+    ),
   ).toEqual(Option.none());
-  expect(unreviewedPullNotice({ kind: "files", paths: ["walkthroughs/review.md"] })).toEqual(
-    Option.none(),
-  );
+  expect(
+    reviewSelectionNotice({ kind: "files", paths: ["walkthroughs/review.md"] }, [
+      "walkthroughs/review.md",
+    ]),
+  ).toEqual(Option.none());
 });
 
 describe("the served API", () => {

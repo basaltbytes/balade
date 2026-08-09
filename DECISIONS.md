@@ -305,6 +305,20 @@ prints the launch failure as a warning with the URL and keeps serving;
 through `BrowserLauncher.layerWith`, so the suite exercises the real spawn
 seam without opening a browser.
 
+## Pull-request shorthand leads with bare numbers
+
+`generate` and `open` accept a pull-request URL, bare digits, or `#` followed by
+digits. Public usage and command help lead with bare digits such as `96`; the
+`#96` form appears only as `'#96'` because interactive zsh treats an unquoted
+`#` as the start of a comment. The parser keeps accepting both forms for quoted
+arguments and programmatic callers.
+
+Zero-argument `open` remains the discovery workflow. Once discovery succeeds,
+the CLI announces that no target was given and prints the number of discovered
+walkthroughs before the server URL. This makes a shell-stripped target visible
+without requiring an `--all` flag or guessing whether the user intended an
+argument.
+
 ## A passing generation enters the live review pipeline
 
 `balade generate` now hands a checked draft directly to the same prepared-session,
