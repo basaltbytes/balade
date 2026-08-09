@@ -70,9 +70,10 @@ contain a project-context closing tag are rejected regardless of that flag
 (`src/pi/authoring.ts`, `src/pi/project-context.ts`; see
 [#61](https://github.com/basaltbytes/balade/issues/61)).
 
-Linked issues are fetched with the reviewer's own GitHub token and are not
-restricted to the same repository:
-[#59](https://github.com/basaltbytes/balade/issues/59).
+Linked issues are fetched with the reviewer's own GitHub token. Same-repository
+issues stay under author-stated intent; cross-repository issues remain available
+under a separate third-party claims heading, with a notice naming the foreign
+repository ([#59](https://github.com/basaltbytes/balade/issues/59)).
 
 ### 2. PR bytes → the renderer
 
@@ -211,8 +212,16 @@ they describe.
 
 **Authoring sandbox**
 
-- A seven-tool allowlist, all read-only (`src/pi/session.ts:301-309`). No shell,
+- A seven-tool allowlist, all read-only (`src/pi/session.ts:333-350`). No shell,
   no write, no network. The agent cannot execute anything.
+- Pinned and base source reads share one repo-relative path gate. It rejects
+  credential basenames case-insensitively (`.env*`, auth files, private-key
+  formats and credential/secret names) plus `.aws/`, `.ssh/` and `.gnupg/`
+  directory segments. The authoring prompt separately forbids reproducing
+  credential values and requires an explicit omission note.
+- PR and linked-issue URLs from `gh` must parse to repository locations before
+  provenance is classified. A malformed location drops the optional GitHub
+  enrichment with a notice instead of becoming a guessed third-party label.
 - PR-head `AGENTS.md` and `CLAUDE.md` files enter the system prompt only when
   unchanged by the PR or explicitly trusted with `--trust-head-instructions`.
   Project-context closing tags are rejected before interpolation.
@@ -221,6 +230,9 @@ they describe.
   `test/snapshot.test.ts:34-71`).
 - `search_source` regexes go to ripgrep (Rust regex — linear time, no
   catastrophic backtracking), bounded to 20 searches / 200 matches / 80k chars.
+- The process installs the balade-owned `RIPGREP_CONFIG_PATH` once before Pi can
+  dispatch searches in parallel. No search restores process-global state, so
+  every ripgrep spawn retains `--no-ignore` and `--no-follow`.
 - Pi credential isolation holds: balade uses its own agent directory
   `~/.balade/pi/` and never reads or writes `~/.pi/agent/`
   (`src/pi/client.ts:81-105`, `test/pi-agent-dir.test.ts`, issue #27).

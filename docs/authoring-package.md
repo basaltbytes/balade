@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.9.0`. Its major version matches the
+The current package version is `1.10.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -18,10 +18,15 @@ walkthrough schema it authors.
 The package receives a pull-request snapshot: PR identity, base and head refs,
 the pinned commit, changed-file statistics, and the author's stated intent.
 When authenticated `gh` data is available, that intent includes the PR title and
-body plus the title and available body of each linked closing issue. Git always
-supplies up to 20 commit subjects from the pinned PR range. If `gh` is
-unavailable, generation continues with those commit subjects and reports the
+body plus the title and available body of each same-repository closing issue.
+Git always supplies up to 20 commit subjects from the pinned PR range. If `gh`
+is unavailable, generation continues with those commit subjects and reports the
 `gh-unavailable` warning.
+
+Closing issues from another repository remain available in a separate
+third-party claims block, with a notice that names their repository. The agent
+can use this text to guide inspection, but never as evidence of the pull-request
+author's intent.
 
 All author-stated intent is untrusted text. The agent treats it as claims to
 verify against the pinned diff and source, never as facts or instructions. A
@@ -44,6 +49,9 @@ one structured draft. A loaded instruction can direct the model to read another
 project document through the pinned source tool. The session cannot run shell
 commands or write files. Every requested path is resolved through the snapshot
 root, including symlink targets, before a filesystem-backed tool uses it.
+Source reads also reject credential-file basenames and paths below `.aws/`,
+`.ssh/`, or `.gnupg/`. The prompt tells the agent to describe credential-related
+changes without quoting their values and to state when it omits one.
 
 The pinned tree is extracted with `git archive` into
 `~/.balade/cache/snapshots/`. Cache entries are keyed by repository and commit,
@@ -63,7 +71,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.9.0
+  balade-authoring: 1.10.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -73,9 +81,11 @@ confirms each code path, range, and `expect=` boundary echo.
 One turn may read at most eight diffs, run twenty source searches, and read
 twelve source ranges across the pin and base. Search results are repo-relative,
 sorted by path and line, capped at 200 matches, and character-truncated. They
-do not depend on ignore files or on the user's own ripgrep configuration. A
-draft may contain at most ten code ranges. Those limits live beside the prompt
-and are also used by the Pi tool adapter.
+do not depend on ignore files or on the user's own ripgrep configuration. The
+session installs one balade-owned ripgrep configuration for its whole process,
+so parallel tool calls cannot restore a competing configuration between spawn
+steps. A draft may contain at most ten code ranges. Those limits live beside the
+prompt and are also used by the Pi tool adapter.
 
 ## Version policy
 

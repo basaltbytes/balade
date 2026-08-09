@@ -24,6 +24,7 @@ import {
   type PinnedRepositorySnapshot,
   type ResolvedSnapshotPath,
 } from "./snapshot.js";
+import { AuthorSourceUnavailable, parseAuthorSourcePath } from "./source-path.js";
 
 export type CodingAgentSdk = typeof import("@earendil-works/pi-coding-agent");
 export type AiSdk = typeof import("@earendil-works/pi-ai");
@@ -90,6 +91,7 @@ export async function createPiSession(
   let sourceReads = 0;
   const changed = new Set(request.files.map((file) => file.path));
   const { snapshot, projectContext, searchConfiguration } = preparation;
+  await runSessionEffect(installSearchConfiguration(searchConfiguration));
   for (const notice of projectContext.notices) request.progress(notice);
 
   const listChanges = pi.coding.defineTool({
@@ -168,19 +170,17 @@ export async function createPiSession(
       }
       const scope = await runSessionEffect(snapshot.resolvePath(params.path ?? "."));
       searches++;
-      const result = await withSearchConfiguration(searchConfiguration, () =>
-        grep.execute(
-          id,
-          {
-            pattern: params.query,
-            path: scope.absolute,
-            literal: (params.mode ?? "fixed") === "fixed",
-            limit: MAX_SEARCH_MATCHES,
-          },
-          signal,
-          onUpdate,
-          context,
-        ),
+      const result = await grep.execute(
+        id,
+        {
+          pattern: params.query,
+          path: scope.absolute,
+          literal: (params.mode ?? "fixed") === "fixed",
+          limit: MAX_SEARCH_MATCHES,
+        },
+        signal,
+        onUpdate,
+        context,
       );
       return {
         ...result,
@@ -240,8 +240,19 @@ export async function createPiSession(
       to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
     }),
     execute: async (_id, params) => {
-      if (!(await runSessionEffect(snapshot.listFiles)).includes(params.path)) {
-        throw new Error(`${params.path} does not exist at ${request.pin}.`);
+      const sourcePath = await runSessionEffect(
+        Effect.fromResult(parseAuthorSourcePath(params.path)),
+      );
+      if (!(await runSessionEffect(snapshot.listFiles)).includes(sourcePath)) {
+        await runSessionEffect(
+          Effect.fail(
+            new AuthorSourceUnavailable({
+              path: sourcePath,
+              pin: request.pin,
+              message: `${sourcePath} does not exist at ${request.pin}.`,
+            }),
+          ),
+        );
       }
       if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
         return toolText(
@@ -249,8 +260,8 @@ export async function createPiSession(
         );
       }
       sourceReads++;
-      const content = await runSessionEffect(snapshot.readFile(params.path));
-      return toolText(numberedLines(params.path, content, params.from, params.to));
+      const content = await runSessionEffect(snapshot.readFile(sourcePath));
+      return toolText(numberedLines(sourcePath, content, params.from, params.to));
     },
   });
 
@@ -265,7 +276,9 @@ export async function createPiSession(
       to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
     }),
     execute: async (_id, params) => {
-      const sourcePath = repositoryPath(params.path);
+      const sourcePath = await runSessionEffect(
+        Effect.fromResult(parseAuthorSourcePath(params.path)),
+      );
       if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
         return toolText(
           `Source inspection budget reached after ${AUTHORING_LIMITS.sourceReads} reads. Submit using the verified ranges already collected; do not invent more.`,
@@ -530,20 +543,6 @@ function limitCharacters(value: string): string {
     : `${value.slice(0, MAX_TOOL_CHARACTERS)}\n… output capped at ${MAX_TOOL_CHARACTERS} characters.`;
 }
 
-function repositoryPath(sourcePath: string): string {
-  const normalized = sourcePath.replace(/^\.\//u, "");
-  const segments = normalized.split("/");
-  if (
-    normalized === "" ||
-    normalized.startsWith("/") ||
-    normalized.includes("\\") ||
-    segments.some((segment) => segment === "" || segment === "." || segment === "..")
-  ) {
-    throw new Error(`${sourcePath} is not a contained repo-relative path.`);
-  }
-  return normalized;
-}
-
 /**
  * Search must not depend on the user's environment: `--no-ignore` keeps the
  * snapshot's committed ignore files inert even when the cache sits inside a
@@ -562,24 +561,13 @@ const writeSearchConfiguration = Effect.fn("writeSearchConfiguration")(function*
   return file;
 });
 
-/**
- * Pi spawns ripgrep with the inherited environment, so a user-level
- * RIPGREP_CONFIG_PATH could follow symlinks out of the snapshot or filter
- * matches. Every search runs under the balade-owned configuration instead.
- */
-async function withSearchConfiguration<A>(
-  configuration: string,
-  search: () => Promise<A>,
-): Promise<A> {
-  const previous = process.env.RIPGREP_CONFIG_PATH;
-  process.env.RIPGREP_CONFIG_PATH = configuration;
-  try {
-    return await search();
-  } finally {
-    if (previous === undefined) delete process.env.RIPGREP_CONFIG_PATH;
-    else process.env.RIPGREP_CONFIG_PATH = previous;
-  }
-}
+/** Pi inherits this process global and exposes no per-ripgrep environment seam. */
+const installSearchConfiguration = Effect.fn("installSearchConfiguration")(
+  (configuration: string) =>
+    Effect.sync(() => {
+      process.env.RIPGREP_CONFIG_PATH = configuration;
+    }),
+);
 
 function normalizeSearchOutput(
   value: string,

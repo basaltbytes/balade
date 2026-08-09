@@ -4,7 +4,7 @@
  * enriches the PR header when it is there and authenticated.
  */
 
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import { Context, Effect, Layer, Option, Result, Schema } from "effect";
 import { basename, win32 } from "node:path";
 import {
   CommitUnresolvable,
@@ -18,7 +18,7 @@ import { langOf } from "../contract/lang.js";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../contract/types.js";
 import { CommandExecutor, firstLine, gh, gitOut, gitToplevel } from "../shell.js";
 import { changedLines, splitDiff } from "./diff.js";
-import type { PullNotice, PullRequestClaimsSource } from "./intent.js";
+import type { PullLinkedIssueReference, PullNotice, PullRequestClaimsSource } from "./intent.js";
 
 export interface PullFile {
   readonly path: string;
@@ -82,6 +82,12 @@ const PullRequestResponse = Schema.Struct({
 const decodePullRequest = Schema.decodeUnknownEffect(PullRequestResponse, {
   onExcessProperty: "error",
 });
+const decodeRepositoryUrl = Schema.decodeUnknownResult(Schema.URLFromString);
+
+class PullRepositoryUrlInvalid extends Schema.TaggedErrorClass<PullRepositoryUrlInvalid>()(
+  "PullRepositoryUrlInvalid",
+  { url: Schema.String, reason: Schema.String },
+) {}
 
 const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOptions) {
   const root = yield* gitToplevel(options.cwd);
@@ -365,7 +371,7 @@ function prState(state: string | undefined): "open" | "closed" | "merged" {
  * that is missing, unauthenticated or offline is a warning the report carries,
  * never a silent downgrade of the PR header.
  */
-export const readPullRequest = (root: string, number: number) =>
+export const readPullRequest = Effect.fn("readPullRequest")((root: string, number: number) =>
   gh(
     [
       "pr",
@@ -389,6 +395,7 @@ export const readPullRequest = (root: string, number: number) =>
         }).pipe(
           Effect.flatMap((body) =>
             decodePullRequest(body).pipe(
+              Effect.flatMap((response) => Effect.fromResult(pullRequestFromResponse(response))),
               Effect.mapError(() => ghNotice("its answer did not match the requested fields")),
             ),
           ),
@@ -397,26 +404,82 @@ export const readPullRequest = (root: string, number: number) =>
               pull: Option.none(),
               notices: [notice],
             }),
-            onSuccess: (response): PullRequestResult => ({
-              pull: Option.some({
-                url: response.url,
-                state: response.state,
-                author: response.author?.login,
-                baseRefName: response.baseRefName,
-                headRefName: response.headRefName,
-                baseRefOid: response.baseRefOid,
-                headRefOid: response.headRefOid,
-                commits: response.commits.length,
-                title: response.title,
-                body: response.body,
-                linkedIssueUrls: response.closingIssuesReferences.map(({ url }) => url),
-              }),
+            onSuccess: (pull): PullRequestResult => ({
+              pull: Option.some(pull),
               notices: [],
             }),
           }),
         ),
     }),
+  ),
+);
+
+interface RepositoryLocation {
+  readonly url: string;
+  readonly host: string;
+  readonly slug: string;
+}
+
+function pullRequestFromResponse(
+  response: typeof PullRequestResponse.Type,
+): Result.Result<PullRequest, PullRepositoryUrlInvalid> {
+  return Result.all({
+    pull: repositoryLocation(response.url),
+    issues: Result.all(response.closingIssuesReferences.map(({ url }) => repositoryLocation(url))),
+  }).pipe(
+    Result.map(({ pull, issues }) => ({
+      url: response.url,
+      state: response.state,
+      author: response.author?.login,
+      baseRefName: response.baseRefName,
+      headRefName: response.headRefName,
+      baseRefOid: response.baseRefOid,
+      headRefOid: response.headRefOid,
+      commits: response.commits.length,
+      title: response.title,
+      body: response.body,
+      linkedIssues: issues.map((issue) => linkedIssueReference(pull, issue)),
+    })),
   );
+}
+
+function repositoryLocation(
+  value: string,
+): Result.Result<RepositoryLocation, PullRepositoryUrlInvalid> {
+  return decodeRepositoryUrl(value).pipe(
+    Result.mapError(
+      () => new PullRepositoryUrlInvalid({ url: value, reason: "The value is not a URL." }),
+    ),
+    Result.flatMap((url) => {
+      const [owner, repository] = url.pathname.split("/").filter((segment) => segment !== "");
+      return owner === undefined || repository === undefined
+        ? Result.fail(
+            new PullRepositoryUrlInvalid({
+              url: value,
+              reason: "The URL does not identify a repository.",
+            }),
+          )
+        : Result.succeed({ url: value, host: url.host, slug: `${owner}/${repository}` });
+    }),
+  );
+}
+
+function linkedIssueReference(
+  pull: RepositoryLocation,
+  issue: RepositoryLocation,
+): PullLinkedIssueReference {
+  if (
+    pull.host.toLowerCase() === issue.host.toLowerCase() &&
+    pull.slug.toLowerCase() === issue.slug.toLowerCase()
+  ) {
+    return { _tag: "SameRepositoryLinkedIssue", url: issue.url };
+  }
+  return {
+    _tag: "ThirdPartyLinkedIssue",
+    url: issue.url,
+    repository: issue.slug,
+  };
+}
 
 function ghNotice(detail: string): PullNotice {
   return {

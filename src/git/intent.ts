@@ -6,12 +6,21 @@ import { firstLine, gh, gitOut } from "../shell.js";
 export const PULL_COMMIT_SUBJECT_LIMIT = 20;
 
 export interface PullNotice {
-  readonly code: "gh-unavailable";
+  readonly code: "gh-unavailable" | "third-party-linked-issue";
   readonly message: string;
   readonly hint: string;
 }
 
+export type PullLinkedIssueReference =
+  | { readonly _tag: "SameRepositoryLinkedIssue"; readonly url: string }
+  | {
+      readonly _tag: "ThirdPartyLinkedIssue";
+      readonly url: string;
+      readonly repository: string;
+    };
+
 export interface PullLinkedIssueClaim {
+  readonly reference: PullLinkedIssueReference;
   readonly title: string;
   readonly body: Option.Option<string>;
 }
@@ -30,7 +39,7 @@ export interface PullIntentClaims {
 export interface PullRequestClaimsSource {
   readonly title: string;
   readonly body: string;
-  readonly linkedIssueUrls: readonly string[];
+  readonly linkedIssues: readonly PullLinkedIssueReference[];
 }
 
 interface ReadPullIntentClaimsOptions {
@@ -82,8 +91,8 @@ export const readPullIntentClaims = Effect.fn("readPullIntentClaims")(function* 
       } satisfies PullIntentClaimsResult),
     onSome: (github) =>
       Effect.gen(function* () {
-        const results = yield* Effect.forEach(github.linkedIssueUrls, (url) =>
-          readLinkedIssueClaim(options.root, url),
+        const results = yield* Effect.forEach(github.linkedIssues, (reference) =>
+          readLinkedIssueClaim(options.root, reference),
         );
         return {
           claims: {
@@ -100,47 +109,67 @@ export const readPullIntentClaims = Effect.fn("readPullIntentClaims")(function* 
   });
 });
 
-const readLinkedIssueClaim = (root: string, url: string) =>
-  gh(["issue", "view", url, "--json", "title,body"], root).pipe(
+const readLinkedIssueClaim = Effect.fn("readLinkedIssueClaim")((
+  root: string,
+  reference: PullLinkedIssueReference,
+) => {
+  const provenanceNotices =
+    reference._tag === "ThirdPartyLinkedIssue" ? [thirdPartyIssueNotice(reference)] : [];
+  return gh(["issue", "view", reference.url, "--json", "title,body"], root).pipe(
     Effect.matchEffect({
       onFailure: (error) =>
         Effect.succeed<LinkedIssueClaimResult>({
           claim: Option.none(),
-          notices: [linkedIssueNotice(url, `exit ${error.code}: ${firstLine(error.stderr)}`)],
+          notices: [
+            ...provenanceNotices,
+            linkedIssueNotice(reference.url, `exit ${error.code}: ${firstLine(error.stderr)}`),
+          ],
         }),
       onSuccess: (stdout) =>
         Effect.try({
           try: () => JSON.parse(stdout) as unknown,
-          catch: () => linkedIssueNotice(url, "its answer was not JSON"),
+          catch: () => linkedIssueNotice(reference.url, "its answer was not JSON"),
         }).pipe(
           Effect.flatMap((body) =>
             decodeLinkedIssue(body).pipe(
               Effect.mapError(() =>
-                linkedIssueNotice(url, "its answer did not match the requested fields"),
+                linkedIssueNotice(reference.url, "its answer did not match the requested fields"),
               ),
             ),
           ),
           Effect.match({
             onFailure: (notice): LinkedIssueClaimResult => ({
               claim: Option.none(),
-              notices: [notice],
+              notices: [...provenanceNotices, notice],
             }),
             onSuccess: (response): LinkedIssueClaimResult => ({
               claim: Option.some({
+                reference,
                 title: response.title,
                 body: Option.fromNullishOr(response.body),
               }),
-              notices: [],
+              notices: provenanceNotices,
             }),
           }),
         ),
     }),
   );
+});
+
+function thirdPartyIssueNotice(
+  reference: Extract<PullLinkedIssueReference, { readonly _tag: "ThirdPartyLinkedIssue" }>,
+): PullNotice {
+  return {
+    code: "third-party-linked-issue",
+    message: `Linked issue ${reference.url} comes from third-party repository ${reference.repository}.`,
+    hint: "Its text remains available as an untrusted third-party claim, separate from author-stated intent.",
+  };
+}
 
 function linkedIssueNotice(url: string, detail: string): PullNotice {
   return {
     code: "gh-unavailable",
     message: `gh unavailable — linked issue ${url} was omitted (${detail}).`,
-    hint: "Run `gh auth login` with access to the linked issue; generation can continue with the remaining author-stated intent.",
+    hint: "Run `gh auth login` with access to the linked issue; generation can continue with the remaining pull-request claims.",
   };
 }
