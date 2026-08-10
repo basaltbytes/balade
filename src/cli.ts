@@ -26,7 +26,7 @@ const cliLayer = Layer.mergeAll(PrLocator.layer, piWalkthroughAuthorLive, contex
 );
 
 const balade = Command.make("balade").pipe(
-  Command.withDescription("Narrated code walkthroughs for pull requests"),
+  Command.withDescription("Human-readable walkthroughs for agent-scale pull requests"),
   Command.withSubcommands([
     checkCommand,
     openCommand,

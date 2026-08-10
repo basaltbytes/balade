@@ -275,7 +275,7 @@ export const Landing = () => {
           walks you through your agents&rsquo;&nbsp;pull&nbsp;requests.
         </p>
         <p className="mt-3 max-w-[44ch] font-human text-[15px] leading-relaxed text-muted-foreground">
-          Narrated, validated walkthroughs for diffs too large to scan.
+          Human-readable walkthroughs for diffs too large to scan.
         </p>
         <code className="mt-10 rounded-md border border-border bg-card px-4 py-2.5 font-machine text-sm">
           <span className="text-muted-foreground select-none">$ </span>
