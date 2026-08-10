@@ -12,30 +12,26 @@
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/balade" alt="MIT license" /></a>
 </p>
 
-`balade` renders a committed Markdoc walkthrough as a local PR-review app. A
-walkthrough combines prose with references to code ranges, diagrams, field
-tables and tests. References resolve from git at the stamped commit, and
-`balade check` reports invalid or stale references.
+`balade` transforms big agent-driven PR into a beautiful human-readable PR-walkthrough local webpage. It combines a powerful markdoc authoring system and renders it into a mini webapp with local state to review the PR with interactive components. 
 
-The npm package contains the CLI and review app. Use a live local server or
-build one self-contained HTML file. Walkthroughs remain plain text that can be
-committed and reviewed with the code.
+Let `balade generate` the PR walkthrough for you by bringing your own model (authentication with OpenAI Codex or Anthropic API Key, based on pi.dev). Or install the skills and let your agent commit the walkthrough Markdoc file that you can then render with `balade open`.
 
-`balade generate` can draft a walkthrough through Anthropic or OpenAI. Requests
-go from your machine to the selected provider; balade has no hosted backend.
+Agents can self-check correctness of the authored walkthrough with `balade check` and good error handling, always gibing you a working PR walkthrough.
 
 ## Requirements
 
 - Node.js 22.22.2+, 24.15.0+, or 26+
-- A local clone of the repository
-- A GitHub remote when the target PR isn't checked out
-
-No global install is required.
 
 ## Quick start
 
 ```sh
+# cd into your repo folder and the number of the github PR
 npx balade generate 96
+```
+
+Or if there is an existing walkthrough to visualize
+```sh
+# existing walkthrough file
 npx balade open .agents/walkthroughs/pr-96-loan-refactor.md
 npx balade check .agents/walkthroughs/pr-96-loan-refactor.md
 npx balade build .agents/walkthroughs/pr-96-loan-refactor.md
@@ -112,8 +108,7 @@ won't overwrite an existing file. It validates the draft and allows up to two
 model repair turns. If validation still fails, the draft stays on disk and the
 command exits with status 1.
 
-Generation never stages, commits, pushes or opens a pull request. Use
-`--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
+Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
 Generated frontmatter records authoring package version `1.10.0`. See the
@@ -162,11 +157,11 @@ first write, balade adds that directory to `.git/info/exclude`. Marks are local
 to the clone and reviewer. Unchanged sections retain their marks after a
 re-stamp; changed sections reset.
 
-Static exports store review state in browser `localStorage`. An export embeds:
+Static exports store review state in browser `localStorage`. An export contains:
 
 - the old and new contents of every changed file, including files absent from
-  the walkthrough narrative;
-- each full unified diff and the source lines used by code blocks;
+  the walkthrough narrative.
+- each full unified diff and the source lines used by code blocks.
 - repository, PR, author, branch, commit and walkthrough metadata;
 - file paths, author-supplied metadata and validation messages.
 
@@ -175,9 +170,6 @@ Treat the HTML as a copy of the changed repository source. When opened through
 the same browser profile. The state contains no source code, but it identifies
 the repository, PR, commit, walkthrough and changed paths. Serve sensitive
 exports from a dedicated HTTP origin.
-
-Code excerpts in both review modes link to the matching file and line in the
-GitHub PR diff.
 
 ## Authoring with another agent
 
@@ -190,10 +182,9 @@ npx balade skills install
 This writes `.agents/skills/balade-authoring/SKILL.md`. If the repository has a
 `.claude/` directory, it also writes
 `.claude/skills/balade-authoring/SKILL.md`. Re-run the command after upgrading
-balade; `check` reports a version mismatch.
+balade. Anyway `check` will report a version mismatch.
 
-Use `--out <dir>` for another skill layout. The npm package also includes the
-rendered skill under `dist/skill/`.
+Use `--out <dir>` for another skill layout (other coding agent harnesses). The npm package also includes the rendered skill under `dist/skill/`.
 
 ## CI
 
