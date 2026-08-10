@@ -20,8 +20,9 @@ npx balade build  .agents/walkthroughs/pr-96-loan-refactor.md   # write one self
 npx balade check  .agents/walkthroughs/pr-96-loan-refactor.md   # validate; exit code is the contract
 ```
 
-- `generate` takes a pull-request URL, `#96`, or `96`. It reads the PR at an
-  exact commit, asks a Pi-backed coding agent to draft the walkthrough, then
+- `generate` takes a bare pull-request number such as `96`, a pull-request URL,
+  or the quoted `'#96'` form. It reads the PR at an exact commit, asks a
+  Pi-backed coding agent to draft the walkthrough, then
   runs the same checks used in CI and opens the passing draft as a live review.
   `--no-open` stops after generation for scripts and CI. See
   [Generating a walkthrough](#generating-a-walkthrough).
@@ -30,12 +31,14 @@ npx balade check  .agents/walkthroughs/pr-96-loan-refactor.md   # validate; exit
   it in your default browser. `--no-browser` serves headless and prints the
   URL only, for CI and remote shells; if the browser cannot be launched, the
   server keeps running and the CLI prints the URL with a recovery hint.
-- `open` with no file discovers every walkthrough in the repository and serves
-  an index. `--lang en|fr` sets the chrome language, `--port` the port.
-- `open` also takes a pull request — the URL, or `#96`. When the branch is
-  checked out the walkthrough is served from the working tree; otherwise balade
-  fetches the PR's own `pull/96/head` ref and reads it from there. Reviewing
-  needs a clone of the repository, not a checkout of the branch.
+- `open` with no file discovers every walkthrough in the repository, prints how
+  many it found, and serves an index. `--lang en|fr` sets the chrome language,
+  `--port` the port.
+- `open` also takes a pull request — a bare number such as `96`, a URL, or the
+  quoted `'#96'` form. When the branch is checked out the walkthrough is served
+  from the working tree; otherwise balade fetches the PR's own `pull/96/head`
+  ref and reads it from there. Reviewing needs a clone of the repository, not a
+  checkout of the branch.
 - `build` is the other review mode: one self-contained HTML export whose
   payload is fixed at build time and whose review state stays in browser
   storage. It takes exactly one file and writes `<name>.html` beside it, or

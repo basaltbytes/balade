@@ -24,7 +24,7 @@ const noBrowserFlag = Flag.boolean("no-browser").pipe(
 const openTargets = Argument.variadic(
   Argument.string("target").pipe(
     Argument.withDescription(
-      "Walkthrough file or pull request (URL, #number); omit to use every discovered walkthrough",
+      "Walkthrough file, bare PR number, URL, or quoted '#number'; omit to use every discovered walkthrough",
     ),
   ),
 );

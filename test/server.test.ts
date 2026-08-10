@@ -20,7 +20,7 @@ import {
 } from "../src/server/api.js";
 import { PayloadCache } from "../src/server/cache.js";
 import { ServerRepo } from "../src/server/repo.js";
-import { startReviewSession, unreviewedPullNotice } from "../src/server/review.js";
+import { reviewSessionStartedText, startReviewSession } from "../src/server/review.js";
 import { findAppBundle, serve } from "../src/server/http.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { gitCommonDir } from "../src/shell.js";
@@ -91,29 +91,51 @@ it("keeps internal API failure causes out of public responses", () => {
   }
 });
 
+it("announces zero-target discovery before the server URL", () => {
+  expect(
+    reviewSessionStartedText({ kind: "discovered" }, ["a.md", "b.md"], "http://localhost/"),
+  ).toBe(
+    "No target given — serving 2 discovered walkthroughs.\n" +
+      "balade is serving 2 walkthroughs at http://localhost/\n",
+  );
+  expect(reviewSessionStartedText({ kind: "discovered" }, ["a.md"], "http://localhost/")).toBe(
+    "No target given — serving 1 discovered walkthrough.\n" +
+      "balade is serving a.md at http://localhost/\n",
+  );
+});
+
 it("warns only when a selection is read from a fetched pull head", () => {
-  const remote = unreviewedPullNotice({
-    kind: "pullHead",
-    root: "/repo",
-    paths: ["walkthroughs/review.md"],
-    number: 67,
-    at: "0123456789abcdef0123456789abcdef01234567",
-  });
-  expect(remote).toEqual(
-    Option.some(
-      "Rendering walkthrough content from PR #67's head commit 0123456 — " +
-        "content you have not reviewed.\n",
-    ),
+  const paths = ["walkthroughs/review.md"];
+  const serving = "balade is serving walkthroughs/review.md at http://localhost/\n";
+  const remote = reviewSessionStartedText(
+    {
+      kind: "pullHead",
+      root: "/repo",
+      paths,
+      number: 67,
+      at: "0123456789abcdef0123456789abcdef01234567",
+    },
+    paths,
+    "http://localhost/",
+  );
+  expect(remote).toBe(
+    "Rendering walkthrough content from PR #67's head commit 0123456 — " +
+      "content you have not reviewed.\n" +
+      serving,
   );
   expect(
-    unreviewedPullNotice({
-      kind: "workingTree",
-      root: "/repo",
-      paths: ["walkthroughs/review.md"],
-    }),
-  ).toEqual(Option.none());
-  expect(unreviewedPullNotice({ kind: "files", paths: ["walkthroughs/review.md"] })).toEqual(
-    Option.none(),
+    reviewSessionStartedText(
+      {
+        kind: "workingTree",
+        root: "/repo",
+        paths,
+      },
+      paths,
+      "http://localhost/",
+    ),
+  ).toBe(serving);
+  expect(reviewSessionStartedText({ kind: "files", paths }, paths, "http://localhost/")).toBe(
+    serving,
   );
 });
 

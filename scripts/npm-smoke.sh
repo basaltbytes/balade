@@ -30,13 +30,24 @@ BIN="$PROJECT/node_modules/.bin/balade"
 
 "$BIN" --version | grep -q "$PACKAGE_VERSION"
 "$BIN" --help | grep -qi "walkthrough"
-"$BIN" generate --help | grep -qi "provider"
-"$BIN" generate --help | grep -qi "verbose"
-"$BIN" generate --help | grep -qi -- "--trust-head-instructions"
-"$BIN" generate --help | grep -qi -- "--no-open"
-"$BIN" generate --help | grep -qi -- "--no-browser"
-"$BIN" generate --help | grep -qi -- "--port"
-if "$BIN" generate --help | grep -qi "choose-model"; then
+GENERATE_HELP="$("$BIN" generate --help)"
+OPEN_HELP="$("$BIN" open --help)"
+
+# Interactive zsh strips unquoted #number; help leads with bare numbers and quotes the hash form.
+grep -Fqi "Bare pull request number, URL, or quoted '#number'" <<<"$GENERATE_HELP"
+grep -Fqi "bare PR number, URL, or quoted '#number'" <<<"$OPEN_HELP"
+if grep -Fqi "URL, #number" <<<"$GENERATE_HELP$OPEN_HELP"; then
+  echo "help still advertises shell-unsafe unquoted #number" >&2
+  exit 1
+fi
+
+grep -qi "provider" <<<"$GENERATE_HELP"
+grep -qi "verbose" <<<"$GENERATE_HELP"
+grep -qi -- "--trust-head-instructions" <<<"$GENERATE_HELP"
+grep -qi -- "--no-open" <<<"$GENERATE_HELP"
+grep -qi -- "--no-browser" <<<"$GENERATE_HELP"
+grep -qi -- "--port" <<<"$GENERATE_HELP"
+if grep -qi "choose-model" <<<"$GENERATE_HELP"; then
   echo "obsolete --choose-model flag is still exposed" >&2
   exit 1
 fi

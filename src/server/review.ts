@@ -3,7 +3,7 @@
  * the complete CLI review lifecycle shared by `open` and successful generation.
  */
 
-import { Effect, Match, Option, Schema } from "effect";
+import { Effect, Match, Schema } from "effect";
 import {
   printSoft,
   served,
@@ -80,12 +80,16 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
     return yield* Match.valueTags(result, {
       ReviewSessionStarted: (started) =>
         Effect.gen(function* () {
-          printSoft(started.session.reports);
-          Option.match(unreviewedPullNotice(options.session.selection), {
-            onNone: () => undefined,
-            onSome: writeStdout,
+          yield* Effect.sync(() => {
+            printSoft(started.session.reports);
+            writeStdout(
+              reviewSessionStartedText(
+                options.session.selection,
+                started.session.paths,
+                started.url,
+              ),
+            );
           });
-          writeStdout(`balade is serving ${served(started.session.paths)} at ${started.url}\n`);
           /* Launch failure is a notice: the scoped server remains available. */
           yield* launchBrowser(options.browserMode, started.url).pipe(
             Effect.catchTag("BrowserLaunchFailed", (error) =>
@@ -107,13 +111,31 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
   ),
 );
 
-export const unreviewedPullNotice = (selection: Selection): Option.Option<string> =>
-  selection.kind === "pullHead"
-    ? Option.some(
+const reviewSelectionNotice = (selection: Selection, paths: readonly string[]): string => {
+  switch (selection.kind) {
+    case "discovered":
+      return (
+        `No target given — serving ${paths.length} discovered ` +
+        `walkthrough${paths.length === 1 ? "" : "s"}.\n`
+      );
+    case "pullHead":
+      return (
         `Rendering walkthrough content from PR #${selection.number}'s head commit ` +
-          `${selection.at.slice(0, 7)} — content you have not reviewed.\n`,
-      )
-    : Option.none();
+        `${selection.at.slice(0, 7)} — content you have not reviewed.\n`
+      );
+    case "files":
+    case "workingTree":
+      return "";
+  }
+};
+
+export const reviewSessionStartedText = (
+  selection: Selection,
+  paths: readonly string[],
+  url: string,
+): string => {
+  return reviewSelectionNotice(selection, paths) + `balade is serving ${served(paths)} at ${url}\n`;
+};
 
 const reviewSessionErrorMessage = (error: ReviewSessionError): string =>
   Match.valueTags(error, {
