@@ -4,7 +4,7 @@
 
 <h1 align="center">balade</h1>
 
-<p align="center"><em>interactive pull-request walkthroughs</em> · <a href="https://balade.dev">balade.dev</a></p>
+<p align="center"><em>Human-readable walkthroughs for diffs too large to scan.</em> · <a href="https://balade.dev">balade.dev</a></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/balade"><img src="https://img.shields.io/npm/v/balade" alt="npm version" /></a>
@@ -13,6 +13,9 @@
 </p>
 
 `balade` transforms big agent-driven PR into a beautiful human-readable PR-walkthrough local webpage. It combines a powerful markdoc authoring system and renders it into a mini webapp with local state to review the PR with interactive components. 
+
+Example output:
+<img width="2456" height="1770" alt="balade-pr-screenshot" src="https://github.com/user-attachments/assets/b14c800f-d88b-40d7-88f1-5a4dc820d294" />
 
 Let `balade generate` the PR walkthrough for you by bringing your own model (authentication with OpenAI Codex or Anthropic API Key, based on pi.dev). Or install the skills and let your agent commit the walkthrough Markdoc file that you can then render with `balade open`.
 
