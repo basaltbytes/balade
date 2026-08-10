@@ -12,13 +12,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/balade" alt="MIT license" /></a>
 </p>
 
-`balade` renders a walkthrough of a pull request into an interactive review
-app. The walkthrough is a Markdoc file: prose plus references to code ranges,
-diagrams, field tables and test summaries. The CLI resolves every reference
-against git at the commit stamped in the file, so the narration and the code
-cannot drift apart unnoticed. Nothing is duplicated into the file; diffs,
-blobs and PR metadata are read from the repository at run time. It is built
-for the pull requests coding agents produce, too large to review line by line.
+`balade` turns the pull requests coding agents produce — too large to review
+line by line — into human-readable walkthroughs, rendered as an interactive
+review app. The walkthrough is a Markdoc file: prose plus references to code
+ranges, diagrams, field tables and test summaries. The CLI resolves every
+reference against git at the commit stamped in the file, so the narration and
+the code cannot drift apart unnoticed. Nothing is duplicated into the file;
+diffs, blobs and PR metadata are read from the repository at run time.
 
 Everything is MIT-licensed and ships as one npm package, CLI and review app
 included. Reviewing runs on your machine: a local server reads your clone, or
@@ -299,4 +299,4 @@ Add the link to the walkthrough to your PR description yourself.
 
 ## License
 
-[MIT](LICENSE) © Basalt Bytes
+[MIT](LICENSE) © Philippe L'ATTENTION
