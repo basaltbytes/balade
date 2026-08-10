@@ -154,7 +154,7 @@ const en: Strings = {
 
   index: {
     title: "Walkthroughs",
-    subtitle: (repo) => `Committed walkthroughs found in ${repo}.`,
+    subtitle: (repo) => `Walkthroughs found in ${repo}.`,
     empty: "No walkthrough files were found in this repository.",
     updated: (date) => `updated ${date}`,
     neverOpened: "not started",
@@ -234,7 +234,7 @@ const fr: Strings = {
 
   index: {
     title: "Balades",
-    subtitle: (repo) => `Balades commitées trouvées dans ${repo}.`,
+    subtitle: (repo) => `Balades trouvées dans ${repo}.`,
     empty: "Aucun fichier de balade trouvé dans ce dépôt.",
     updated: (date) => `mis à jour ${date}`,
     neverOpened: "non commencée",
