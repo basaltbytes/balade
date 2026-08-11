@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/balade"><img src="https://img.shields.io/npm/v/balade" alt="npm version" /></a>
+  <img src="https://img.shields.io/badge/status-alpha-orange" alt="Status: alpha" />
   <a href="https://pkg.pr.new/~/basaltbytes/balade"><img src="https://pkg.pr.new/badge/basaltbytes/balade" alt="pkg.pr.new previews" /></a>
   <a href="https://github.com/basaltbytes/balade/actions/workflows/ci.yml"><img src="https://github.com/basaltbytes/balade/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/balade" alt="MIT license" /></a>
