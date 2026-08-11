@@ -67,10 +67,10 @@ describe("the generated authoring skill", () => {
 
   it("teaches the mechanism layer, like the Pi prompt does", () => {
     expect(skillMd).toContain("### Mechanism");
-    expect(skillMd).toContain("Do not write pseudo-code");
-    expect(skillMd).toContain("pin the real code range with `collapsed=true`");
+    expect(skillMd).toContain("human comprehension is the goal");
+    expect(skillMd).toContain("pinned with `collapsed=true`");
     expect(skillMd).toContain("The explanation is the primary content of the section");
-    expect(skillMd).toContain("One line above a code range is not an explanation");
+    expect(skillMd).toContain("If you want to dive deeper");
   });
 
   it("teaches the mermaid fence and the collapsed bound, like the Pi prompt does", () => {

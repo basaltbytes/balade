@@ -112,13 +112,13 @@ describe("the authoring package", () => {
     expect(prompt).toContain(
       "explain the solution in the Mechanism group, directly after Orientation",
     );
-    expect(prompt).toContain("Do not write pseudo-code");
-    expect(prompt).toContain("pin the real code range with `collapsed=true`");
-    /* The explanation is the content; a one-line claim is the defect it replaces. */
+    expect(prompt).toContain("human comprehension is the goal");
+    expect(prompt).toContain("pinned with `collapsed=true`");
+    /* The explanation is the content; comprehension is the goal. */
     expect(prompt).toContain("The explanation is the primary content of the section");
-    expect(prompt).toContain("One line above a code range is not an explanation");
-    /* A judgment call, not a mandate. */
-    expect(prompt).toContain("a forced section only adds filler");
+    expect(prompt).toContain("If you want to dive deeper");
+    /* Scoped to introduced code, not transversal changes. */
+    expect(prompt).toContain("other transversal or trivial changes");
     /* The tag attribute the pattern depends on is taught with the code tag. */
     expect(prompt).toContain(
       `{% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" collapsed=true /%}`,

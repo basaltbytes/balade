@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.12.0`. Its major version matches the
+The current package version is `1.13.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -71,7 +71,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.12.0
+  balade-authoring: 1.13.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -122,8 +122,8 @@ pieces of code that are introduced in the PR.
 
 Feel free to use plain-text, or pseudo-code to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding.
 
-If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free
-to give link for reading materials and explaination of the software engineering concept.
+If the PR introduces known algorithms, encryption techniques, modelization techniques, feel free
+to give link for reading materials and explanation of the software engineering concept.
 
 When explaining the code feel free to directly have the code block shown in-between, in full form
 or pinned with `collapsed=true` to disclose it as a "If you want to dive deeper" section.

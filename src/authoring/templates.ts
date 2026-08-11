@@ -24,12 +24,12 @@ Replace this line with the review frame.
   {
     group: "Mechanism",
     selectWhen:
-      "Use when the change carries an algorithm or non-obvious logic worth explaining. Explain the solution in several sentences, add a mermaid fence when a picture makes the logic clearer, then pin the code range that proves each critical claim as a collapsed block under that claim. Skip the group for a documentation, configuration, or mechanical change.",
+      "Use when the change carries an algorithm or non-obvious logic worth explaining. Explain the solution in several sentences, add a mermaid fence when a picture makes the logic clearer, then show the code range that proves each critical claim under that claim, in full form or as a collapsed block. Skip the group for a documentation, configuration, or mechanical change.",
     template: `{% group label="Mechanism" %}
 {% section id="mechanism" title="Mechanism" %}
 Replace this paragraph with the explanation of the solution: what it does, the inputs it accepts, the decisions it makes, the order of the steps, and the cases it rejects. Add a mermaid fence when a picture makes the logic clearer.
 
-Then state one critical claim per paragraph, and pin the code range that proves it under the claim with collapsed=true.
+Then state one critical claim per paragraph, and show the code range that proves it under the claim, in full form or pinned with collapsed=true.
 {% /section %}
 {% /group %}`,
   },

@@ -115,7 +115,7 @@ command exits with status 1.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.12.0`. See the
+Generated frontmatter records authoring package version `1.13.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -131,7 +131,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.12.0
+  balade-authoring: 1.13.0
 ---
 ```
 
