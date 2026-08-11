@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.10.0`. Its major version matches the
+The current package version is `1.11.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -71,7 +71,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.10.0
+  balade-authoring: 1.11.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -108,11 +108,19 @@ narrative groups that add review signal, then appends the mandatory full-PR diff
 | Group | Use it for |
 | --- | --- |
 | Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This group is always present. |
+| Mechanism | An algorithm or non-obvious logic worth explaining. It follows Orientation directly. |
 | Models | Domain types, persisted state, components, or services whose structure carries the change. |
 | Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |
 | Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
-| Deep dive | One algorithm, lifecycle, state transition, or compatibility boundary that needs a slower reading path. |
 | Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block. |
+
+The Mechanism group carries two layers. The explanation states what the
+solution does and the logic behind it, in prose, `{% flow %}` steps, and
+diagrams — never in pseudo-code, because the real code is one click away. Under
+each critical claim sits the range that proves it, pinned with
+`collapsed=true`, so the evidence opens on demand. The group is a judgment
+call: a documentation, configuration, or mechanical change carries no algorithm
+to explain, and a forced section only adds filler.
 
 A changed file does not earn a narrative section by itself. Mechanical renames
 can use one orientation section before the required full-PR diff. That final
@@ -153,7 +161,7 @@ The evaluator and human review use four questions:
 | --- | --- | --- |
 | Factual accuracy | Every claim, path, range, and boundary echo matches inspected evidence at the pin. | The draft guesses intent or cites code it did not inspect. |
 | Section selection | Each narrative section adds review signal; the required bare full-PR diff remains last. | The narrative inventories files, copies all five narrative groups by habit, or omits, filters, or moves the closing full-PR diff. |
-| Reviewer usefulness | The draft explains observable behavior, control flow, constraints, and the proof or risk that matters. | It paraphrases syntax or repeats the PR title. |
+| Reviewer usefulness | The draft explains observable behavior, control flow, constraints, and the proof or risk that matters, and the reader understands the logic of the solution without opening every code range. | It paraphrases syntax or repeats the PR title. |
 | Prose quality | A reader who missed the coding session can understand direct, neutral, concrete prose. | The text assumes prior code knowledge or uses vague praise. |
 
 English prose follows ASD-STE100 Simplified Technical English. French prose

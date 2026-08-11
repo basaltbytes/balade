@@ -142,7 +142,7 @@ ${CLOSING_FULL_PR_DIFF}`,
     ],
     expected: {
       groups: ["Orientation", "Models", "Quality", "Full PR diff"],
-      omittedGroups: ["Surface", "Deep dive"],
+      omittedGroups: ["Surface", "Mechanism"],
       sections: { minimum: 4, maximum: 4 },
       codeRanges: { minimum: 1, maximum: 1 },
       referencedFiles: ["src/retries.ts"],
@@ -207,15 +207,17 @@ Invoice totals no longer live inside string formatting. Callers can reuse the nu
 
 {% /group %}
 
-{% group label="Deep dive" %}
+{% group label="Mechanism" %}
 
 {% section id="split" title="Calculation before presentation" %}
 
-The first function returns a number. The formatter consumes that result and owns the currency text.
+The first function returns a number. It sums the line amounts and stops there.
 
-{% code file="src/invoice-total.ts" from=1 to=3 expect="export function invoiceTotal(lines: readonly number[]): number {" /%}
+{% code file="src/invoice-total.ts" from=1 to=3 expect="export function invoiceTotal(lines: readonly number[]): number {" collapsed=true /%}
 
-{% code file="src/format-invoice.ts" from=1 to=5 expect="import { invoiceTotal } from \\"./invoice-total.js\\";" /%}
+The formatter consumes that result and owns the currency text.
+
+{% code file="src/format-invoice.ts" from=1 to=5 expect="import { invoiceTotal } from \\"./invoice-total.js\\";" collapsed=true /%}
 
 {% /section %}
 
@@ -226,7 +228,7 @@ ${CLOSING_FULL_PR_DIFF}`,
       },
     ],
     expected: {
-      groups: ["Orientation", "Deep dive", "Full PR diff"],
+      groups: ["Orientation", "Mechanism", "Full PR diff"],
       omittedGroups: ["Models", "Surface", "Quality"],
       sections: { minimum: 3, maximum: 3 },
       codeRanges: { minimum: 2, maximum: 2 },
@@ -321,7 +323,7 @@ ${CLOSING_FULL_PR_DIFF}`,
     ],
     expected: {
       groups: ["Orientation", "Quality", "Full PR diff"],
-      omittedGroups: ["Models", "Surface", "Deep dive"],
+      omittedGroups: ["Models", "Surface", "Mechanism"],
       sections: { minimum: 3, maximum: 3 },
       codeRanges: { minimum: 1, maximum: 1 },
       referencedFiles: ["src/batches.ts"],
@@ -386,7 +388,7 @@ ${CLOSING_FULL_PR_DIFF}`,
     ],
     expected: {
       groups: ["Orientation", "Full PR diff"],
-      omittedGroups: ["Models", "Surface", "Quality", "Deep dive"],
+      omittedGroups: ["Models", "Surface", "Quality", "Mechanism"],
       sections: { minimum: 2, maximum: 2 },
       codeRanges: { minimum: 0, maximum: 0 },
       referencedFiles: [],
@@ -455,7 +457,7 @@ ${CLOSING_FULL_PR_DIFF}`,
     ],
     expected: {
       groups: ["Orientation", "Surface", "Full PR diff"],
-      omittedGroups: ["Models", "Quality", "Deep dive"],
+      omittedGroups: ["Models", "Quality", "Mechanism"],
       sections: { minimum: 3, maximum: 3 },
       codeRanges: { minimum: 1, maximum: 1 },
       referencedFiles: ["docs/retries.md"],

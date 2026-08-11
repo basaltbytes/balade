@@ -567,6 +567,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
   }
 
   const view = attrString(node, "view");
+  const collapsed = node.attributes["collapsed"] === true;
   const expected = attrString(node, "expect");
   let expect: CodeBlock["expect"];
   if (expected === undefined) {
@@ -601,6 +602,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     to,
     lang: env.fileEntry(file)?.lang ?? langOf(file),
     view: view === "plain" || view === "diff" ? view : "change",
+    ...(collapsed ? { collapsed } : {}),
     lines: [...lines],
     changed,
     ...(mark.length > 0 ? { mark } : {}),

@@ -8,6 +8,7 @@ import { Option } from "effect";
 import { tagCatalogText } from "../authoring/catalog.js";
 import {
   absenceText,
+  algorithmText,
   audienceText,
   catalogLeadText,
   markdocRulesText,
@@ -58,6 +59,8 @@ Section templates
 ${templatesLeadText}
 
 ${sectionTemplatesText}
+
+${algorithmText}
 
 ${absenceText}
 

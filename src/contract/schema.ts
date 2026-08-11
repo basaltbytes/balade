@@ -133,6 +133,8 @@ export const CodeBlock = Schema.Struct({
   lang: Schema.String,
   /** Authored default; the reviewer can switch views in the app. */
   view: Schema.Literals(["plain", "change", "diff"]),
+  /** Authored default; when true the block starts collapsed in the app. */
+  collapsed: Schema.optionalKey(Schema.Boolean),
   /** Raw source lines at the pinned commit. */
   lines: Strings,
   /** Absolute line numbers the PR added or modified. */
