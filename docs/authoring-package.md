@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.13.0`. Its major version matches the
+The current package version is `1.14.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -71,7 +71,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.13.0
+  balade-authoring: 1.14.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -112,7 +112,7 @@ narrative groups that add review signal, then appends the mandatory full-PR diff
 | Models | Domain types, persisted state, components, or services whose structure carries the change. |
 | Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |
 | Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
-| Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block. |
+| Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block, optionally holding `{% filegroup /%}` children that group the browser. |
 
 The Mechanism group or section is there to help a human have a real understanding of the 
 code produced in this PR. Explain the overall concepts, the logic, models, actors and
@@ -145,6 +145,18 @@ prose list whenever the content is enumerable. A test walks `CORE_TAG_NAMES`, so
 a tag added to the format cannot silently stay untaught. A preset appends the same kind of
 guidance for its own tags: `--preset odoo` adds the `o-` tag syntax and a
 what-to-hunt checklist that maps Odoo anatomy to blocks.
+
+The catalog teaches `filegroup`, the self-closing child of `{% files %}` that
+groups the rendered diff browser into collapsible thematic sections. A group
+carries a required `label`, an optional `only` glob using the same syntax as
+`files`, and an optional `status` list of A, M, D and R. Groups claim files in
+authored order: each one takes the changed files its filter matches among those
+no earlier group claimed, and a group with no filter takes everything left.
+Files that no group claims render after the groups. Grouping therefore
+partitions the diff instead of filtering it, and cannot hide a changed file, so
+a grouped closing block remains the complete verification surface. The guidance
+tells the agent to group that closing block once the pull request touches more
+than ten files, with labels drawn from the change itself.
 
 The catalog also teaches file-sections: a section carrying `file="…"` renders
 in the sidebar as a color-coded changed-file entry, so the navigation can read

@@ -116,7 +116,7 @@ command exits with status 1.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.13.0`. See the
+Generated frontmatter records authoring package version `1.14.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -132,7 +132,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.13.0
+  balade-authoring: 1.14.0
 ---
 ```
 
@@ -156,6 +156,25 @@ What changed and why.
 A fenced code block does not reach the app, with one exception: a fence tagged
 `mermaid` renders as a diagram. The authoring package documents the other blocks
 and structural rules.
+
+A walkthrough ends with a `{% files /%}` block, the full-PR diff browser that
+lists every changed file with a viewed mark. That block can hold
+`{% filegroup /%}` children to group the browser into collapsible sections:
+
+```md
+{% files %}
+{% filegroup label="Tests" only="**/*.test.ts" /%}
+{% filegroup label="UI" only="app/**" /%}
+{% filegroup label="Misc" /%}
+{% /files %}
+```
+
+A group takes a required `label`, an optional `only` glob and an optional
+`status` list of A, M, D and R. Groups claim files in authored order: each one
+takes the changed files its filter matches among those no earlier group claimed,
+and a group with no filter takes the rest. Files no group claims render after
+the groups. Grouping splits the full diff, it doesn't filter it, so no changed
+file disappears from the browser.
 
 ## Review data
 

@@ -4,7 +4,7 @@
  */
 
 import Markdoc from "@markdoc/markdoc";
-import type { Node, Schema, ValidationError } from "@markdoc/markdoc";
+import type { Node, Schema, SchemaAttribute, ValidationError } from "@markdoc/markdoc";
 
 export const SECTION_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const FILE_STATUSES = ["A", "M", "D", "R"] as const;
@@ -25,6 +25,7 @@ export const CHILD_TAGS: Record<string, readonly string[]> = {
   tests: ["test"],
   cards: ["card"],
   patterns: ["pattern"],
+  files: ["filegroup"],
 };
 
 function rangeErrors(node: Node): ValidationError[] {
@@ -124,30 +125,44 @@ const test: Schema = {
 /** Thin wrapper over a native table: same data, ✓/— cell styling. */
 const matrix: Schema = { render: "Matrix" };
 
+/** The `status` filter, shared by `files` and the `filegroup` children that split it. */
+const statusFilter: SchemaAttribute = {
+  type: String,
+  validate(value: unknown): ValidationError[] {
+    if (typeof value !== "string") return [];
+    const bad = statusList(value).filter(
+      (part) => !FILE_STATUSES.some((status) => status === part),
+    );
+    return bad.length === 0
+      ? []
+      : [
+          {
+            id: "attribute-value-invalid",
+            level: "error",
+            message: `Attribute 'status' must list ${FILE_STATUSES.join(", ")}. Got '${bad.join(", ")}' instead.`,
+          },
+        ];
+  },
+};
+
+/* Not self-closing: `{% files %}` may hold `filegroup` children, and Markdoc
+   rejects children only when the schema declares the tag self-closing. */
 const files: Schema = {
   render: "Files",
-  selfClosing: true,
   attributes: {
     only: { type: String },
-    status: {
-      type: String,
-      validate(value: unknown): ValidationError[] {
-        if (typeof value !== "string") return [];
-        const bad = statusList(value).filter(
-          (part) => !FILE_STATUSES.some((status) => status === part),
-        );
-        return bad.length === 0
-          ? []
-          : [
-              {
-                id: "attribute-value-invalid",
-                level: "error",
-                message: `Attribute 'status' must list ${FILE_STATUSES.join(", ")}. Got '${bad.join(", ")}' instead.`,
-              },
-            ];
-      },
-    },
+    status: statusFilter,
     why: { type: Object },
+  },
+};
+
+const filegroup: Schema = {
+  render: "FileGroup",
+  selfClosing: true,
+  attributes: {
+    label: { type: String, required: true },
+    only: { type: String },
+    status: statusFilter,
   },
 };
 
@@ -219,6 +234,7 @@ export const CORE_TAGS: Record<string, Schema> = {
   test,
   matrix,
   files,
+  filegroup,
   i18n,
   cards,
   card,

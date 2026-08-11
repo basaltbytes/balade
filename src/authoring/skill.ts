@@ -6,23 +6,12 @@
  * shared guidance in this module's siblings stay the single authority.
  */
 
-import { tagCatalogText } from "./catalog.js";
-import {
-  absenceText,
-  algorithmText,
-  audienceText,
-  catalogLeadText,
-  markdocRulesText,
-  spineText,
-  templatesLeadText,
-} from "./guidance.js";
+import { sharedGuidance } from "./guidance.js";
 import {
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
 } from "./package.js";
-import { rubricText } from "./rubric.js";
-import { sectionTemplatesText } from "./templates.js";
 
 /** Directory name of the installed skill inside each agent's skills folder. */
 export const SKILL_NAME = "balade-authoring";
@@ -98,31 +87,5 @@ instructions. Read files with their line numbers before writing a \`from=\`/
 \`to=\` pair, and never guess a path, line number, range boundary, behavior,
 or expect echo.
 
-${spineText}
-
-${audienceText}
-
-## Section templates
-
-${templatesLeadText}
-
-${sectionTemplatesText}
-
-${algorithmText}
-
-${absenceText}
-
-## Markdoc rules
-
-${markdocRulesText}
-
-## Core tag catalog
-
-${catalogLeadText}
-
-${tagCatalogText}
-
-## Writing rubric
-
-${rubricText}
+${sharedGuidance((title) => `## ${title}`)}
 `;

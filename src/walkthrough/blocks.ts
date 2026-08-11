@@ -12,6 +12,8 @@ import type {
   CodeBlock,
   ErrorCard,
   FieldRow,
+  FileEntry,
+  FileGroup,
   I18nRow,
   Inline,
   PatternItem,
@@ -442,20 +444,66 @@ function matrixBlock(node: Node, env: CompileEnv): Block {
   };
 }
 
-function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
+/** The `only`/`status` pair of a `files` or `filegroup` tag: the filter, and its own words. */
+interface FileFilter {
+  keeps(entry: FileEntry): boolean;
+  /** The authored filter, for a diagnostic hint. */
+  readonly text: string;
+}
+
+function fileFilter(node: Node): FileFilter {
   const only = attrString(node, "only");
   const status = attrString(node, "status");
   const wanted = status === undefined ? null : new Set(statusList(status));
+  return {
+    keeps: (entry) =>
+      (only === undefined || matchesGlob(entry.path, only)) &&
+      (wanted === null || wanted.has(entry.status)),
+    text: `${only === undefined ? "no glob" : `only="${only}"`}${status === undefined ? "" : `, status="${status}"`}`,
+  };
+}
+
+function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
+  const filter = fileFilter(node);
   const why = node.attributes["why"];
   const whyMap = typeof why === "object" && why !== null && !Array.isArray(why) ? why : {};
 
-  const paths = env.ctx.files
-    .filter((entry) => (only === undefined ? true : matchesGlob(entry.path, only)))
-    .filter((entry) => (wanted === null ? true : wanted.has(entry.status)))
-    .map((entry) => entry.path);
-  const held = new Set(paths);
+  const children = childTags(node, "files", env);
+  const groups: FileGroup[] = [];
+  let pool = env.ctx.files.filter((entry) => filter.keeps(entry));
 
-  for (const path of paths) env.fileRef(path, sectionId);
+  for (const child of children) {
+    const childFilter = fileFilter(child);
+    const claimed: string[] = [];
+    const rest: FileEntry[] = [];
+    /* First match wins: a claimed file leaves the pool the later groups draw from. */
+    for (const entry of pool) {
+      if (childFilter.keeps(entry)) claimed.push(entry.path);
+      else rest.push(entry);
+    }
+    pool = rest;
+
+    const label = attrString(child, "label") ?? "";
+    if (claimed.length === 0) {
+      env.report({
+        code: "filegroup-empty",
+        level: "warning",
+        file: env.file,
+        line: lineOf(child),
+        message: `The \`filegroup\` \`${label}\` claims no file this list still holds.`,
+        hint: `Check the filter: ${childFilter.text}. Earlier groups claim first; statuses are ${FILE_STATUSES.join(", ")}.`,
+      });
+      continue;
+    }
+    groups.push({ label, paths: claimed });
+  }
+
+  const paths = pool.map((entry) => entry.path);
+  /* Grouping partitions the list: every held path still refs its section. */
+  const heldPaths = [...groups.flatMap((group) => group.paths), ...paths];
+  const held = new Set(heldPaths);
+
+  for (const path of heldPaths) env.fileRef(path, sectionId);
 
   for (const [path, text] of Object.entries(whyMap)) {
     if (!held.has(path)) {
@@ -472,17 +520,17 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
     env.fileWhy(path, String(text));
   }
 
-  if (paths.length === 0) {
+  if (heldPaths.length === 0) {
     env.report({
       code: "files-empty",
       level: "warning",
       file: env.file,
       line: lineOf(node),
       message: "The `files` filter matches nothing in this PR.",
-      hint: `Check the filter: ${only === undefined ? "no glob" : `only="${only}"`}${status === undefined ? "" : `, status="${status}"`}. Statuses are ${FILE_STATUSES.join(", ")}.`,
+      hint: `Check the filter: ${filter.text}. Statuses are ${FILE_STATUSES.join(", ")}.`,
     });
   }
-  return { b: "files", paths };
+  return { b: "files", paths, ...(children.length > 0 ? { groups } : {}) };
 }
 
 function i18nBlock(env: CompileEnv, sectionId: string): Block {

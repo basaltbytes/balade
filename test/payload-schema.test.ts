@@ -40,6 +40,16 @@ describe("the payload schemas", () => {
     expect(Schema.encodeSync(PayloadSchema)(decoded)).toEqual(payload);
   });
 
+  it("carries the authored groups of a files block across the JSON edge", () => {
+    const block = {
+      b: "files",
+      paths: ["docs/old.md"],
+      groups: [{ label: "Translations", paths: ["i18n/fr.po", "i18n/acme.pot"] }],
+    };
+    const decoded = Schema.decodeUnknownSync(Block, strict)(block);
+    expect(Schema.encodeSync(Block)(decoded)).toEqual(block);
+  });
+
   it("preserves the JSON data of a namespaced preset block", () => {
     const block = {
       b: "odoo/security",

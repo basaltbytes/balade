@@ -157,6 +157,81 @@ describe("the walkthrough route", () => {
     expect(rendered).not.toContain("a --&gt; b");
   });
 
+  /* Grouping partitions the browser: every authored path keeps exactly one row,
+     but a group's rows only exist once the reader opens it. */
+  describe("a files browser with authored groups", () => {
+    const tests = "addons/acme_planning/tests/test_planning_pool_item.py";
+    const views = [
+      "addons/acme_planning/views/planning_pool_item_views.xml",
+      "addons/acme_planning/views/planning_slot_views.xml",
+    ];
+    const ungrouped = "addons/acme_planning/i18n/fr.po";
+
+    const statsOf = (paths: string[]): string => {
+      const known = pr96.files.filter((file) => paths.includes(file.path));
+      const additions = known.reduce((sum, file) => sum + file.additions, 0);
+      const deletions = known.reduce((sum, file) => sum + file.deletions, 0);
+      return `${known.length} ${known.length === 1 ? "file" : "files"} changed · +${additions} −${deletions}`;
+    };
+
+    const grouped: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "grouped-files",
+          title: "Grouped files",
+          hash: "sha256:grouped-files",
+          blocks: [
+            {
+              b: "files",
+              paths: [ungrouped],
+              groups: [
+                { label: "Tests unitaires", paths: [tests] },
+                { label: "Vues XML", paths: views },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const groupedHtml = render(grouped);
+
+    it("heads each group with its label and its own stats", () => {
+      expect(groupedHtml).toContain("Tests unitaires");
+      expect(groupedHtml).toContain("Vues XML");
+      expect(groupedHtml).toContain(statsOf([tests]));
+      expect(groupedHtml).toContain(statsOf(views));
+      /* The browser head still counts the whole thing, groups included. */
+      expect(groupedHtml).toContain(statsOf([tests, ...views, ungrouped]));
+    });
+
+    it("keeps a collapsed group's rows out of the render and the ungrouped rows in", () => {
+      expect(groupedHtml).not.toContain("test_planning_pool_item.py");
+      expect(groupedHtml).not.toContain("planning_slot_views.xml");
+      expect(groupedHtml).toContain("fr.po");
+    });
+
+    it("renders a groups-less block as the flat row list", () => {
+      const flat: Payload = {
+        ...grouped,
+        sections: [
+          {
+            id: "flat-files",
+            title: "Flat files",
+            hash: "sha256:flat-files",
+            blocks: [{ b: "files", paths: [tests, ...views, ungrouped] }],
+          },
+        ],
+      };
+
+      const rendered = render(flat);
+      expect(rendered).toContain("test_planning_pool_item.py");
+      expect(rendered).toContain("planning_slot_views.xml");
+      expect(rendered).toContain("fr.po");
+      expect(rendered).toContain(statsOf([tests, ...views, ungrouped]));
+    });
+  });
+
   it("renders toned callouts as localized banners and leaves neutral callouts plain", () => {
     const callouts: Payload = {
       ...pr96,

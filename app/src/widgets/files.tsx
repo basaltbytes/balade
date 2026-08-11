@@ -4,7 +4,7 @@
 
 import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import { useMemo, useState } from "react";
-import type { FileEntry } from "../contract";
+import type { FileEntry, FileGroup } from "../contract";
 import { normalizeUnified, splitPath } from "../data/diff";
 import { fileByPath } from "../data/review";
 import { useDiffHighlighter } from "../highlight/diff-highlighter";
@@ -179,23 +179,17 @@ function FileRow({ entry }: { entry: FileEntry }) {
   );
 }
 
-export function Files({ paths }: { paths: ReadonlyArray<string> }) {
-  const payload = usePayload();
+/* A path the pull request never touched still gets a row: silently dropping it
+   would hide an authoring mistake instead of naming it. */
+function Rows({ paths }: { paths: ReadonlyArray<string> }) {
   const strings = useStrings();
-  const byPath = fileByPath(payload);
-  const entries = paths.map((path) => [path, byPath.get(path)] as const);
-  const known = entries.flatMap(([, entry]) => (entry ? [entry] : []));
-  const additions = known.reduce((sum, entry) => sum + entry.additions, 0);
-  const deletions = known.reduce((sum, entry) => sum + entry.deletions, 0);
+  const byPath = fileByPath(usePayload());
 
   return (
-    <div className="my-4 border border-border rounded-md overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-[10px] bg-muted border-b border-border text-[13px] text-muted-foreground">
-        <Octicon name="file-diff" size={14} />
-        {strings.files.header(known.length, additions, deletions)}
-      </div>
-      {entries.map(([path, entry]) =>
-        entry ? (
+    <>
+      {paths.map((path) => {
+        const entry = byPath.get(path);
+        return entry ? (
           <FileRow key={path} entry={entry} />
         ) : (
           <div
@@ -204,8 +198,81 @@ export function Files({ paths }: { paths: ReadonlyArray<string> }) {
           >
             {strings.files.missing(path)}
           </div>
-        ),
+        );
+      })}
+    </>
+  );
+}
+
+/** What a path list adds up to; the paths the payload knows nothing about count for nothing. */
+function totals(byPath: Map<string, FileEntry>, paths: ReadonlyArray<string>) {
+  const known = paths.flatMap((path) => {
+    const entry = byPath.get(path);
+    return entry ? [entry] : [];
+  });
+  return {
+    files: known.length,
+    additions: known.reduce((sum, entry) => sum + entry.additions, 0),
+    deletions: known.reduce((sum, entry) => sum + entry.deletions, 0),
+  };
+}
+
+/* An authored theme over the rows. It starts collapsed — the point of grouping a
+   long browser is that the reader opens one theme at a time — and its head
+   carries the same stats sentence as the browser's own, scoped to the group. */
+function Group({ group }: { group: FileGroup }) {
+  const strings = useStrings();
+  const [open, setOpen] = useState(false);
+  const stats = totals(fileByPath(usePayload()), group.paths);
+
+  return (
+    <div className="border-b border-border-soft last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-[8px] bg-muted text-[12.5px] text-muted-foreground cursor-pointer text-left"
+      >
+        <Octicon name={open ? "chevron-down" : "chevron-right"} size={13} className="shrink-0" />
+        <Octicon name="rows" size={13} className="shrink-0" />
+        {/* Authored, pull-request-derived text: a React child, never markup. */}
+        <span className="text-foreground truncate">{group.label}</span>
+        <span className="ml-auto shrink-0">
+          {strings.files.header(stats.files, stats.additions, stats.deletions)}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-border-soft">
+          <Rows paths={group.paths} />
+        </div>
       )}
+    </div>
+  );
+}
+
+export function Files({
+  paths,
+  groups,
+}: {
+  paths: ReadonlyArray<string>;
+  groups?: ReadonlyArray<FileGroup>;
+}) {
+  const strings = useStrings();
+  const byPath = fileByPath(usePayload());
+  /* Groups partition the browser, so the head still counts the whole thing. */
+  const stats = totals(byPath, [...(groups ?? []).flatMap((group) => group.paths), ...paths]);
+
+  return (
+    <div className="my-4 border border-border rounded-md overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-[10px] bg-muted border-b border-border text-[13px] text-muted-foreground">
+        <Octicon name="file-diff" size={14} />
+        {strings.files.header(stats.files, stats.additions, stats.deletions)}
+      </div>
+      {/* Authored order, and labels are free text: the position is the only stable key. */}
+      {groups?.map((group, index) => (
+        <Group key={index} group={group} />
+      ))}
+      <Rows paths={paths} />
     </div>
   );
 }

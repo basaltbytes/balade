@@ -16,6 +16,7 @@ export type Lang = typeof Contract.Lang.Type;
 export type FileStatus = typeof Contract.FileStatus.Type;
 export type FileDiff = typeof Contract.FileDiff.Type;
 export type FileEntry = typeof Contract.FileEntry.Type;
+export type FileGroup = typeof Contract.FileGroup.Type;
 export type NavNode = typeof Contract.NavNode.Type;
 
 export type CodeBlock = typeof Contract.CodeBlock.Type;

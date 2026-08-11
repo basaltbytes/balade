@@ -115,11 +115,13 @@ export function sectionProgress(payload: Payload, state: ReviewState): Progress 
   return { done, total: payload.sections.length };
 }
 
-/** Paths of every `files` browser a section carries, in document order. */
+/** Paths of every `files` browser a section carries, in render order. */
 function browserPaths(section: Section): string[] {
   const paths: string[] = [];
   for (const block of section.blocks) {
-    if (block.b === "files") for (const path of block.paths) paths.push(path);
+    if (block.b !== "files") continue;
+    for (const group of block.groups ?? []) for (const path of group.paths) paths.push(path);
+    for (const path of block.paths) paths.push(path);
   }
   return paths;
 }
