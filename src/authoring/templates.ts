@@ -5,7 +5,7 @@
  */
 
 export interface AuthoringSectionTemplate {
-  readonly group: "Orientation" | "Models" | "Surface" | "Quality" | "Deep dive" | "Full PR diff";
+  readonly group: "Orientation" | "Mechanism" | "Models" | "Surface" | "Quality" | "Full PR diff";
   readonly selectWhen: string;
   readonly template: string;
 }
@@ -18,6 +18,16 @@ export const AUTHORING_SECTION_TEMPLATES: readonly AuthoringSectionTemplate[] = 
     template: `{% group label="Orientation" %}
 {% section id="overview" title="Overview" %}
 Replace this line with the review frame.
+{% /section %}
+{% /group %}`,
+  },
+  {
+    group: "Mechanism",
+    selectWhen:
+      "Use when the change carries an algorithm or non-obvious logic worth explaining. Explain what the solution does and the logic behind it, then pin the code range that proves each critical claim as a collapsed block. Skip the group for a documentation, configuration, or mechanical change.",
+    template: `{% group label="Mechanism" %}
+{% section id="mechanism" title="Mechanism" %}
+Replace this line with the explanation of the solution and its logic, then pin the code range under each critical claim with collapsed=true.
 {% /section %}
 {% /group %}`,
   },
@@ -48,16 +58,6 @@ Replace this line with the observable behavior.
     template: `{% group label="Quality" %}
 {% section id="proof" title="Proof" %}
 Replace this line with the safety or test evidence.
-{% /section %}
-{% /group %}`,
-  },
-  {
-    group: "Deep dive",
-    selectWhen:
-      "Use only when one algorithm, lifecycle, state transition, or compatibility boundary needs a slower reading path.",
-    template: `{% group label="Deep dive" %}
-{% section id="mechanism" title="Mechanism" %}
-Replace this line with the detailed reading path.
 {% /section %}
 {% /group %}`,
   },

@@ -69,6 +69,40 @@ describe("the walkthrough route", () => {
     );
   });
 
+  it("opens a code block unless the payload asks for it collapsed", () => {
+    const codeSection = (collapsed: boolean): Payload => ({
+      ...pr96,
+      sections: [
+        {
+          id: "collapsed",
+          title: "Collapsed",
+          hash: "sha256:collapsed",
+          blocks: [
+            {
+              b: "code",
+              file: "models/planning_pool_item.py",
+              from: 1,
+              to: 1,
+              lang: "python",
+              view: "plain",
+              ...(collapsed ? { collapsed: true } : {}),
+              lines: ["from odoo import api"],
+              changed: [1],
+            },
+          ],
+        },
+      ],
+    });
+
+    const closed = render(codeSection(true));
+    expect(closed).toContain("bg-background collapsed");
+    expect(closed).toContain("octicon-chevron-right");
+
+    const open = render(codeSection(false));
+    expect(open).not.toContain("bg-background collapsed");
+    expect(open).toContain("octicon-chevron-down");
+  });
+
   it("caps a payload-provided diagram at a 64 by 64 grid", () => {
     const payload: Payload = {
       ...pr96,

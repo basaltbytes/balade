@@ -83,7 +83,10 @@ describe("blocks without a repository", () => {
     blob: () => Option.none(),
   };
 
-  function compile(body: string): { blocks: Block[]; diagnostics: CheckDiagnostic[] } {
+  function compile(
+    body: string,
+    ctx: ResolveContext = stubContext,
+  ): { blocks: Block[]; diagnostics: CheckDiagnostic[] } {
     const doc = parseDocument(
       `---\nwalkthrough: 1\ntitle: T\npr: 1\ncommit: abc1234\n---\n\n${body}\n`,
       "w.md",
@@ -93,7 +96,7 @@ describe("blocks without a repository", () => {
     const diagnostics: CheckDiagnostic[] = [];
     const env: CompileEnv = {
       file: "w.md",
-      ctx: stubContext,
+      ctx,
       preset: undefined,
       fileEntry: () => undefined,
       report: (diagnostic) => diagnostics.push(diagnostic),
@@ -150,6 +153,28 @@ describe("blocks without a repository", () => {
     );
     expect(diagnostics[0]?.code).toBe("fence-unsupported");
     expect(diagnostics[0]?.hint).toContain("{% code");
+  });
+
+  it("carries an authored collapsed, and stays thin without one", () => {
+    const source = ["from odoo import api", "", "class PlanningPoolItem:"];
+    const withSource: ResolveContext = { ...stubContext, blob: () => Option.some(source) };
+    const codeSection = (attributes: string): string =>
+      [
+        '{% section id="s" title="T" %}',
+        `{% code file="models/planning_pool_item.py" from=1 to=3 expect="from odoo import api"${attributes} /%}`,
+        "{% /section %}",
+      ].join("\n");
+
+    expect(compile(codeSection(" collapsed=true"), withSource).blocks[0]).toMatchObject({
+      b: "code",
+      collapsed: true,
+    });
+
+    for (const attributes of ["", " collapsed=false"]) {
+      const block = compile(codeSection(attributes), withSource).blocks[0];
+      expect(block).toMatchObject({ b: "code" });
+      expect(block).not.toHaveProperty("collapsed");
+    }
   });
 });
 

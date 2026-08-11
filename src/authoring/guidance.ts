@@ -14,6 +14,10 @@ export const spineText = `Choose the behavioral spine instead of inventorying ch
 export const audienceText =
   "Write for a member of the public who did not read the code and did not join the coding session. Explain the named behavior before implementation detail. For English, apply ASD-STE100 Simplified Technical English: use one term per concept, short active sentences, and literal wording. For French, use Rédaction technique simplifiée and keep English technical terms that French developers normally use. Do not translate them word for word.";
 
+/** The two-layer comprehension pattern: explanation first, evidence under it. */
+export const algorithmText =
+  "When the change carries an algorithm or non-obvious logic, explain the solution in the Mechanism group, directly after Orientation. State what the solution does, then the logic behind it: the inputs it accepts, the decisions it makes, the order of the steps, and the cases it rejects. Do not write pseudo-code. The real code is one click away, and a second version of it teaches nothing. Use prose, a `{% flow %}` block for an ordered path, and a `{% diagram %}` block for relations between named parts. After this section, the reader must understand the logic of the solution without opening a single code block. Then attach the evidence: under each critical claim, pin the real code range with `collapsed=true`, so the block sits below the claim and opens on demand. Prose can drift from the code; the pinned range under it cannot. This section is a judgment call, not a rule. A documentation, configuration, or mechanical change carries no algorithm to explain, and a forced section only adds filler.";
+
 /** How to hold the section-template skeleton. */
 export const templatesLeadText =
   "Start from this canonical navigation skeleton, adapt section ids and titles, and omit every narrative group without review signal. A changed file does not automatically deserve a narrative section. Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. Keep that group last; it is mandatory and does not count as inventorying the PR.";
@@ -27,7 +31,11 @@ export const markdocRulesText = `Use ordinary Markdown for narrative inside grou
 
 {% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" /%}
 
-Read the numbered source first, keep the range focused, and copy expect exactly from the first referenced line. Markdoc attributes use double quotes. Escape every embedded double quote with a backslash, for example:
+Read the numbered source first, keep the range focused, and copy expect exactly from the first referenced line. Add collapsed=true when the range is evidence under a claim; the block then starts closed and the reader opens it on demand:
+
+{% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" collapsed=true /%}
+
+Markdoc attributes use double quotes. Escape every embedded double quote with a backslash, for example:
 
 {% method sig="_check_allocation()" decorator="@api.constrains(\\"allocation_id\\")" %}
 Explain the constraint.

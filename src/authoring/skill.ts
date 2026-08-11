@@ -9,6 +9,7 @@
 import { tagCatalogText } from "./catalog.js";
 import {
   absenceText,
+  algorithmText,
   audienceText,
   catalogLeadText,
   markdocRulesText,
@@ -106,6 +107,8 @@ ${audienceText}
 ${templatesLeadText}
 
 ${sectionTemplatesText}
+
+${algorithmText}
 
 ${absenceText}
 

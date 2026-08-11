@@ -20,12 +20,12 @@ export const AUTHORING_RUBRIC: readonly AuthoringRubricCriterion[] = [
     question: "Does each narrative section earn its place in the review story?",
     pass: "The narrative follows the behavioral spine and omits files or topics that add no review signal; the required bare full-PR diff remains last.",
     reject:
-      "The narrative inventories files, copies all five narrative groups by habit, gives a mechanical change its own deep section, or omits, filters, or moves the closing full-PR diff.",
+      "The narrative inventories files, copies all five narrative groups by habit, gives a mechanical change its own mechanism section, or omits, filters, or moves the closing full-PR diff.",
   },
   {
     id: "reviewer-usefulness",
     question: "Can a reviewer use the draft to choose what to inspect and what to challenge?",
-    pass: "The draft explains observable behavior, control flow, constraints, and the proof or risk that matters.",
+    pass: "The draft explains observable behavior, control flow, constraints, and the proof or risk that matters; the reader understands the logic of the solution without opening every code range.",
     reject:
       "The draft paraphrases syntax, repeats the PR title, or hides the decision behind generic praise.",
   },

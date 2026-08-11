@@ -978,3 +978,31 @@ missing binary fails deterministically with Pi's own unavailable error rather
 than by network luck. The offline switch is safe because balade instantiates
 only Pi's grep tool (`src/pi/session.ts`); nothing needs `fd`. What would move
 this: Pi authenticating its tool downloads, or runner images shipping ripgrep.
+
+## The Mechanism group explains the logic before the evidence
+
+Walkthroughs exist so a human understands agent-written code without reading
+every line of it. The skeleton now encodes that reading order: when a change
+carries an algorithm or non-obvious logic, a Mechanism group sits directly
+after Orientation and explains what the solution does and the logic behind it
+— prose, `flow`, `diagram`; never pseudo-code, because the pinned code is one
+click away and a second version of it teaches nothing. Each critical claim
+pins its real range as a `{% code … collapsed=true /%}` block, so the evidence
+sits under the claim and opens on demand. The explanation can drift; the
+pinned range under it cannot — that adjacency, not reviewer trust in prose, is
+what keeps the layer honest. The group replaced the trailing Deep dive slot
+rather than joining it: two overlapping "slow path" homes would split the same
+content, and pre-alpha removes rather than aliases.
+
+The pattern is taught as a judgment call, not a structural rule: docs, config
+and mechanical changes carry no algorithm, and the compiler enforces nothing —
+unlike the closing full-PR diff, a missing Mechanism section is an authoring
+quality issue, not invalid input. `collapsed` is an authored initial state
+only; the app does not persist the reader's toggle. Evidence ranges count
+against the unchanged 10-range budget on purpose — the cap is what forces
+"critical pieces", not an inventory of hunks. Authored artifacts written
+against the old skeleton (`.agents/walkthroughs/pr-88-*.md`,
+`app/src/fixtures/pr96.ts`) keep their free-text `Deep dive` labels; group
+labels are data, not contract. What would move this: dogfooding showing the
+range budget starves evidence pinning, or reviewers wanting collapse state
+persisted with the other review marks.

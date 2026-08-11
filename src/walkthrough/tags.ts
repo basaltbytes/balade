@@ -76,6 +76,7 @@ const code: Schema = {
     to: { type: Number, required: true },
     mark: { type: [String, Array] },
     view: { type: String, matches: [...CODE_VIEWS], default: "change" },
+    collapsed: { type: Boolean },
     expect: { type: String },
   },
   validate: rangeErrors,

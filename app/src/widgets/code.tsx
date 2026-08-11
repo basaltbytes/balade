@@ -21,7 +21,7 @@ export function Code({ block }: { block: CodeBlock }) {
   const strings = useStrings();
   const { pr } = usePayload();
   const [view, setView] = useState<View>(block.view);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(block.collapsed !== true);
 
   const code = useMemo(() => block.lines.join("\n"), [block.lines]);
   const highlightSkipped = hasOverlongHighlightLine(code);

@@ -74,10 +74,10 @@ describe("the authoring package", () => {
   it("ships the canonical templates and four rubric axes", () => {
     expect(AUTHORING_SECTION_TEMPLATES.map((template) => template.group)).toEqual([
       "Orientation",
+      "Mechanism",
       "Models",
       "Surface",
       "Quality",
-      "Deep dive",
       "Full PR diff",
     ]);
     expect(AUTHORING_RUBRIC.map((criterion) => criterion.id)).toEqual([
@@ -105,6 +105,21 @@ describe("the authoring package", () => {
     expect(authoringSystemPrompt()).toContain("state plainly that the value was omitted");
     expect(authoringSystemPrompt()).toContain("20 searches");
     expect(authoringSystemPrompt()).toContain("Every walkthrough ends with the Full PR diff group");
+  });
+
+  it("teaches the mechanism layer and the collapsed evidence under it", () => {
+    const prompt = authoringSystemPrompt();
+    expect(prompt).toContain(
+      "explain the solution in the Mechanism group, directly after Orientation",
+    );
+    expect(prompt).toContain("Do not write pseudo-code");
+    expect(prompt).toContain("pin the real code range with `collapsed=true`");
+    /* A judgment call, not a mandate. */
+    expect(prompt).toContain("a forced section only adds filler");
+    /* The tag attribute the pattern depends on is taught with the code tag. */
+    expect(prompt).toContain(
+      `{% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" collapsed=true /%}`,
+    );
   });
 
   it("teaches every core tag's syntax in the catalog", () => {
