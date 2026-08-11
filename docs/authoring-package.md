@@ -114,33 +114,19 @@ narrative groups that add review signal, then appends the mandatory full-PR diff
 | Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
 | Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block. |
 
-The Mechanism group carries two layers. The explanation comes first and is the
-primary content: several sentences that state what the solution does, its
-inputs, its decisions, the order of the steps, and the cases it rejects, in
-prose, `{% flow %}` steps whose each step is one short clause, and an optional
-mermaid diagram — never in pseudo-code, because the real code is one click
-away. A one-line claim is not an explanation. Under each critical claim sits
-the range that proves it, pinned with `collapsed=true`, so the evidence opens
-on demand. That attribute belongs to this pattern only; every other code block
-in a walkthrough stays open, because the open block is the reading surface. The
-group is a judgment call: a documentation, configuration, or mechanical change
-carries no algorithm to explain, and a forced section only adds filler.
+The Mechanism group or section is there to help a human have a real understanding of the 
+code produced in this PR. Explain the overall concepts, the logic, models, actors and
+algorithms that are in this PR. This section doesn't need to go over translation files, or 
+documentation updates or other transversal or trivial changes, it is used to understand 
+pieces of code that are introduced in the PR.
 
-A Markdown fence tagged `mermaid` renders as a diagram. The package encourages
-one inside the Mechanism explanation when a picture makes the logic clearer
-than prose alone — a flowchart for branches, a sequence diagram for
-interactions — with node labels of a few words. It never requires one: a
-walkthrough with no diagram is normal. The grid `{% diagram %}` block keeps a
-narrower job, a relation map between named changed parts, because only it
-carries a per-part change status and a section reference. Neither block is a
-place for a sequence of steps.
+Feel free to use plain-text, or pseudo-code to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding.
 
-A changed file does not earn a narrative section by itself. Mechanical renames
-can use one orientation section before the required full-PR diff. That final
-block stays attribute-free so every changed file remains available for review
-and its Viewed checkbox. When an empty area expresses a product rule, the draft
-explains the absence with Markdown and a callout; it does not create a one-card
-block.
+If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free
+to give link for reading materials and explaination of the software engineering concept.
+
+When explaining the code feel free to directly have the code block shown in-between, in full form
+or pinned with `collapsed=true` to disclose it as a "If you want to dive deeper" section.
 
 Markdoc attributes use double quotes. Embedded double quotes need backslash
 escapes:
