@@ -147,6 +147,29 @@ describe("progress", () => {
     expect(fileProgress(p, current, one)).toBeNull();
   });
 
+  it("counts grouped paths in a files browser's progress", () => {
+    const grouped = payload(
+      [
+        section("all", "hg", {
+          blocks: [
+            {
+              b: "files",
+              paths: ["loose.py"],
+              groups: [{ label: "Tests", paths: ["a.py", "b.py"] }],
+            },
+          ],
+        }),
+      ],
+      [file("a.py", "fa"), file("b.py", "fb"), file("loose.py", "fl")],
+    );
+    const target = grouped.sections[0];
+    if (!target) throw new Error("fixture");
+    let current = state({});
+    expect(fileProgress(grouped, current, target)).toEqual({ done: 0, total: 3 });
+    current = toggleFile(grouped, current, "all", "a.py", at);
+    expect(fileProgress(grouped, current, target)).toEqual({ done: 1, total: 3 });
+  });
+
   it("unmarks on a second toggle", () => {
     const marked = toggleSection(p, state({}), "one", at);
     expect(toggleSection(p, marked, "one", at).sections.one).toBeUndefined();

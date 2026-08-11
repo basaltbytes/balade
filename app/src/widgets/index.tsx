@@ -58,7 +58,12 @@ export const BlockView = memo(function BlockView({ block }: { block: Block }) {
         />
       );
     case "files":
-      return <Files paths={block.paths} />;
+      return (
+        <Files
+          paths={block.paths}
+          {...(block.groups !== undefined ? { groups: block.groups } : {})}
+        />
+      );
     case "i18n":
       return (
         <I18nTable rows={block.rows} {...(block.note !== undefined ? { note: block.note } : {})} />

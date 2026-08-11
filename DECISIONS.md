@@ -1060,3 +1060,34 @@ diff highlighter, so SSR never imports mermaid and the served entry chunk
 grows by ~3 kB. What would move this: mermaid gating links and html labels
 behind `secure` upstream, or a CLI-side mermaid parse for `check` once one
 runs without a DOM.
+
+## The closing diff groups by authored partition, never by filter
+
+A flat closing file list re-states what GitHub already shows; past a handful
+of files it stops being a review surface. `{% files %}` therefore accepts
+`{% filegroup label="…" only="…" status="…" /%}` children that split the same
+browser into collapsible thematic sections. Grouping is authored, not
+computed: thematic labels (Tests, Security, Models…) are a judgment about the
+change, not something derivable from the tree, so the agent draws the groups
+and balade only resolves them.
+
+The semantics keep the #46 invariant by construction. Groups claim files in
+authored order, first match wins, a filter-less group claims the remainder,
+and files no group claims still render ungrouped after the groups — a grouped
+closing block partitions the complete diff and structurally cannot hide a
+file, so it still satisfies the compiler's closing rule. A group that claims
+nothing warns (`filegroup-empty`) and is dropped from the payload;
+`files-empty` keys on the grouped-plus-ungrouped total. The `files` schema is
+no longer self-closing (Markdoc rejects children otherwise); both forms stay
+valid, and a stray `filegroup` outside `files` vanishes silently like a stray
+`step` — the existing child-family behavior.
+
+In the app, groups start collapsed — the point of grouping a long browser is
+opening one theme at a time — and the group head reuses the browser's own
+stats sentence, so the feature adds no i18n string. Labels are PR-derived
+free text: rendered only as React text children, keyed by position. The
+authoring package teaches grouping as guidance, not a compiler rule: group
+the closing block once the PR touches more than ten files. What would move
+this: dogfooding showing globs cannot express the groups agents actually want
+(an explicit path-list attribute), or reviewers wanting group collapse state
+persisted with the review marks.

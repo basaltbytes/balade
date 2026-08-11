@@ -193,6 +193,12 @@ export const PatternItem = Schema.Struct({
   body: Schema.Array(Inline),
 });
 
+/** One authored group of the files browser; groups partition the list, they never hide a file. */
+export const FileGroup = Schema.Struct({
+  label: Schema.String,
+  paths: Strings,
+});
+
 export const DiagramNode = Schema.Struct({
   id: Schema.String,
   model: Schema.String,
@@ -279,7 +285,13 @@ export const Block = Schema.Union([
     rows: Schema.Array(Schema.Array(Schema.Array(Inline))),
     firstColMono: Schema.optionalKey(Schema.Boolean),
   }),
-  Schema.Struct({ b: Schema.Literal("files"), paths: Strings }),
+  Schema.Struct({
+    b: Schema.Literal("files"),
+    /** Ungrouped rows; every row when the author drew no groups. */
+    paths: Strings,
+    /** Authored order; rendered before the ungrouped rows. */
+    groups: Schema.optionalKey(Schema.Array(FileGroup)),
+  }),
   Schema.Struct({
     b: Schema.Literal("i18n"),
     rows: Schema.Array(I18nRow),

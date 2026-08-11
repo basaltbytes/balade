@@ -73,8 +73,14 @@ What it does and when it runs.
   },
   {
     label: "files",
-    note: "Every walkthrough ends with a closing section containing a bare `{% files /%}`. That block renders the unfiltered full-PR diff browser for the reviewer's final verification sweep. A narrative section may also use a filtered listing: only matches paths, status accepts A, M, D, or R, and why annotates rows. Never put those attributes on the mandatory closing block.",
-    example: `{% files only="src/**" status="A, M" why={"src/example.ts": "why it changed"} /%}`,
+    note: "Every walkthrough ends with a closing section containing a bare `{% files /%}`. That block renders the unfiltered full-PR diff browser for the reviewer's final verification sweep. A narrative section may also use a filtered listing: only matches paths, status accepts A, M, D, or R, and why annotates rows. Never put those attributes on the mandatory closing block. The block can instead take `{% filegroup /%}` children, which split that same browser into collapsible thematic sections: label names the section and is required, only filters paths with the same glob syntax as files, and status takes a comma list of A, M, D or R. Each group claims, in authored order, the changed files its filter matches among the files no earlier group already claimed, so a file lands in exactly one group. A filegroup with no filter claims everything still unclaimed, which makes it a useful last group. Files that no group claims still render, ungrouped, after the groups: grouping partitions the diff and can never hide a file, so the closing block stays a complete verification surface. Grouping earns its place as soon as the pull request touches more than ten files — group the closing block then, and choose the labels from what the change actually contains, for example Tests, Traductions, Models, Security, UI, Controllers, or Misc.",
+    example: `{% files only="src/**" status="A, M" why={"src/example.ts": "why it changed"} /%}
+
+{% files %}
+{% filegroup label="Tests" only="**/*.test.ts" /%}
+{% filegroup label="UI" only="app/**" /%}
+{% filegroup label="Misc" /%}
+{% /files %}`,
   },
   {
     label: "i18n",

@@ -8,7 +8,7 @@
  * frontmatter, and `balade check` compares that stamp against this version.
  */
 
-export const AUTHORING_PACKAGE_VERSION = "1.13.0";
+export const AUTHORING_PACKAGE_VERSION = "1.14.0";
 export const AUTHORING_WALKTHROUGH_SCHEMA_VERSION = 1;
 export const AUTHORING_META_KEY = "balade-authoring";
 

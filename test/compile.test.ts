@@ -166,6 +166,8 @@ describe("compile", () => {
 
   it("resolves files, their refs and the author's why", () => {
     const files = firstBlock(payload, "files", "files");
+    /* No `filegroup` authored: the block carries rows only. */
+    expect(files.groups).toBeUndefined();
     expect([...files.paths].sort()).toEqual([
       "docs/old.md",
       "i18n/acme.pot",
@@ -247,4 +249,95 @@ describe("compile", () => {
       }
     }),
   );
+});
+
+describe("compile with file groups", () => {
+  let repo: FixtureRepo;
+  let loaded: LoadResult;
+  let payload: Payload;
+
+  const groupOf = (sectionId: string, label: string): readonly string[] => {
+    const group = firstBlock(payload, sectionId, "files").groups?.find(
+      (entry) => entry.label === label,
+    );
+    if (group === undefined) throw new Error(`no group ${label} in ${sectionId}`);
+    return [...group.paths].sort();
+  };
+
+  beforeAll(async () => {
+    repo = createFixtureRepo();
+    const path = repo.addWalkthrough("filegroups.md", "filegroups.md");
+    loaded = await Effect.runPromise(
+      provideLive(loadWalkthrough({ cwd: repo.dir, path, useGh: false })),
+    );
+    if (loaded.payload === null) throw new Error(JSON.stringify(loaded.diagnostics, null, 2));
+    payload = loaded.payload;
+  });
+
+  afterAll(() => repo.cleanup());
+
+  it("keeps a grouped closing block a valid full-PR list", () => {
+    expect(loaded.diagnostics.filter((d) => d.level === "error")).toEqual([]);
+  });
+
+  it("partitions the pool into the authored groups, leftovers in paths", () => {
+    const files = firstBlock(payload, "grouped", "files");
+    expect(files.groups?.map((group) => group.label)).toEqual(["Translations", "Models", "Python"]);
+    expect(groupOf("grouped", "Translations")).toEqual(["i18n/acme.pot", "i18n/fr.po"]);
+    expect(groupOf("grouped", "Models")).toEqual([
+      "models/planning_allocation.py",
+      "models/planning_pool_item.py",
+    ]);
+    /* The Python glob overlaps the models one; the earlier group already claimed them. */
+    expect(groupOf("grouped", "Python")).toEqual(["utils/planning_helper.py"]);
+    expect([...files.paths].sort()).toEqual([
+      "docs/old.md",
+      "security/ir.model.access.csv",
+      "views/planning_pool_views.xml",
+    ]);
+    const all = [...(files.groups ?? []).flatMap((group) => group.paths), ...files.paths];
+    expect(new Set(all).size).toBe(all.length);
+    expect(all).toHaveLength(payload.files.length);
+  });
+
+  it("warns about a group that claims nothing", () => {
+    const empty = loaded.diagnostics.filter((d) => d.code === "filegroup-empty");
+    expect(empty).toHaveLength(1);
+    expect(empty[0]?.level).toBe("warning");
+    expect(empty[0]?.message).toContain("Static assets");
+    expect(empty[0]?.hint).toContain('only="static/**"');
+    /* Warned, then dropped: every group in the payload holds rows. */
+    expect(
+      firstBlock(payload, "grouped", "files").groups?.some((group) => group.paths.length === 0),
+    ).toBe(false);
+  });
+
+  it("lets a filter-less group claim the rest of the pool", () => {
+    const files = firstBlock(payload, "closing", "files");
+    expect(files.groups?.map((group) => group.label)).toEqual(["New files", "Everything else"]);
+    expect(groupOf("closing", "New files")).toEqual([
+      "i18n/acme.pot",
+      "models/planning_allocation.py",
+      "security/ir.model.access.csv",
+    ]);
+    expect(groupOf("closing", "Everything else")).toEqual([
+      "docs/old.md",
+      "i18n/fr.po",
+      "models/planning_pool_item.py",
+      "utils/planning_helper.py",
+      "views/planning_pool_views.xml",
+    ]);
+    /* The block holds every file through its groups: no `files-empty`. */
+    expect(files.paths).toEqual([]);
+    expect(loaded.diagnostics.filter((d) => d.code === "files-empty")).toEqual([]);
+  });
+
+  it("refs and explains a grouped path like an ungrouped one", () => {
+    const grouped = payload.files.find((entry) => entry.path === "i18n/fr.po");
+    expect(grouped?.ref).toBe("grouped");
+    expect(grouped?.why).toBe("one new label");
+    const leftover = payload.files.find((entry) => entry.path === "docs/old.md");
+    expect(leftover?.ref).toBe("grouped");
+    expect(leftover?.why).toBe("superseded by the pool item");
+  });
 });
