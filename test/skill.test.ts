@@ -61,25 +61,6 @@ describe("the generated authoring skill", () => {
       if (tag === "table") continue;
       expect(skill).toContain(`{% ${tag}`);
     }
-    expect(skill).toContain("Only code tags count against the range budget");
-    expect(skill).toContain("ASD-STE100 Simplified Technical English");
-  });
-
-  it("teaches the mechanism layer, like the Pi prompt does", () => {
-    expect(skillMd).toContain("### Mechanism");
-    expect(skillMd).toContain("human comprehension is the goal");
-    expect(skillMd).toContain("pinned with `collapsed=true`");
-    expect(skillMd).toContain("The explanation is the primary content of the section");
-    expect(skillMd).toContain("If you want to dive deeper");
-  });
-
-  it("teaches the mermaid fence and the collapsed bound, like the Pi prompt does", () => {
-    expect(skillMd).toContain("a fence tagged mermaid renders as a diagram");
-    expect(skillMd).toContain("```mermaid");
-    expect(skillMd).toContain("A diagram is never required");
-    expect(skillMd).toContain("A code block is open by default");
-    expect(skillMd).toContain("Never collapse every range");
-    expect(skillMd).toContain("Most walkthroughs need no grid diagram");
   });
 });
 

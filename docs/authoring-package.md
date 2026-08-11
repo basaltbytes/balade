@@ -122,8 +122,8 @@ pieces of code that are introduced in the PR.
 
 Feel free to use plain-text, or pseudo-code to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding.
 
-If the PR introduces known algorithms, encryption techniques, modelization techniques, feel free
-to give link for reading materials and explanation of the software engineering concept.
+If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free
+to give link for reading materials and explaination of the software engineering concept.
 
 When explaining the code feel free to directly have the code block shown in-between, in full form
 or pinned with `collapsed=true` to disclose it as a "If you want to dive deeper" section.
