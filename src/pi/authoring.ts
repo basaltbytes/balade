@@ -5,24 +5,13 @@
  */
 
 import { Option } from "effect";
-import { tagCatalogText } from "../authoring/catalog.js";
-import {
-  absenceText,
-  algorithmText,
-  audienceText,
-  catalogLeadText,
-  markdocRulesText,
-  spineText,
-  templatesLeadText,
-} from "../authoring/guidance.js";
+import { sharedGuidance } from "../authoring/guidance.js";
 import {
   AUTHORING_LIMITS,
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
 } from "../authoring/package.js";
-import { rubricText } from "../authoring/rubric.js";
-import { sectionTemplatesText } from "../authoring/templates.js";
 import type { Lang } from "../contract/types.js";
 import type { AuthoringPreset, AuthoringRequest } from "./author.js";
 
@@ -50,33 +39,7 @@ List the changes and inspect the relevant diff. Before claiming how an identifie
 
 Never reproduce credential material in the walkthrough — tokens, private keys, passwords, connection strings, or the contents of environment files. When a change involves such a value, describe the change and its effect without quoting the value, and state plainly that the value was omitted, so the reviewer knows to inspect it themselves.
 
-${spineText}
-
-${audienceText}
-
-Section templates
-
-${templatesLeadText}
-
-${sectionTemplatesText}
-
-${algorithmText}
-
-${absenceText}
-
-Markdoc rules
-
-${markdocRulesText}
-
-Core tag catalog
-
-${catalogLeadText}
-
-${tagCatalogText}
-
-Writing rubric
-
-${rubricText}
+${sharedGuidance((title) => title)}
 
 Your final action must be submit_walkthrough with the complete draft.`;
 
