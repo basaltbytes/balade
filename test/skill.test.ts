@@ -61,14 +61,6 @@ describe("the generated authoring skill", () => {
       if (tag === "table") continue;
       expect(skill).toContain(`{% ${tag}`);
     }
-    expect(skill).toContain("Only code tags count against the range budget");
-    expect(skill).toContain("ASD-STE100 Simplified Technical English");
-  });
-
-  it("teaches the mechanism layer, like the Pi prompt does", () => {
-    expect(skillMd).toContain("### Mechanism");
-    expect(skillMd).toContain("Do not write pseudo-code");
-    expect(skillMd).toContain("pin the real code range with `collapsed=true`");
   });
 });
 

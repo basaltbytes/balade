@@ -340,10 +340,12 @@ adding one is a line in `app/src/highlight/shiki.ts`.
 
 `build` inlines the app into one HTML file, and a `file://` page has nowhere to
 fetch a chunk from — so the export build (`vite build app --mode export`) turns
-code splitting off and emits one JS and one CSS. All 31 grammars ride along:
-3.97 MB of JS against the served build's 1.54 MB entry chunk, which loads a
-grammar only when a payload names one. An exported walkthrough weighs about
-4.0 MB, 766 kB gzipped, whatever it shows.
+code splitting off and emits one JS and one CSS. All 31 grammars and the whole
+mermaid renderer ride along: 7.48 MB of JS against the served build's 1.65 MB
+entry chunk, which loads a grammar or mermaid only when a payload needs one.
+An exported walkthrough weighs about 7.5 MB, 1.72 MB gzipped, whatever it
+shows, and the export build's chunk-size warning is the expected cost of the
+single file.
 
 Two builds is the price of that difference. Serving the export bundle instead
 would cost every reviewer the 2.4 MB of grammars they will not read; exporting
@@ -1030,3 +1032,31 @@ the executable reports a build-time version synced by the release flow, while
 the preview is selected by its pkg.pr.new URL and does not enter a dependency
 range or project lockfile. What would move this: publishing a library API whose
 preview must participate in dependency resolution.
+
+## Mermaid draws the logic; the sink does not trust mermaid
+
+Dogfooding the Mechanism pattern showed the model bending the grid `diagram`
+block into sequential logic — sentence-long labels stacked one node per row —
+because the format had no medium for flow pictures. Mermaid is that medium
+now: a plain ```mermaid fence compiles to a `mermaid` block and renders
+client-side. Authoring teaches it as encouraged-never-required, and the same
+dogfooding pass bounded the evidence pattern: `collapsed=true` is legal only
+on ranges directly under a substantial Mechanism explanation, a one-line claim
+above a collapsed range is a rubric reject, and the grid diagram is reserved
+for relation maps of changed parts — the one thing mermaid cannot draw, since
+only the grid block carries per-part change status and section refs.
+
+Rendering treats mermaid as an untrusted-input compiler, not a trusted
+library. `securityLevel: "strict"` is insufficient on its own — html labels
+default on even at strict, and `click … href` emits a real anchor — so the
+config forces SVG text labels and extends mermaid's `secure` list with
+`htmlLabels`/`themeCSS` (a diagram directive cannot re-enable them), and
+`sanitizeDiagramSvg` guards the sink itself: anchors unwrapped, scripts
+removed, every non-fragment URL attribute dropped. The guard lives at the
+injection point rather than in the renderer so the test seam cannot bypass it;
+the walkthrough-cannot-express-a-link invariant survives (conditions cited in
+docs/threat-model.md). The renderer loads through the same lazy seam as the
+diff highlighter, so SSR never imports mermaid and the served entry chunk
+grows by ~3 kB. What would move this: mermaid gating links and html labels
+behind `secure` upstream, or a CLI-side mermaid parse for `check` once one
+runs without a DOM.

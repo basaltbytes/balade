@@ -70,6 +70,7 @@ export interface Strings {
   calloutTitle: Record<"key" | "warn", string>;
   unknownBlock: (kind: string) => string;
   diagramRelations: string;
+  mermaidUnavailable: string;
 
   /* index route */
   index: {
@@ -151,6 +152,7 @@ const en: Strings = {
   calloutTitle: { key: "Key point", warn: "Warning" },
   unknownBlock: (kind) => `No renderer for “${kind}” blocks.`,
   diagramRelations: "Relations",
+  mermaidUnavailable: "This diagram could not be drawn; its source is shown instead.",
 
   index: {
     title: "Walkthroughs",
@@ -231,6 +233,7 @@ const fr: Strings = {
   calloutTitle: { key: "Point clé", warn: "Attention" },
   unknownBlock: (kind) => `Aucun rendu pour les blocs « ${kind} ».`,
   diagramRelations: "Relations",
+  mermaidUnavailable: "Ce diagramme n’a pas pu être tracé ; sa source est affichée à la place.",
 
   index: {
     title: "Balades",

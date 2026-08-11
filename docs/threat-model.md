@@ -87,6 +87,10 @@ Markdoc registers no variables, functions or partials
 (`src/walkthrough/config.ts:11-16`); and compilation is a pure transform into a
 JSON payload of plain data. The exposure is the browser origin.
 
+A ```mermaid fence widens that origin exposure: its source reaches the browser
+verbatim and a third-party library turns it into markup the app injects. The
+conditions that bound it are recorded under "Rendering" below.
+
 When the walkthrough comes from a fetched PR head, the CLI names the PR and
 head commit and labels the content unreviewed before serving it. A walkthrough
 read from the working tree carries no such notice.
@@ -152,11 +156,12 @@ they describe.
   structurally cannot express a link. This is the strongest control in the app.
 - `Rich` (`app/src/ui/rich.tsx`) renders every branch as a React text child. No
   `href`, no `style` from data, no HTML sink.
-- Exactly one `dangerouslySetInnerHTML` **in balade's own source**
-  (`app/src/widgets/code.tsx:138`), fed by shiki over payload text; grammars are
-  a closed 31-entry allowlist falling back to `"text"`
-  (`app/src/highlight/shiki.ts:86-90`). `@git-diff-view/react` adds four more on
-  the same attacker-controlled bytes — see below.
+- Two `dangerouslySetInnerHTML` sinks **in balade's own source**. The first
+  (`app/src/widgets/code.tsx:138`) is fed by shiki over payload text; grammars
+  are a closed 31-entry allowlist falling back to `"text"`
+  (`app/src/highlight/shiki.ts:86-90`). The second
+  (`app/src/widgets/mermaid.tsx`) is fed by mermaid — see below.
+  `@git-diff-view/react` adds four more on the same attacker-controlled bytes.
 - **shiki's `codeToHtml` output is safe to inject.** Text nodes are escaped by
   `hast-util-to-html` via `stringifyEntities`, attribute values by
   `handle/element.js`, and raw HTML is off by default (`allowDangerousHtml:
@@ -166,6 +171,57 @@ they describe.
   (`app/src/highlight/shiki.ts:171-186`), and its single transformer only adds
   static class names. `style` values come from the bundled theme, never from
   input.
+- **mermaid's SVG output is injected, and `securityLevel: "strict"` alone does
+  not make that safe.** Verified against `mermaid@11.16.1`; line numbers name
+  `dist/mermaid.js`, the readable build of the ESM entry the app imports. Under
+  `strict` mermaid sanitizes the whole SVG string it returns with its bundled
+  `dompurify@3.4.0` (`:6896`), adding only `foreignobject` and
+  `dominant-baseline` to the default profile (`:191371-191372`, `:191651`); it
+  sanitizes every label text the same way (`:22395-22420`); it refuses
+  `click … call` callbacks, which register at `loose` only (`:47676-47678`,
+  `:144525`, `:157266`); and it sends a `click … href` URL through
+  `@braintree/sanitize-url` (`:34481-34489`). **Four conditions hold this sink
+  safe** and must not be broken:
+  1. HTML labels are off. They default to **on** even at `strict` —
+     `config.htmlLabels ?? config.flowchart?.htmlLabels ?? true` (`:6887-6892`)
+     over a shipped default that sets neither (`:5815`) — so `MERMAID_CONFIG`
+     (`app/src/mermaid/mermaid.ts`) sets the root switch plus
+     `flowchart.htmlLabels` and `class.htmlLabels`, because some shape renderers
+     read the flowchart one directly (`:45302`, `:48318`). Labels stay SVG text.
+  2. The diagram source may not reconfigure mermaid. A `%%{init}%%` directive or
+     a YAML `config:` block inside the source reaches `addDirective`
+     (`:191373-191378`), which drops only the keys named in `siteConfig.secure`
+     (`:6818`). mermaid's own list holds six, and not `htmlLabels`
+     (`:6344-6351`), so `MERMAID_CONFIG` extends it with `htmlLabels` and
+     `themeCSS`. `secure` is always first in that list, so a directive cannot
+     shorten it; `maxTextSize` (50,000 characters) and `maxEdges` (500) are on
+     it already, so a diagram cannot raise its own bounds (`:6336-6337`).
+  3. `bindFunctions` is never called. The renderer keeps only `svg` off the
+     render result, so nothing a diagram declares becomes a listener;
+     `attachFunctions` replays only what `setClickFun` registered, which stays
+     empty outside `loose` (`:191245-191251`).
+  4. Everything the renderer returns passes `sanitizeDiagramSvg` before it is
+     injected. **A link does survive strict mode**: `setLink` carries no
+     security gate (`:47722-47731`) and the node renderer wraps the shape in
+     `<svg:a xlink:href=…>` (`:50015-50022`, `:171899-171909`), which DOMPurify
+     keeps. The guard parses the markup into an inert `DOMParser` document,
+     unwraps every `<a>`, removes `<script>`, and drops every `on*` attribute
+     and every `href`/`xlink:href`/`src`/`target`/`ping`/`formaction` that is
+     not a `#` same-document reference — mermaid's own marker and icon
+     references are all that stay. The rule that a walkthrough cannot express a
+     link therefore holds at this sink too, and no PR-derived URL is fetched.
+     `app/src/mermaid/mermaid.test.ts` drives these three cases through real
+     mermaid.
+- A diagram's CSS cannot leave the diagram. Every rule mermaid emits, including
+  a `themeCSS` a directive might set, is compiled through `compileCSS(svgId, …)`,
+  which prefixes each selector with the `#<id>` the app generated and comments
+  out at-rules outside a fixed list (`:191451-191517`). Ids are app-generated
+  (`balade-mermaid-<n>`), never payload-derived.
+- Mermaid needs a document, so it loads and draws only from an effect hook in
+  the browser: server rendering shows a placeholder and never imports the
+  library. A parse or render failure falls back to the diagram source as React
+  text with a localized note, which is not an HTML sink
+  (`app/src/mermaid/use-mermaid.ts`, `app/src/widgets/mermaid.tsx`).
 - No syntax grammar receives a line longer than 2,000 characters. Code excerpts
   use React's escaped plaintext rendering and show a localized note; diff views
   use Shiki's plaintext grammar. Diff highlighting remains off until the custom

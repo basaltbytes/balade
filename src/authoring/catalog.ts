@@ -35,7 +35,7 @@ One sentence the reviewer must not miss.
   },
   {
     label: "flow/step",
-    note: "One ordered control path; the optional tag names the actor or phase.",
+    note: "One ordered control path; the optional tag names the actor or phase. A step is one short clause, never a paragraph.",
     example: `{% flow %}
 {% step tag="guard" %}Reject a stale pin before any write.{% /step %}
 {% step %}Apply the change.{% /step %}
@@ -102,8 +102,20 @@ What it does and when it runs.
     example: `{% attrs items=["readonly", "cascade"] /%}`,
   },
   {
+    label: "mermaid fence",
+    note: "Plain Markdown, not a tag: a fenced block tagged mermaid renders as a diagram. It earns its place when a picture makes branching logic or an interaction clearer than prose alone, most often inside the Mechanism explanation. Choose the type that fits the logic: a flowchart for branches, a sequence diagram for interactions between parts. Keep every node label to a few words; a sentence inside a node defeats the diagram. A diagram is never required.",
+    example: `\`\`\`mermaid
+flowchart TD
+  req[Request] --> status{Retryable status?}
+  status -->|no| fail[Return the error]
+  status -->|yes| budget{Attempts left?}
+  budget -->|no| fail
+  budget -->|yes| retry[Wait, then retry]
+\`\`\``,
+  },
+  {
     label: "diagram",
-    note: 'Relations between named models or components. A node needs id and model; change is "new", "mod" or "ctx"; col and row place it on a grid that starts at 1; compartments hold labelled member rows. An edge joins two node ids; kind is "new", "mod", "ctx" or "derived"; label and thick are optional — mark the one relation the change turns on with thick=true. When the change adds or rewires a relation between named parts, one diagram of those parts and their direct neighbors is high review signal. Leave out parts the change never touches.',
+    note: 'A relation map between named parts the change touches: models, components, or services. Only this block carries a per-part change status and a section reference, so it shows what a mermaid diagram cannot. A node needs id and model; change is "new", "mod" or "ctx"; col and row place it on a grid that starts at 1; ref points the node at a section id; compartments hold labelled member rows. An edge joins two node ids; kind is "new", "mod", "ctx" or "derived"; label and thick are optional — mark the one relation the change turns on with thick=true. Use it when the change adds or rewires a relation between named parts, and leave out parts the change never touches. Never use it for a sequence of steps or for branching logic: a flow block or a mermaid fence carries those. A node label is a name, never a sentence. Most walkthroughs need no grid diagram.',
     example: `{% diagram intro="How a slot reaches its pool." nodes=[{id: "pool", model: "planning.pool", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["slot_ids"]}]}, {id: "slot", model: "planning.slot", change: "mod", col: 2, row: 1}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many", thick: true}] /%}`,
   },
 ];

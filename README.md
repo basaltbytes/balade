@@ -115,7 +115,7 @@ command exits with status 1.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.11.0`. See the
+Generated frontmatter records authoring package version `1.13.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -131,7 +131,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.11.0
+  balade-authoring: 1.13.0
 ---
 ```
 
@@ -152,7 +152,9 @@ What changed and why.
 ```
 
 `expect` must match part of the range's first line. A mismatch fails validation.
-The authoring package documents the other blocks and structural rules.
+A fenced code block does not reach the app, with one exception: a fence tagged
+`mermaid` renders as a diagram. The authoring package documents the other blocks
+and structural rules.
 
 ## Review data
 

@@ -16,8 +16,7 @@ export const audienceText =
 
 /** The two-layer comprehension pattern: explanation first, evidence under it. */
 export const algorithmText =
-  "When the change carries an algorithm or non-obvious logic, explain the solution in the Mechanism group, directly after Orientation. State what the solution does, then the logic behind it: the inputs it accepts, the decisions it makes, the order of the steps, and the cases it rejects. Do not write pseudo-code. The real code is one click away, and a second version of it teaches nothing. Use prose, a `{% flow %}` block for an ordered path, and a `{% diagram %}` block for relations between named parts. After this section, the reader must understand the logic of the solution without opening a single code block. Then attach the evidence: under each critical claim, pin the real code range with `collapsed=true`, so the block sits below the claim and opens on demand. Prose can drift from the code; the pinned range under it cannot. This section is a judgment call, not a rule. A documentation, configuration, or mechanical change carries no algorithm to explain, and a forced section only adds filler.";
-
+  "When the change carries an algorithm or non-obvious logic, explain the solution in the Mechanism group, directly after Orientation. The explanation is the primary content of the section, human comprehension is the goal. Explain the overall concepts, the logic, models, actors and algorithms that are in this PR. This section doesn't need to go over translation files, or documentation updates or other transversal or trivial changes, it is used to understand pieces of code that are introduced in the PR. Feel free to use plain-text, or pseudo-code to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding. If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free to give link for reading materials and explaination of the software engineering concept. When explaining the code feel free to directly have the code block shown in-between, in full form or pinned with `collapsed=true` to disclose it as a 'If you want to dive deeper' section.";
 /** How to hold the section-template skeleton. */
 export const templatesLeadText =
   "Start from this canonical navigation skeleton, adapt section ids and titles, and omit every narrative group without review signal. A changed file does not automatically deserve a narrative section. Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. Keep that group last; it is mandatory and does not count as inventorying the PR.";
@@ -31,9 +30,13 @@ export const markdocRulesText = `Use ordinary Markdown for narrative inside grou
 
 {% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" /%}
 
-Read the numbered source first, keep the range focused, and copy expect exactly from the first referenced line. Add collapsed=true when the range is evidence under a claim; the block then starts closed and the reader opens it on demand:
+Read the numbered source first, keep the range focused, and copy expect exactly from the first referenced line. A code block is open by default, because the open block is the reading surface. Add collapsed=true on one kind of range only: evidence that sits directly under a substantial explanation in the Mechanism group.
 
 {% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" collapsed=true /%}
+
+The block then starts closed, and the reader opens it on demand. Every other range in the walkthrough stays open. Never collapse every range.
+
+A fenced code block does not reach the payload, with one exception: a fence tagged mermaid renders as a diagram.
 
 Markdoc attributes use double quotes. Escape every embedded double quote with a backslash, for example:
 

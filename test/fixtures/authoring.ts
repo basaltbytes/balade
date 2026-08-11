@@ -211,11 +211,21 @@ Invoice totals no longer live inside string formatting. Callers can reuse the nu
 
 {% section id="split" title="Calculation before presentation" %}
 
-The first function returns a number. It sums the line amounts and stops there.
+The old function accepted the line amounts and returned one display string, so the sum and the currency text were computed in the same pass. The change gives each job its own function and fixes their order. invoiceTotal accepts the line amounts and returns the numeric total; it applies no rounding, no symbol, and no locale. formatInvoice calls invoiceTotal first, rounds the returned number to two decimals, and only then builds the currency text. A caller that needs the amount stops after the first function and never parses display text. No path produces the text without the number, so the two results cannot disagree.
+
+\`\`\`mermaid
+flowchart TD
+  lines[Line amounts] --> total[invoiceTotal]
+  total --> number[Numeric total]
+  number --> format[formatInvoice]
+  format --> text[Currency text]
+\`\`\`
+
+The first function returns a number. It sums the line amounts with one reduce and stops there, so no display rule can reach the arithmetic.
 
 {% code file="src/invoice-total.ts" from=1 to=3 expect="export function invoiceTotal(lines: readonly number[]): number {" collapsed=true /%}
 
-The formatter consumes that result and owns the currency text.
+The formatter consumes that result and owns the currency text. It imports the calculation instead of repeating it, so the rounding and the symbol have exactly one home.
 
 {% code file="src/format-invoice.ts" from=1 to=5 expect="import { invoiceTotal } from \\"./invoice-total.js\\";" collapsed=true /%}
 
@@ -234,7 +244,7 @@ ${CLOSING_FULL_PR_DIFF}`,
       codeRanges: { minimum: 2, maximum: 2 },
       referencedFiles: ["src/invoice-total.ts", "src/format-invoice.ts"],
       unreferencedFiles: ["src/format.ts"],
-      phrases: ["numeric total", "string formatting", "currency text"],
+      phrases: ["numeric total", "string formatting", "currency text", "flowchart TD"],
       decision:
         "One mechanism section explains the split; the deleted file needs only a files entry.",
     },

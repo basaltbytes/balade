@@ -226,6 +226,12 @@ export const DiagramBlock = Schema.Struct({
   edges: Schema.Array(DiagramEdge),
 });
 
+/** Authored in a ```mermaid fence; the renderer treats the source as untrusted. */
+export const MermaidBlock = Schema.Struct({
+  b: Schema.Literal("mermaid"),
+  source: Schema.String,
+});
+
 /** A renderer may not know the namespaced kind, but must preserve its JSON data. */
 export const PresetBlock = Schema.StructWithRest(
   Schema.Struct({
@@ -287,6 +293,7 @@ export const Block = Schema.Union([
   Schema.Struct({ b: Schema.Literal("patterns"), items: Schema.Array(PatternItem) }),
   Schema.Struct({ b: Schema.Literal("attrs"), items: Strings }),
   DiagramBlock,
+  MermaidBlock,
   CodeBlock,
   PresetBlock,
 ]);

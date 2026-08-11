@@ -155,6 +155,49 @@ describe("blocks without a repository", () => {
     expect(diagnostics[0]?.hint).toContain("{% code");
   });
 
+  it("keeps a mermaid fence in place between the prose around it", () => {
+    const { blocks, diagnostics } = compile(
+      [
+        '{% section id="s" title="T" %}',
+        "Before.",
+        "",
+        "```mermaid",
+        "graph TD",
+        "  a --> b",
+        "```",
+        "",
+        "After.",
+        "{% /section %}",
+      ].join("\n"),
+    );
+
+    expect(diagnostics).toEqual([]);
+    expect(blocks).toEqual([
+      { b: "md", nodes: [{ p: ["Before."] }] },
+      { b: "mermaid", source: "graph TD\n  a --> b" },
+      { b: "md", nodes: [{ p: ["After."] }] },
+    ]);
+  });
+
+  /* A blockquote reaches the payload as markdown flow, so the fence inside it is
+     collected with the others and loses the position a top-level fence keeps. */
+  it("leaves a mermaid fence unsupported when a blockquote holds it", () => {
+    const { blocks, diagnostics } = compile(
+      [
+        '{% section id="s" title="T" %}',
+        "> Quoted.",
+        "> ",
+        "> ```mermaid",
+        "> graph TD",
+        "> ```",
+        "{% /section %}",
+      ].join("\n"),
+    );
+
+    expect(diagnostics[0]?.code).toBe("fence-unsupported");
+    expect(blocks.map((block) => block.b)).toEqual(["md"]);
+  });
+
   it("carries an authored collapsed, and stays thin without one", () => {
     const source = ["from odoo import api", "", "class PlanningPoolItem:"];
     const withSource: ResolveContext = { ...stubContext, blob: () => Option.some(source) };

@@ -9,6 +9,7 @@ import { Cards, Method, Patterns, Tests } from "./cards";
 import { Code } from "./code";
 import { Diagram } from "./diagram";
 import { Files } from "./files";
+import { Mermaid } from "./mermaid";
 import { Attrs, Callout, Flow, Md } from "./prose";
 import { DataTable, Fields, I18nTable, Matrix } from "./tables";
 
@@ -77,6 +78,8 @@ export const BlockView = memo(function BlockView({ block }: { block: Block }) {
           {...(block.hint !== undefined ? { hint: block.hint } : {})}
         />
       );
+    case "mermaid":
+      return <Mermaid block={block} />;
     case "code":
       return <Code block={block} />;
     default:
