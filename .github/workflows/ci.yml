@@ -43,6 +43,9 @@ jobs:
         env: { PI_OFFLINE: "1" }
   npm-package:
     runs-on: ubuntu-latest
+    concurrency:
+      group: pkg-pr-new-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -51,3 +54,8 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm package:smoke
+      # The pkg.pr.new app authenticates the upload and posts the PR comment;
+      # this job keeps the workflow token read-only and carries no npm token.
+      - name: Publish PR package
+        if: github.event_name == 'pull_request'
+        run: pnpm exec pkg-pr-new publish --pnpm --bin --no-template
