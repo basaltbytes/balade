@@ -3,6 +3,12 @@
 Releases are driven by [changesets](https://github.com/changesets/changesets).
 There is no local publish step.
 
+Pull requests have a separate preview path. The `npm-package` job in
+`.github/workflows/ci.yml` builds and smoke-tests the packed tarball, then runs
+`pkg-pr-new publish` once from the lockfile. The installed pkg.pr.new GitHub App
+posts an `npx` command on the pull request. Preview packages never reach npm and
+do not create versions, tags or GitHub Releases.
+
 ## The flow
 
 1. A PR that changes user-facing behavior adds a changeset — run
@@ -39,3 +45,6 @@ There is no local publish step.
 - Manual fallbacks: `workflow_dispatch` on `changesets.yml` re-runs the
   version-or-tag decision at `main`; `workflow_dispatch` on `release.yml`
   publishes whatever version the chosen ref carries.
+- Preview publication runs only for `pull_request` events, with the CI
+  workflow's read-only token and no npm credentials. A newer commit cancels an
+  older preview job for the same pull request.

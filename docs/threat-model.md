@@ -119,10 +119,13 @@ discloses all of its embedded data to its recipient.
 ### 5. Supply chain and CI
 
 Dependencies are pinned exact; publishing uses OIDC trusted publishing with no
-long-lived token ([docs/releasing.md](releasing.md)). Actions are pinned to
-full commit SHAs with Dependabot (`.github/dependabot.yml`) bumping the pins;
+long-lived token ([docs/releasing.md](releasing.md)). Actions are pinned to full
+commit SHAs with Dependabot (`.github/dependabot.yml`) bumping the pins;
 `ci.yml` holds a read-only token
-([#57](https://github.com/basaltbytes/balade/issues/57)).
+([#57](https://github.com/basaltbytes/balade/issues/57)). Pull-request previews
+run `pkg-pr-new` from the lockfile only after the npm-package smoke test. The
+pkg.pr.new GitHub App authenticates the upload and PR comment; the workflow
+receives no npm credential and retains the same read-only token.
 
 ## Verified invariants
 
@@ -288,8 +291,10 @@ they describe.
 **CI**
 
 - No PR-controlled `${{ }}` interpolation, and no `pull_request_target`.
-  `release.yml` and `changesets.yml` scope `permissions:` tightly; `ci.yml` does
-  not ([#57](https://github.com/basaltbytes/balade/issues/57)).
+  `release.yml` and `changesets.yml` scope `permissions:` tightly; `ci.yml`
+  keeps `contents: read` while its PR-preview step relies on the installed
+  pkg.pr.new App instead of a write-capable workflow token
+  ([#57](https://github.com/basaltbytes/balade/issues/57)).
 
 ## What balade does not defend against
 

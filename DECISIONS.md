@@ -1006,3 +1006,27 @@ against the old skeleton (`.agents/walkthroughs/pr-88-*.md`,
 labels are data, not contract. What would move this: dogfooding showing the
 range budget starves evidence pinning, or reviewers wanting collapse state
 persisted with the other review marks.
+
+## PR package previews publish only after the tarball smoke test
+
+The `npm-package` job publishes one pkg.pr.new preview after `package:smoke`
+passes on a pull request. Keeping the step in that job avoids a second build and
+ensures the uploaded package is the same package shape that installed and ran in
+the smoke project. Pushes to `main` skip it; changesets and the OIDC npm release
+workflow remain the only version, tag and registry path.
+
+`pkg-pr-new` is a lockfile dependency, and CI invokes it with `pnpm exec` rather
+than a downloader. The workflow token remains `contents: read` and carries no
+npm credential; the installed pkg.pr.new App owns upload authentication, the
+check and the pull-request comment. One concurrency group per pull request
+cancels stale package jobs before an older commit can replace the current
+preview comment.
+
+`--pnpm` packs through the same package manager as `package:smoke`. Balade is a
+binary, so `--bin` makes the comment show the direct `npx` command;
+`--no-template` omits a browser template that cannot exercise this CLI. The
+preview keeps the source package version instead of using `--previewVersion`:
+the executable reports a build-time version synced by the release flow, while
+the preview is selected by its pkg.pr.new URL and does not enter a dependency
+range or project lockfile. What would move this: publishing a library API whose
+preview must participate in dependency resolution.
