@@ -136,6 +136,27 @@ describe("the walkthrough route", () => {
     expect(rendered).toContain("FarAway");
   });
 
+  /* Mermaid needs a document and only ever loads from an effect hook, so server
+     rendering neither imports it nor draws anything. */
+  it("holds a mermaid block at its placeholder without reaching for mermaid", () => {
+    const payload: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "mermaid",
+          title: "Mermaid",
+          hash: "sha256:mermaid",
+          blocks: [{ b: "mermaid", source: "graph TD\n  a --> b" }],
+        },
+      ],
+    };
+
+    const rendered = render(payload);
+    expect(rendered).toContain('data-mermaid="pending"');
+    expect(rendered).not.toContain('data-mermaid="drawn"');
+    expect(rendered).not.toContain("a --&gt; b");
+  });
+
   it("renders toned callouts as localized banners and leaves neutral callouts plain", () => {
     const callouts: Payload = {
       ...pr96,

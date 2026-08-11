@@ -69,6 +69,17 @@ describe("the generated authoring skill", () => {
     expect(skillMd).toContain("### Mechanism");
     expect(skillMd).toContain("Do not write pseudo-code");
     expect(skillMd).toContain("pin the real code range with `collapsed=true`");
+    expect(skillMd).toContain("The explanation is the primary content of the section");
+    expect(skillMd).toContain("One line above a code range is not an explanation");
+  });
+
+  it("teaches the mermaid fence and the collapsed bound, like the Pi prompt does", () => {
+    expect(skillMd).toContain("a fence tagged mermaid renders as a diagram");
+    expect(skillMd).toContain("```mermaid");
+    expect(skillMd).toContain("A diagram is never required");
+    expect(skillMd).toContain("A code block is open by default");
+    expect(skillMd).toContain("Never collapse every range");
+    expect(skillMd).toContain("Most walkthroughs need no grid diagram");
   });
 });
 

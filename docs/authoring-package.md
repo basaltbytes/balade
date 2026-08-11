@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.11.0`. Its major version matches the
+The current package version is `1.12.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -71,7 +71,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.11.0
+  balade-authoring: 1.12.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -108,19 +108,32 @@ narrative groups that add review signal, then appends the mandatory full-PR diff
 | Group | Use it for |
 | --- | --- |
 | Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This group is always present. |
-| Mechanism | An algorithm or non-obvious logic worth explaining. It follows Orientation directly. |
+| Mechanism | An algorithm or non-obvious logic worth explaining. It follows Orientation directly, and its explanation carries the section. |
 | Models | Domain types, persisted state, components, or services whose structure carries the change. |
 | Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |
 | Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
 | Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block. |
 
-The Mechanism group carries two layers. The explanation states what the
-solution does and the logic behind it, in prose, `{% flow %}` steps, and
-diagrams — never in pseudo-code, because the real code is one click away. Under
-each critical claim sits the range that proves it, pinned with
-`collapsed=true`, so the evidence opens on demand. The group is a judgment
-call: a documentation, configuration, or mechanical change carries no algorithm
-to explain, and a forced section only adds filler.
+The Mechanism group carries two layers. The explanation comes first and is the
+primary content: several sentences that state what the solution does, its
+inputs, its decisions, the order of the steps, and the cases it rejects, in
+prose, `{% flow %}` steps whose each step is one short clause, and an optional
+mermaid diagram — never in pseudo-code, because the real code is one click
+away. A one-line claim is not an explanation. Under each critical claim sits
+the range that proves it, pinned with `collapsed=true`, so the evidence opens
+on demand. That attribute belongs to this pattern only; every other code block
+in a walkthrough stays open, because the open block is the reading surface. The
+group is a judgment call: a documentation, configuration, or mechanical change
+carries no algorithm to explain, and a forced section only adds filler.
+
+A Markdown fence tagged `mermaid` renders as a diagram. The package encourages
+one inside the Mechanism explanation when a picture makes the logic clearer
+than prose alone — a flowchart for branches, a sequence diagram for
+interactions — with node labels of a few words. It never requires one: a
+walkthrough with no diagram is normal. The grid `{% diagram %}` block keeps a
+narrower job, a relation map between named changed parts, because only it
+carries a per-part change status and a section reference. Neither block is a
+place for a sequence of steps.
 
 A changed file does not earn a narrative section by itself. Mechanical renames
 can use one orientation section before the required full-PR diff. That final
@@ -139,11 +152,11 @@ escapes:
 ## Block catalog
 
 The system prompt teaches the exact syntax of every core tag: one example per
-block, plus the full node and edge shape of `diagram`. It also states the cost
-model — only `code` ranges count against the range budget, so structured blocks
-are free — and tells the model to prefer a block over a prose list whenever the
-content is enumerable. A test walks `CORE_TAG_NAMES`, so a tag added to the
-format cannot silently stay untaught. A preset appends the same kind of
+block, plus the full node and edge shape of `diagram` and one mermaid fence. It
+also states the cost model — only `code` ranges count against the range budget,
+so structured blocks are free — and tells the model to prefer a block over a
+prose list whenever the content is enumerable. A test walks `CORE_TAG_NAMES`, so
+a tag added to the format cannot silently stay untaught. A preset appends the same kind of
 guidance for its own tags: `--preset odoo` adds the `o-` tag syntax and a
 what-to-hunt checklist that maps Odoo anatomy to blocks.
 
@@ -160,8 +173,8 @@ The evaluator and human review use four questions:
 | Criterion | Pass | Reject |
 | --- | --- | --- |
 | Factual accuracy | Every claim, path, range, and boundary echo matches inspected evidence at the pin. | The draft guesses intent or cites code it did not inspect. |
-| Section selection | Each narrative section adds review signal; the required bare full-PR diff remains last. | The narrative inventories files, copies all five narrative groups by habit, or omits, filters, or moves the closing full-PR diff. |
-| Reviewer usefulness | The draft explains observable behavior, control flow, constraints, and the proof or risk that matters, and the reader understands the logic of the solution without opening every code range. | It paraphrases syntax or repeats the PR title. |
+| Section selection | Each narrative section adds review signal; the required bare full-PR diff remains last. | The narrative inventories files, copies all five narrative groups by habit, draws a diagram that restates a list or a sequence as boxes, or omits, filters, or moves the closing full-PR diff. |
+| Reviewer usefulness | The draft explains observable behavior, control flow, constraints, and the proof or risk that matters, and the reader understands the logic of the solution without opening every code range. | It paraphrases syntax, repeats the PR title, or puts a one-line claim above a collapsed code range. |
 | Prose quality | A reader who missed the coding session can understand direct, neutral, concrete prose. | The text assumes prior code knowledge or uses vague praise. |
 
 English prose follows ASD-STE100 Simplified Technical English. French prose

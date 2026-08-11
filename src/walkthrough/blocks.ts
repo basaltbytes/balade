@@ -86,6 +86,14 @@ export function parseMark(value: unknown): number[] {
   return out;
 }
 
+/** A ```mermaid fence becomes a mermaid block; every other fence stays unsupported. */
+function mermaidSourceOf(node: Node): string | null {
+  const language = node.attributes["language"];
+  if (typeof language !== "string" || language.trim().toLowerCase() !== "mermaid") return null;
+  const content = node.attributes["content"];
+  return typeof content === "string" ? content.trim() : "";
+}
+
 /** Markdown flow between tags collapses into `md` blocks. */
 export function compileBlocks(
   children: readonly Node[],
@@ -105,7 +113,7 @@ export function compileBlocks(
         file: env.file,
         line: lineOf(fence),
         message: "A fenced code block does not reach the payload.",
-        hint: 'Reference the code in git instead: {% code file="…" from=1 to=10 expect="…" /%}.',
+        hint: 'Reference the code in git instead: {% code file="…" from=1 to=10 expect="…" /%}. A ```mermaid fence renders as a diagram.',
       });
     }
     if (nodes.length > 0) blocks.push({ b: "md", nodes });
@@ -113,6 +121,14 @@ export function compileBlocks(
   };
 
   for (const child of children) {
+    if (child.type === "fence") {
+      const source = mermaidSourceOf(child);
+      if (source !== null) {
+        flushFlow();
+        blocks.push({ b: "mermaid", source });
+        continue;
+      }
+    }
     if (child.type !== "tag" && child.type !== "table") {
       flow.push(child);
       continue;

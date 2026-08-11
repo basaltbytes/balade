@@ -27,6 +27,7 @@ export type I18nRow = typeof Contract.I18nRow.Type;
 export type CardItem = typeof Contract.CardItem.Type;
 export type PatternItem = typeof Contract.PatternItem.Type;
 export type DiagramBlock = typeof Contract.DiagramBlock.Type;
+export type MermaidBlock = typeof Contract.MermaidBlock.Type;
 export type DiagramNode = typeof Contract.DiagramNode.Type;
 export type DiagramEdge = typeof Contract.DiagramEdge.Type;
 

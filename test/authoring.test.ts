@@ -114,12 +114,40 @@ describe("the authoring package", () => {
     );
     expect(prompt).toContain("Do not write pseudo-code");
     expect(prompt).toContain("pin the real code range with `collapsed=true`");
+    /* The explanation is the content; a one-line claim is the defect it replaces. */
+    expect(prompt).toContain("The explanation is the primary content of the section");
+    expect(prompt).toContain("One line above a code range is not an explanation");
     /* A judgment call, not a mandate. */
     expect(prompt).toContain("a forced section only adds filler");
     /* The tag attribute the pattern depends on is taught with the code tag. */
     expect(prompt).toContain(
       `{% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" collapsed=true /%}`,
     );
+  });
+
+  it("bounds collapsed=true to Mechanism evidence and keeps every other range open", () => {
+    const prompt = authoringSystemPrompt();
+    expect(prompt).toContain("A code block is open by default");
+    expect(prompt).toContain(
+      "Add collapsed=true on one kind of range only: evidence that sits directly under a substantial explanation in the Mechanism group",
+    );
+    expect(prompt).toContain("Every other range in the walkthrough stays open");
+    expect(prompt).toContain("Never collapse every range");
+  });
+
+  it("encourages a mermaid fence and keeps the grid diagram for relation maps", () => {
+    const prompt = authoringSystemPrompt();
+    expect(prompt).toContain("a fence tagged mermaid renders as a diagram");
+    expect(prompt).toContain("```mermaid");
+    expect(prompt).toContain("flowchart TD");
+    /* Encouraged, never mandatory, and never a home for sentences. */
+    expect(prompt).toContain("A diagram is never required");
+    expect(prompt).toContain("Keep every node label to a few words");
+    /* The grid block keeps its own job. */
+    expect(prompt).toContain("Never use it for a sequence of steps or for branching logic");
+    expect(prompt).toContain("Most walkthroughs need no grid diagram");
+    /* A flow step stays a clause. */
+    expect(prompt).toContain("A step is one short clause, never a paragraph");
   });
 
   it("teaches every core tag's syntax in the catalog", () => {
