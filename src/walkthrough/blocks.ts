@@ -193,8 +193,6 @@ function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
         },
       ];
     }
-    case "flow":
-      return [{ b: "flow", steps: childTags(node, "flow", env).map(stepItem) }];
     case "fields":
       return [{ b: "fields", rows: fieldRows(node, env) }];
     case "method": {
@@ -291,11 +289,6 @@ function childTags(node: Node, family: string, env: CompileEnv): Node[] {
     });
   }
   return out;
-}
-
-function stepItem(node: Node): { body: Inline[]; tag?: string } {
-  const tag = attrString(node, "tag");
-  return { body: bodyInline(node), ...(tag !== undefined ? { tag } : {}) };
 }
 
 function fieldRows(node: Node, env: CompileEnv): FieldRow[] {

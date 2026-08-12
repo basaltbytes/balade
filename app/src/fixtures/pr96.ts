@@ -662,17 +662,6 @@ const sections: Section[] = [
         ],
       },
       {
-        b: "flow",
-        steps: [
-          { body: ["CRM opportunity"] },
-          { body: ["allocation"], tag: "forecast" },
-          { body: ["quote confirmed"], tag: "converted" },
-          { body: ["pool row shows up"] },
-          { body: ["planner places shifts"] },
-          { body: ["2 left → 0"] },
-        ],
-      },
-      {
         b: "md",
         nodes: [
           { h: "What it deliberately does not do" },

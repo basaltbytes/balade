@@ -20,7 +20,6 @@ const CODE_VIEWS = ["plain", "change", "diff"] as const;
 
 /** Tag names that hold a child family; the compiler checks the child names. */
 export const CHILD_TAGS: Record<string, readonly string[]> = {
-  flow: ["step"],
   fields: ["field"],
   tests: ["test"],
   cards: ["card"],
@@ -87,9 +86,6 @@ const callout: Schema = {
   render: "Callout",
   attributes: { tone: { type: String, matches: ["key", "warn"] } },
 };
-
-const flow: Schema = { render: "Flow" };
-const step: Schema = { render: "Step", attributes: { tag: { type: String } } };
 
 const fields: Schema = { render: "Fields" };
 const field: Schema = {
@@ -225,8 +221,6 @@ export const CORE_TAGS: Record<string, Schema> = {
   group,
   code,
   callout,
-  flow,
-  step,
   fields,
   field,
   method,
