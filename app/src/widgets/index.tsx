@@ -10,7 +10,7 @@ import { Code } from "./code";
 import { Diagram } from "./diagram";
 import { Files } from "./files";
 import { Mermaid } from "./mermaid";
-import { Attrs, Callout, Flow, Md } from "./prose";
+import { Attrs, Callout, Md } from "./prose";
 import { DataTable, Fields, I18nTable, Matrix } from "./tables";
 
 function PresetPlaceholder({ block }: { block: PresetBlock }) {
@@ -32,8 +32,6 @@ export const BlockView = memo(function BlockView({ block }: { block: Block }) {
       return <Md nodes={block.nodes} />;
     case "callout":
       return <Callout {...(block.tone ? { tone: block.tone } : {})} body={block.body} />;
-    case "flow":
-      return <Flow steps={block.steps} />;
     case "fields":
       return <Fields rows={block.rows} />;
     case "method":

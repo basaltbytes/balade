@@ -99,11 +99,6 @@ describe("compile", () => {
   });
 
   it("compiles the child-tag families", () => {
-    expect(firstBlock(payload, "overview", "flow").steps).toEqual([
-      { body: ["CRM opportunity"] },
-      { body: ["allocation"], tag: "forecast" },
-      { body: ["pool row shows up"] },
-    ]);
     expect(firstBlock(payload, "overview", "cards").cols).toBe(2);
     expect(firstBlock(payload, "overview", "cards").items[0]?.title).toBe("One new model");
     expect(firstBlock(payload, "overview", "callout").tone).toBe("key");

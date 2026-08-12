@@ -10,7 +10,7 @@ external coding agent the same format. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.14.0`. Its major version matches the
+The current package version is `1.15.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -71,7 +71,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.14.0
+  balade-authoring: 1.15.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file

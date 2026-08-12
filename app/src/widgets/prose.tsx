@@ -1,6 +1,6 @@
-import type { Block, Inline, MdNode } from "../contract";
+import type { Block, MdNode } from "../contract";
 import { Banner } from "../ui/bits";
-import { Rich, Tag } from "../ui/rich";
+import { Rich } from "../ui/rich";
 import { useStrings } from "../ui/strings";
 
 type CalloutProps = Omit<Extract<Block, { readonly b: "callout" }>, "b">;
@@ -65,26 +65,6 @@ export function Callout({ tone, body }: CalloutProps) {
   return (
     <div className="my-4 border border-border rounded-md bg-card px-4 py-3 leading-relaxed text-secondary-foreground">
       <Rich v={body} />
-    </div>
-  );
-}
-
-export function Flow({
-  steps,
-}: {
-  steps: ReadonlyArray<{ readonly body: ReadonlyArray<Inline>; readonly tag?: string }>;
-}) {
-  return (
-    <div className="my-4 flex flex-wrap items-center gap-y-2 text-[13px]">
-      {steps.map((step, index) => (
-        <span key={index} className="inline-flex items-center">
-          <span className="inline-flex items-center gap-2 border border-border bg-card rounded-md px-3 py-[6px]">
-            <Rich v={step.body} />
-            {step.tag !== undefined && <Tag>{step.tag}</Tag>}
-          </span>
-          {index < steps.length - 1 && <span className="mx-2 text-muted-foreground">→</span>}
-        </span>
-      ))}
     </div>
   );
 }

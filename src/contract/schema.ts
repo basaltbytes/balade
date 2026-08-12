@@ -254,15 +254,6 @@ export const Block = Schema.Union([
     tone: Schema.optionalKey(Schema.Literals(["key", "warn"])),
     body: Schema.Array(Inline),
   }),
-  Schema.Struct({
-    b: Schema.Literal("flow"),
-    steps: Schema.Array(
-      Schema.Struct({
-        body: Schema.Array(Inline),
-        tag: Schema.optionalKey(Schema.String),
-      }),
-    ),
-  }),
   Schema.Struct({ b: Schema.Literal("fields"), rows: Schema.Array(FieldRow) }),
   Schema.Struct({
     b: Schema.Literal("method"),

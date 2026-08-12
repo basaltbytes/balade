@@ -33,12 +33,6 @@ They cover the grain and the live recomputation.
 **Shared pool** is the team's name for confirmed-but-unscheduled work.
 {% /callout %}
 
-{% flow %}
-{% step %}CRM opportunity{% /step %}
-{% step tag="forecast" %}allocation{% /step %}
-{% step %}pool row shows up{% /step %}
-{% /flow %}
-
 {% /section %}
 
 {% section id="map" title="Model map" icon="git-branch" %}

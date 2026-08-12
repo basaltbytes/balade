@@ -1091,3 +1091,17 @@ the closing block once the PR touches more than ten files. What would move
 this: dogfooding showing globs cannot express the groups agents actually want
 (an explicit path-list attribute), or reviewers wanting group collapse state
 persisted with the review marks.
+
+## Ordered steps are mermaid's job; the `flow` tag is gone
+
+The format no longer has a `{% flow %}`/`{% step %}` block. The chip-arrow
+strip it rendered kept appearing in generated walkthroughs as a low-signal
+restatement of prose — a list wearing boxes — and it competed with the mermaid
+fence, which draws the same sequence with real branching when a picture earns
+its place. The tag is removed from the contract schema, the Markdoc config,
+the compiler, the renderer, and the authoring catalog; the catalog now points
+sequences and branching at a mermaid fence, and the grid `diagram` block keeps
+its relation-map job. Removal is complete rather than deprecation because the
+project is pre-alpha and untaught-but-renderable tags are exactly the
+compatibility residue the charter says to delete. What would move this:
+evidence that reviewers need an inline step strip that mermaid cannot supply.

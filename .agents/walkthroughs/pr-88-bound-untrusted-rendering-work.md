@@ -60,10 +60,8 @@ The renderer clamps coordinates again before it derives the grid dimensions. Thi
 
 Two smaller CLI boundaries now treat attacker-controlled strings as data:
 
-{% flow %}
-{% step tag="frontmatter" %}Find a key with literal string operations. A key cannot become regular-expression source.{% /step %}
-{% step tag="git" %}Place a pull-request revision after Git's `--end-of-options` marker. A leading dash cannot become a `rev-parse` option.{% /step %}
-{% /flow %}
+- **frontmatter** — find a key with literal string operations. A key cannot become regular-expression source.
+- **git** — place a pull-request revision after Git's `--end-of-options` marker. A leading dash cannot become a `rev-parse` option.
 
 {% code file="src/walkthrough/frontmatter.ts" from=99 to=106 expect="/** 1-based line of a top-level frontmatter key, for file:line diagnostics. */" /%}
 
