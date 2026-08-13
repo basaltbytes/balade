@@ -19,7 +19,7 @@ do not create versions, tags or GitHub Releases.
    changesets into a rolling **Version Packages** PR: version bump plus the
    generated `CHANGELOG.md` section. `changeset version` bumps only
    `package.json`; `scripts/sync-cli-version.mjs` then rewrites the `VERSION`
-   constant in `src/cli.ts`. `test/version.test.ts` asserts the pair agrees —
+   constant in `src/version.ts`. `test/version.test.ts` asserts the pair agrees —
    that catches a hand-edited version in any ordinary PR's CI. The Version
    Packages PR itself runs no CI (it is created with the default
    `GITHUB_TOKEN`, whose events trigger no workflows); its real gates are CI

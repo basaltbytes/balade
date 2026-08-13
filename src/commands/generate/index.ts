@@ -2,11 +2,13 @@
 
 import { Context, Effect, Option, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
+import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import { parsePrTarget } from "../../git/pr.js";
 import { getPreset, presetNames } from "../../preset/registry.js";
 import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
 import { formatText, stopMessage, writeStderr, writeStdout } from "../../terminal.js";
+import { VERSION } from "../../version.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
@@ -103,6 +105,7 @@ export const generateCommand = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
+      writeStdout(`balade ${VERSION} (authoring package ${AUTHORING_PACKAGE_VERSION})\n`);
       const pull = parsePrTarget(config.pr);
       if (pull === null) {
         stopMessage(

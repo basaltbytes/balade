@@ -11,7 +11,7 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 `contract/` (shared vocabulary: shapes that cross module boundaries), `preset/`,
 `authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the generation engine), `server/` (live session runtime) — and the root
-files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`.
+files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `version.ts`.
 
 All imports flow one direction; peers never import each other:
 
@@ -25,6 +25,7 @@ preset/                     → contract
 authoring/                  → nothing internal
 contract/                   → nothing internal
 shell.ts  state.ts  terminal.ts  failure.ts                  root ports & utils → contract
+version.ts                                                    package identity → nothing internal
 ```
 
 1. `Command.make` appears only in `commands/<verb>/index.ts` (plus the root
@@ -960,7 +961,7 @@ The tag step is hand-rolled rather than `changeset tag` behind the action's
 when the checked-out `package.json` version has no tag yet, so every other
 push to main is a cheap, observable no-op and nothing depends on parsing
 changeset stdout. Two version lines stay out of changesets' hands by design:
-`src/cli.ts` hardcodes the CLI's `VERSION` constant, so the version script runs
+`src/version.ts` hardcodes the CLI's `VERSION` constant, so the version script runs
 `scripts/sync-cli-version.mjs` after `changeset version` and
 `test/version.test.ts` fails CI on drift; and the authoring package version
 (`src/authoring/package.ts`) tracks the walkthrough/prompt contract on its own
@@ -1105,3 +1106,18 @@ its relation-map job. Removal is complete rather than deprecation because the
 project is pre-alpha and untaught-but-renderable tags are exactly the
 compatibility residue the charter says to delete. What would move this:
 evidence that reviewers need an inline step strip that mermaid cannot supply.
+
+## Generation announces both version lines before it resolves the pull request
+
+Decided on [#102](https://github.com/basaltbytes/balade/issues/102). `generate`
+prints `balade <cli> (authoring package <authoring>)` as its first stdout line.
+The CLI version identifies the npm package that `npx` or a global install
+resolved; the independently versioned authoring package identifies the prompt
+contract that governs the draft. Printing both before pull-request resolution
+makes a paid run attributable while it is still running.
+
+The banner belongs only to `generate`. `check` stdout is an agent-facing
+protocol, while the remaining commands finish quickly enough that a startup
+identity would add noise. The CLI constant lives in `src/version.ts` so the
+side-effectful `cli.ts` entry point and the generate command can share it;
+changesets still updates that constant through `scripts/sync-cli-version.mjs`.

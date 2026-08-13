@@ -14,8 +14,7 @@ import { piWalkthroughAuthorLive } from "./pi/client.js";
 import { PrLocator } from "./commands/open/locator.js";
 import { BrowserLauncher } from "./server/browser.js";
 import { CommandExecutor } from "./shell.js";
-
-const VERSION = "0.9.0";
+import { VERSION } from "./version.js";
 
 /** Host services and the process adapters used by the effectful shell. */
 const shellLayer = Layer.mergeAll(NodeServices.layer, CommandExecutor.layer, BrowserLauncher.layer);
