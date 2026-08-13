@@ -15,7 +15,7 @@ slots carrying the typed data in. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.18.0`. Its major version matches the
+The current package version is `1.19.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -80,7 +80,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.18.0
+  balade-authoring: 1.19.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -134,7 +134,7 @@ algorithms that are in this PR. This section doesn't need to go over translation
 documentation updates or other transversal or trivial changes, it is used to understand 
 pieces of code that are introduced in the PR.
 
-Feel free to use plain-text, or pseudo-code to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding.
+Feel free to use pseudo-code (A markdown fence tagged `pseudo`) to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding.
 
 If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free
 to give link for reading materials and explaination of the software engineering concept.
