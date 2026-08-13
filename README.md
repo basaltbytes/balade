@@ -16,8 +16,7 @@
 
 `balade` turns large, agent-generated pull requests into guided, human-readable
 walkthroughs. It connects explanations to the exact code, validates them
-against git, and preserves the complete diff for human review — all rendered
-locally from a Markdoc file committed to your repository.
+against git, and tailor the complete diff for human review. Balade has its own components and review format in a Markdoc file that you can commit to your repo.
 
 Unlike automated AI review tools, balade doesn't judge the change: it
 organizes the change so a human can review it.
