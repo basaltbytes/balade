@@ -15,7 +15,7 @@ slots carrying the typed data in. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.19.0`. Its major version matches the
+The current package version is `1.20.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -80,7 +80,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.19.0
+  balade-authoring: 1.20.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -152,7 +152,9 @@ escapes:
 ## Block catalog
 
 The system prompt teaches the exact syntax of every core tag: one example per
-block, plus the full node and edge shape of `diagram` and one mermaid fence. It
+block, plus the full node and edge shape of `diagram`, one mermaid fence, and a
+pseudo fence in both of its shapes — condition/action lines for a decision
+path, an indented call tree for runtime flow. It
 also states the cost model — only `code` ranges count against the range budget,
 so structured blocks are free — and tells the model to prefer a block over a
 prose list whenever the content is enumerable. A test walks `CORE_TAG_NAMES`, so
