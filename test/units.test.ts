@@ -145,14 +145,34 @@ describe("blocks without a repository", () => {
     expect(diagnostics[0]?.hint).toBeTruthy();
   });
 
-  it("sends the author to git instead of a fenced snippet", () => {
-    const { diagnostics } = compile(
+  it("renders any other top-level fence as a read-only fence block", () => {
+    const { blocks, diagnostics } = compile(
       ['{% section id="s" title="T" %}', "```python", "print(1)", "```", "{% /section %}"].join(
         "\n",
       ),
     );
-    expect(diagnostics[0]?.code).toBe("fence-unsupported");
-    expect(diagnostics[0]?.hint).toContain("{% code");
+    expect(diagnostics).toEqual([]);
+    expect(blocks).toEqual([{ b: "fence", lang: "python", source: "print(1)" }]);
+  });
+
+  it("keeps a fence block in authored position and normalizes its language", () => {
+    const { blocks, diagnostics } = compile(
+      [
+        '{% section id="s" title="T" %}',
+        "Before.",
+        "",
+        "```PSEUDO",
+        "for each hunk:",
+        "  emit(block)",
+        "```",
+        "{% /section %}",
+      ].join("\n"),
+    );
+    expect(diagnostics).toEqual([]);
+    expect(blocks).toEqual([
+      { b: "md", nodes: [{ p: ["Before."] }] },
+      { b: "fence", lang: "pseudo", source: "for each hunk:\n  emit(block)" },
+    ]);
   });
 
   it("keeps a mermaid fence in place between the prose around it", () => {

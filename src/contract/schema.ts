@@ -238,6 +238,14 @@ export const MermaidBlock = Schema.Struct({
   source: Schema.String,
 });
 
+/** Any other authored fence; the renderer highlights the untrusted source as read-only text. */
+export const FenceBlock = Schema.Struct({
+  b: Schema.Literal("fence"),
+  /** The authored fence language, resolved to a shiki grammar app-side; unknown ids render plain. */
+  lang: Schema.String,
+  source: Schema.String,
+});
+
 /** A renderer may not know the namespaced kind, but must preserve its JSON data. */
 export const PresetBlock = Schema.StructWithRest(
   Schema.Struct({
@@ -297,6 +305,7 @@ export const Block = Schema.Union([
   Schema.Struct({ b: Schema.Literal("attrs"), items: Strings }),
   DiagramBlock,
   MermaidBlock,
+  FenceBlock,
   CodeBlock,
   PresetBlock,
 ]);

@@ -34,6 +34,28 @@ describe("the walkthrough route", () => {
     expect(html).toContain("expect mismatch");
   });
 
+  it("renders a fence block as escaped read-only text before highlight resolves", () => {
+    const payload: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "pseudo",
+          title: "Pseudo",
+          hash: "sha256:pseudo",
+          blocks: [
+            { b: "fence", lang: "pseudo", source: "for each hunk:\n  emit(<block> & <mark>)" },
+          ],
+        },
+      ],
+    };
+    const fenced = render(payload);
+    expect(fenced).toContain("for each hunk:");
+    /* The angle brackets must arrive escaped: the untrusted source never
+       reaches the page as markup. */
+    expect(fenced).toContain("&lt;block&gt; &amp; &lt;mark&gt;");
+    expect(fenced).not.toContain("<block>");
+  });
+
   it("renders an oversized code line as plain text with a localized notice", () => {
     const longLine = "<".repeat(6_000);
     const payload: Payload = {
