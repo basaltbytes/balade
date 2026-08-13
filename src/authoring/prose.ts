@@ -44,7 +44,9 @@ export function renderProse(template: string, slots: ProseSlots): string {
 /**
  * Renders `## ` Markdown headings as bare title lines for a plain-text
  * prompt host. Callers apply it to the template before substitution, so slot
- * text is never rewritten.
+ * text is never rewritten. The transform is not fence-aware: in a document
+ * rendered plain, a line starting with `## ` is always a section heading,
+ * even inside a fenced example.
  */
 export function plainHeadings(markdown: string): string {
   return markdown.replace(/^## /gm, "");
