@@ -6,6 +6,7 @@
 
 import { Context, Effect, Option, Redacted, Schema, Scope } from "effect";
 import type { PullIntentClaims } from "../git/intent.js";
+import type { InspectionTier } from "../authoring/package.js";
 import type { Lang } from "../contract/types.js";
 import type { SnapshotOpenFailed, SnapshotPathRejected, SnapshotReadFailed } from "./snapshot.js";
 
@@ -149,6 +150,8 @@ export interface AuthoringRequest {
   readonly lang?: Lang;
   /** Named by `--prompt`; typed by the operator, so trusted — unlike PR-derived claims. */
   readonly guidance?: string;
+  /** Named by `--budget`; sizes the inspection budget. Absent means `base`. */
+  readonly budget?: InspectionTier;
   readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;

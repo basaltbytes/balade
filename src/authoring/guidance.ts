@@ -9,7 +9,6 @@
  */
 
 import { tagCatalogText } from "./catalog.js";
-import { AUTHORING_LIMITS } from "./package.js";
 import { plainHeadings, proseTemplate, renderProse } from "./prose.js";
 import { rubricText } from "./rubric.js";
 import { sectionTemplatesText } from "./templates.js";
@@ -22,11 +21,6 @@ export function sharedGuidance(headings: GuidanceHeadings): string {
   const template = proseTemplate(import.meta.url, "guidance.md");
   /* Both hosts embed the guidance mid-document, so the file's trailing newline is trimmed. */
   return renderProse(headings === "plain" ? plainHeadings(template) : template, {
-    "suggested-sections-minimum": String(AUTHORING_LIMITS.suggestedSections.minimum),
-    "suggested-sections-maximum": String(AUTHORING_LIMITS.suggestedSections.maximum),
-    "suggested-code-ranges-minimum": String(AUTHORING_LIMITS.suggestedCodeRanges.minimum),
-    "suggested-code-ranges-maximum": String(AUTHORING_LIMITS.suggestedCodeRanges.maximum),
-    "code-ranges-maximum": String(AUTHORING_LIMITS.codeRanges),
     "section-templates": sectionTemplatesText,
     "tag-catalog": tagCatalogText,
     rubric: rubricText,

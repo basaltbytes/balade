@@ -7,12 +7,10 @@ import type {
   ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
-import Markdoc from "@markdoc/markdoc";
-import type { Node } from "@markdoc/markdoc";
 import { Effect, FileSystem, Option, Path, Result } from "effect";
 import { CommandExecutor, gitOut } from "../shell.js";
 import { AuthorSearchConfigurationFailed, type AuthoringRequest } from "./author.js";
-import { AUTHORING_LIMITS } from "../authoring/package.js";
+import { inspectionBudget } from "../authoring/package.js";
 import { authoringSystemPrompt } from "./authoring.js";
 import {
   loadPinnedProjectContext,
@@ -90,6 +88,7 @@ export async function createPiSession(
   let searches = 0;
   let sourceReads = 0;
   const changed = new Set(request.files.map((file) => file.path));
+  const budget = inspectionBudget(changed.size, request.budget ?? "base");
   const { snapshot, projectContext, searchConfiguration } = preparation;
   await runSessionEffect(installSearchConfiguration(searchConfiguration));
   for (const notice of projectContext.notices) request.progress(notice);
@@ -163,9 +162,9 @@ export async function createPiSession(
       ),
     }),
     execute: async (id, params, signal, onUpdate, context) => {
-      if (searches >= AUTHORING_LIMITS.searches) {
+      if (searches >= budget.searches) {
         return toolText(
-          `Source search budget reached after ${AUTHORING_LIMITS.searches} searches. Use the matches already collected to choose exact source ranges, then submit the walkthrough.`,
+          `Source search budget reached after ${budget.searches} searches. Use the matches already collected to choose exact source ranges, then submit the walkthrough.`,
         );
       }
       const scope = await runSessionEffect(snapshot.resolvePath(params.path ?? "."));
@@ -205,9 +204,9 @@ export async function createPiSession(
     }),
     execute: async (_id, params) => {
       if (!changed.has(params.path)) throw new Error(`${params.path} is not a changed file.`);
-      if (diffReads >= AUTHORING_LIMITS.diffReads) {
+      if (diffReads >= budget.diffReads) {
         return toolText(
-          `Diff inspection budget reached after ${AUTHORING_LIMITS.diffReads} reads. Use the evidence already collected, confirm only the source needed for selected ranges, then submit the walkthrough.`,
+          `Diff inspection budget reached after ${budget.diffReads} reads. Use the evidence already collected, confirm only the source needed for selected ranges, then submit the walkthrough.`,
         );
       }
       diffReads++;
@@ -254,9 +253,9 @@ export async function createPiSession(
           ),
         );
       }
-      if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
+      if (sourceReads >= budget.sourceReads) {
         return toolText(
-          `Source inspection budget reached after ${AUTHORING_LIMITS.sourceReads} reads. Submit using the verified ranges already collected; do not invent more.`,
+          `Source inspection budget reached after ${budget.sourceReads} reads. Submit using the verified ranges already collected; do not invent more.`,
         );
       }
       sourceReads++;
@@ -279,9 +278,9 @@ export async function createPiSession(
       const sourcePath = await runSessionEffect(
         Effect.fromResult(parseAuthorSourcePath(params.path)),
       );
-      if (sourceReads >= AUTHORING_LIMITS.sourceReads) {
+      if (sourceReads >= budget.sourceReads) {
         return toolText(
-          `Source inspection budget reached after ${AUTHORING_LIMITS.sourceReads} reads. Submit using the verified ranges already collected; do not invent more.`,
+          `Source inspection budget reached after ${budget.sourceReads} reads. Submit using the verified ranges already collected; do not invent more.`,
         );
       }
       sourceReads++;
@@ -304,12 +303,6 @@ export async function createPiSession(
       body: pi.ai.Type.String({ minLength: 1 }),
     }),
     execute: async (_id, params) => {
-      const rangeCount = codeRangeCount(params.body);
-      if (rangeCount > AUTHORING_LIMITS.codeRanges) {
-        return toolText(
-          `The draft has ${rangeCount} code ranges; the hard maximum is ${AUTHORING_LIMITS.codeRanges}. Keep only the ranges needed for the review story, then submit the complete draft again.`,
-        );
-      }
       draft = {
         title: params.title,
         meta: params.meta,
@@ -329,7 +322,7 @@ export async function createPiSession(
     modelRuntime: pi.modelRuntime,
     resourceLoader: minimalResourceLoader(
       pi.coding,
-      authoringSystemPrompt(request.preset),
+      authoringSystemPrompt(budget, request.preset),
       projectContext.files,
     ),
     tools: [
@@ -492,18 +485,6 @@ function verboseToolOutput(result: unknown): string {
         : verboseValue(block),
     )
     .join("\n");
-}
-
-function codeRangeCount(body: string): number {
-  let count = 0;
-  const visit = (nodes: readonly Node[]): void => {
-    for (const node of nodes) {
-      if (node.type === "tag" && node.tag === "code") count++;
-      visit(node.children);
-    }
-  };
-  visit(Markdoc.parse(body).children);
-  return count;
 }
 
 function toolText(text: string) {
