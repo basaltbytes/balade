@@ -101,6 +101,7 @@ npx balade generate 96 --preset odoo
 npx balade generate 96 --lang fr
 npx balade generate 96 --prompt "focus on the migration; the cache change is the risky part"
 npx balade generate 96 --dir docs/walkthroughs
+npx balade generate 96 --force
 npx balade generate 96 --trust-head-instructions
 npx balade generate 96 --no-browser
 npx balade generate 96 --no-open
@@ -113,10 +114,15 @@ npx balade generate 96 --no-open
 part is risky, what to emphasize, what a previous draft missed. It stacks with
 `--preset` and is not recorded in the generated file.
 
-The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Balade
-won't overwrite an existing file. It validates the draft and allows up to two
-model repair turns. If validation still fails, the draft stays on disk and the
-command exits with status 1.
+The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Without
+`--force`, balade warns before the model run when that directory already contains
+a walkthrough for the same PR. It won't overwrite a matching filename; a
+collision keeps the completed new draft under a unique sibling name and reports
+both paths. `--force` atomically replaces only the matching filename, leaving
+other walkthroughs for that PR untouched.
+
+Balade validates the draft and allows up to two model repair turns. If validation
+still fails, the draft stays on disk and the command exits with status 1.
 
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.

@@ -37,9 +37,8 @@ jobs:
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
-          # changeset version bumps package.json only; the sync script keeps
-          # the CLI's hardcoded VERSION constant in step (test/version.test.ts
-          # guards the pair).
+          # package.json is the CLI's version source; the installed binary
+          # reads it directly at startup.
           version: pnpm changeset:version
           # No `publish` input on purpose: publishing belongs to release.yml.
           createGithubReleases: false
