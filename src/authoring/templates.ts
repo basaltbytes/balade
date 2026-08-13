@@ -66,10 +66,14 @@ Replace this line with the safety or test evidence.
   {
     group: "Full PR diff",
     selectWhen:
-      "Always, and always last. This unfiltered diff browser lets the reviewer inspect every changed file and mark each one as viewed. When the pull request touches more than ten files, group that browser by giving the block `{% filegroup /%}` children with labels drawn from the change itself, such as Tests, Traductions, Models, Security, UI, Controllers, or Misc; the groups only partition the diff, so every changed file stays reachable.",
+      "Always, and always last. This unfiltered diff browser lets the reviewer inspect every changed file and mark each one as viewed. When the pull request touches more than ten files, group that browser by giving the block `{% filegroup /%}` children with labels drawn from the change itself, such as Tests, Traductions, Models, Security, UI, Controllers, or Misc; the groups only partition the diff, so every changed file stays reachable. For a smaller change, drop the children and keep a bare `{% files /%}`.",
     template: `{% group label="Full PR diff" %}
 {% section id="files" title="Full PR diff" icon="file-diff" %}
-{% files /%}
+{% files %}
+{% filegroup label="Tests" only="**/*.test.ts" /%}
+{% filegroup label="UI" only="app/**" /%}
+{% filegroup label="Misc" /%}
+{% /files %}
 {% /section %}
 {% /group %}`,
   },
