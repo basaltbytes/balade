@@ -1,5 +1,14 @@
 # balade
 
+## 0.9.1
+
+### Patch Changes
+
+- 675fa9a: `balade generate --prompt "…"` steers one authoring run with reviewer guidance — which part is risky, what to emphasize, what a previous draft missed. The guidance enters the authoring prompt as trusted operator input in its own labeled block, stacks with `--preset`, survives repair turns, and is not recorded in the generated walkthrough.
+- dd3b89e: Point the no-walkthrough errors from `open`, `check` and `build` at `npx balade generate`.
+- b1e83a0: Print the CLI and authoring package versions when `balade generate` starts.
+- f390f77: `balade generate --force` now replaces an existing walkthrough with the same generated filename through an atomic write. Without `--force`, balade warns before authoring when the output directory already holds walkthroughs for that PR, and a completed draft that collides is retained under a unique sibling filename instead of being discarded.
+
 ## 0.9.0
 
 ### Minor Changes
