@@ -45,7 +45,6 @@ function layerOf(module: string): string {
 }
 
 const ROOT_UTILS = ["shell.ts", "state.ts", "terminal.ts", "failure.ts"];
-const ROOT_LEAVES = ["version.ts"];
 
 /** Which layers each layer may import from. Orchestrators may import anything but commands/. */
 const CONCEPT_EDGES: Record<string, readonly string[]> = {
@@ -56,7 +55,6 @@ const CONCEPT_EDGES: Record<string, readonly string[]> = {
   walkthrough: ["walkthrough", "preset", "contract", ...ROOT_UTILS],
   pi: ["pi", "authoring", "git", "contract", ...ROOT_UTILS],
   ...Object.fromEntries(ROOT_UTILS.map((util) => [util, [util, "contract"]])),
-  ...Object.fromEntries(ROOT_LEAVES.map((leaf) => [leaf, [leaf]])),
 };
 
 describe("the src/ dependency law", () => {

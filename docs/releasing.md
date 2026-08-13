@@ -17,11 +17,10 @@ do not create versions, tags or GitHub Releases.
    user-facing change add none.
 2. On every push to `main`, `.github/workflows/changesets.yml` folds pending
    changesets into a rolling **Version Packages** PR: version bump plus the
-   generated `CHANGELOG.md` section. `changeset version` bumps only
-   `package.json`; `scripts/sync-cli-version.mjs` then rewrites the `VERSION`
-   constant in `src/version.ts`. `test/version.test.ts` asserts the pair agrees —
-   that catches a hand-edited version in any ordinary PR's CI. The Version
-   Packages PR itself runs no CI (it is created with the default
+   generated `CHANGELOG.md` section. `package.json` is the CLI's version source;
+   the installed binary reads it at startup, so `changeset version` has no
+   second version constant to synchronize. The Version Packages PR itself runs
+   no CI (it is created with the default
    `GITHUB_TOKEN`, whose events trigger no workflows); its real gates are CI
    on `main` after merge and `prepublishOnly` at publish.
 3. Merging the Version Packages PR runs the same workflow with nothing left to

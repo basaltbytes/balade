@@ -11,7 +11,7 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 `contract/` (shared vocabulary: shapes that cross module boundaries), `preset/`,
 `authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the generation engine), `server/` (live session runtime) — and the root
-files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `version.ts`.
+files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`.
 
 All imports flow one direction; peers never import each other:
 
@@ -25,7 +25,6 @@ preset/                     → contract
 authoring/                  → nothing internal
 contract/                   → nothing internal
 shell.ts  state.ts  terminal.ts  failure.ts                  root ports & utils → contract
-version.ts                                                    package identity → nothing internal
 ```
 
 1. `Command.make` appears only in `commands/<verb>/index.ts` (plus the root
@@ -960,12 +959,11 @@ The tag step is hand-rolled rather than `changeset tag` behind the action's
 `publish` input: gated on the action's `hasChangesets` output, it tags only
 when the checked-out `package.json` version has no tag yet, so every other
 push to main is a cheap, observable no-op and nothing depends on parsing
-changeset stdout. Two version lines stay out of changesets' hands by design:
-`src/version.ts` hardcodes the CLI's `VERSION` constant, so the version script runs
-`scripts/sync-cli-version.mjs` after `changeset version` and
-`test/version.test.ts` fails CI on drift; and the authoring package version
-(`src/authoring/package.ts`) tracks the walkthrough/prompt contract on its own
-policy and must never be wired in. What would move this: npm dropping
+changeset stdout. `package.json` is the CLI version source; the installed
+binary reads it directly, so changesets has no second CLI constant to update.
+The authoring package version (`src/authoring/package.ts`) tracks the
+walkthrough/prompt contract on its own policy and must never be wired in. What
+would move this: npm dropping
 per-workflow trusted-publisher pinning, or the repository adopting a bot
 identity whose pushes may trigger workflows.
 
@@ -1118,6 +1116,9 @@ makes a paid run attributable while it is still running.
 
 The banner belongs only to `generate`. `check` stdout is an agent-facing
 protocol, while the remaining commands finish quickly enough that a startup
-identity would add noise. The CLI constant lives in `src/version.ts` so the
-side-effectful `cli.ts` entry point and the generate command can share it;
-changesets still updates that constant through `scripts/sync-cli-version.mjs`.
+identity would add noise. `package.json` is the single CLI-version source. The
+CLI and generate command schema-decode that manifest at startup; Node's module
+cache keeps it one file read without adding a shared pass-through module. A
+missing or malformed manifest is a corrupted installation and stops startup as
+a defect. The package smoke test executes the packed binary, covering npm's
+always-included `package.json` and the relative lookups from `dist/`.

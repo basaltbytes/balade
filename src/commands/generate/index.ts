@@ -1,6 +1,7 @@
 /** Interactive command boundary for provider login, model choice and draft reporting. */
 
-import { Context, Effect, Option, Terminal } from "effect";
+import { createRequire } from "node:module";
+import { Context, Effect, Option, Schema, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import { parsePrTarget } from "../../git/pr.js";
@@ -8,7 +9,6 @@ import { getPreset, presetNames } from "../../preset/registry.js";
 import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
 import { formatText, stopMessage, writeStderr, writeStdout } from "../../terminal.js";
-import { VERSION } from "../../version.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
@@ -88,6 +88,10 @@ const port = Flag.integer("port").pipe(
   Flag.withDefault(0),
 );
 
+const PackageManifest = Schema.Struct({ version: Schema.String });
+const packageManifest: unknown = createRequire(import.meta.url)("../../../package.json");
+const packageVersion = Schema.decodeUnknownSync(PackageManifest)(packageManifest).version;
+
 export const generateCommand = Command.make(
   "generate",
   {
@@ -105,7 +109,7 @@ export const generateCommand = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
-      writeStdout(`balade ${VERSION} (authoring package ${AUTHORING_PACKAGE_VERSION})\n`);
+      writeStdout(`balade ${packageVersion} (authoring package ${AUTHORING_PACKAGE_VERSION})\n`);
       const pull = parsePrTarget(config.pr);
       if (pull === null) {
         stopMessage(
