@@ -40,7 +40,7 @@
     "dev:app": "vite app",
     "dev:site": "vite site",
     "build:site": "vite build site",
-    "build:demo": "pnpm build && mkdir -p site/public/demo && node dist/cli.js build .agents/walkthroughs/pr-95-mermaid-diagrams-with-guarded-svg-rendering.md --out site/public/demo/index.html",
+    "build:demo": "pnpm build && mkdir -p site/public/demo && node dist/cli.js build .agents/walkthroughs/pr-95-mermaid-rendering-across-an-untrusted-svg-boundary.md --out site/public/demo/index.html",
     "deploy:site": "pnpm build:demo && pnpm build:site && cd site && wrangler deploy",
     "eval:authoring": "vitest run test/authoring.test.ts test/authoring-eval.test.ts --reporter=verbose",
     "eval:authoring:paid": "vitest run --config vitest.paid.config.ts --reporter=verbose",
