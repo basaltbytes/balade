@@ -5,3 +5,4 @@ dist/
 .wrangler/
 *.log
 .claude/worktrees
+site/public/demo/

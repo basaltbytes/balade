@@ -284,12 +284,20 @@ export const Landing = () => {
         <p className="mt-3 font-machine text-[12px] text-muted-foreground">
           from your repository clone · bring your own model
         </p>
-        <a
-          href="https://github.com/basaltbytes/balade"
-          className="mt-5 rounded-sm font-machine text-[13px] text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-        >
-          github.com/basaltbytes/balade ↗
-        </a>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+          <a
+            href="/demo/"
+            className="rounded-sm font-machine text-[13px] text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          >
+            view a real walkthrough ↗
+          </a>
+          <a
+            href="https://github.com/basaltbytes/balade"
+            className="rounded-sm font-machine text-[13px] text-muted-foreground hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          >
+            github.com/basaltbytes/balade ↗
+          </a>
+        </div>
       </div>
     </main>
   );

@@ -1176,3 +1176,19 @@ lands in commits, duplicating every prose edit in the diff, or goes stale
 between build steps. What would move this: a renderer that cannot read files
 at runtime — a browser-bundled authoring surface — which would force the
 codegen path.
+
+## The hosted demo is a script knob, not an asset
+
+balade.dev/demo serves a real static export: `build:demo` runs the freshly
+built CLI's `balade build` on one committed walkthrough and writes
+`site/public/demo/index.html`; `deploy:site` chains it before the site build,
+so the demo is rebuilt by the same CLI it advertises and cannot go stale
+against the renderer. The walkthrough path inside `build:demo` is the single
+point of change — swapping the example is regenerate (or pick another
+committed walkthrough), edit that one path, `pnpm deploy:site`. The export is
+generated output, so `site/public/demo/` is ignored; the committed source of
+truth stays the walkthrough file in `.agents/walkthroughs/`, like any other.
+Committing the export was rejected: multi-megabyte generated HTML in history,
+re-blessed by hand on every renderer change. What would move this: deploys
+leaving the maintainer's machine (CI would need the demo built from a pinned
+CLI), or more than one hosted example, which would turn the knob into a list.
