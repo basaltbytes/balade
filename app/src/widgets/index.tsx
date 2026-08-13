@@ -8,6 +8,7 @@ import { useStrings } from "../ui/strings";
 import { Cards, Method, Patterns, Tests } from "./cards";
 import { Code } from "./code";
 import { Diagram } from "./diagram";
+import { Fence } from "./fence";
 import { Files } from "./files";
 import { Mermaid } from "./mermaid";
 import { Attrs, Callout, Md } from "./prose";
@@ -83,6 +84,8 @@ export const BlockView = memo(function BlockView({ block }: { block: Block }) {
       );
     case "mermaid":
       return <Mermaid block={block} />;
+    case "fence":
+      return <Fence block={block} />;
     case "code":
       return <Code block={block} />;
     default:

@@ -88,12 +88,13 @@ export function parseMark(value: unknown): number[] {
   return out;
 }
 
-/** A ```mermaid fence becomes a mermaid block; every other fence stays unsupported. */
-function mermaidSourceOf(node: Node): string | null {
+/** A top-level fence becomes a block: ```mermaid draws a diagram, any other language renders as read-only text. */
+function fenceBlockOf(node: Node): Block {
   const language = node.attributes["language"];
-  if (typeof language !== "string" || language.trim().toLowerCase() !== "mermaid") return null;
+  const lang = typeof language === "string" ? language.trim().toLowerCase() : "";
   const content = node.attributes["content"];
-  return typeof content === "string" ? content.trim() : "";
+  const source = typeof content === "string" ? content.trim() : "";
+  return lang === "mermaid" ? { b: "mermaid", source } : { b: "fence", lang, source };
 }
 
 /** Markdown flow between tags collapses into `md` blocks. */
@@ -114,8 +115,8 @@ export function compileBlocks(
         level: "warning",
         file: env.file,
         line: lineOf(fence),
-        message: "A fenced code block does not reach the payload.",
-        hint: 'Reference the code in git instead: {% code file="…" from=1 to=10 expect="…" /%}. A ```mermaid fence renders as a diagram.',
+        message: "A fenced code block reaches the payload only at a section's top level.",
+        hint: "Move the fence out of the blockquote or list. A ```mermaid fence renders as a diagram; any other fence renders as read-only text.",
       });
     }
     if (nodes.length > 0) blocks.push({ b: "md", nodes });
@@ -124,12 +125,9 @@ export function compileBlocks(
 
   for (const child of children) {
     if (child.type === "fence") {
-      const source = mermaidSourceOf(child);
-      if (source !== null) {
-        flushFlow();
-        blocks.push({ b: "mermaid", source });
-        continue;
-      }
+      flushFlow();
+      blocks.push(fenceBlockOf(child));
+      continue;
     }
     if (child.type !== "tag" && child.type !== "table") {
       flow.push(child);

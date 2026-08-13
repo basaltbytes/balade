@@ -98,6 +98,11 @@ A ```mermaid fence widens that origin exposure: its source reaches the browser
 verbatim and a third-party library turns it into markup the app injects. The
 conditions that bound it are recorded under "Rendering" below.
 
+Any other top-level fence reaches the browser the same way, as a `fence`
+block, but opens no third-party markup path: shiki emits escaped tokens from
+the source, and the pre-highlight fallback renders the raw text through
+React's own escaping. The mermaid conditions below do not apply to it.
+
 When the walkthrough comes from a fetched PR head, the CLI names the PR and
 head commit and labels the content unreviewed before serving it. A walkthrough
 read from the working tree carries no such notice.
