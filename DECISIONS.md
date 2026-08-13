@@ -1208,12 +1208,3 @@ nobody asked to save. The suggestion placeholders left `guidance.md` with the
 sizing sentence reduced to "size the walkthrough to the change". What would
 move this: real spend complaints, which would argue for a cheaper default
 tier, never for quality caps.
-
-## No prompt-printing command
-
-A `balade prompt` command that prints the assembled system prompt was
-considered while mapping the prompt assembly and rejected: the CLI's verb set
-is the product surface, and a maintainer debugging aid does not belong on it.
-If prompt visibility is needed later, it enters as an internal debug affordance
-(env var or hidden flag), not a documented command. Future architecture passes
-should not re-propose the command form.
