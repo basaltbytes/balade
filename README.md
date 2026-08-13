@@ -179,9 +179,11 @@ What changed and why.
 ```
 
 `expect` must match part of the range's first line. A mismatch fails validation.
-A fenced code block does not reach the app, with one exception: a fence tagged
-`mermaid` renders as a diagram. The authoring package documents the other blocks
-and structural rules.
+A top-level fenced code block renders as read-only text — highlighted when the
+language is known, plain otherwise, so pseudo-code works. A fence tagged
+`mermaid` renders as a diagram. A fence nested in a blockquote or list does not
+reach the app. The authoring package documents the other blocks and structural
+rules.
 
 A walkthrough ends with a `{% files /%}` block, the full-PR diff browser that
 lists every changed file with a viewed mark. That block can hold

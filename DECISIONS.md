@@ -1193,6 +1193,23 @@ re-blessed by hand on every renderer change. What would move this: deploys
 leaving the maintainer's machine (CI would need the demo built from a pinned
 CLI), or more than one hosted example, which would turn the knob into a list.
 
+## Fences render as read-only text; nesting still does not
+
+A top-level fence in a section body becomes a `fence` payload block — the
+mermaid shape plus the authored language id — and the app highlights it with
+the existing shiki service. Unknown ids (pseudo-code, or nothing) resolve to
+plain text; the pre-highlight state renders through React escaping, so the
+untrusted source gains no markup channel and mermaid stays the only
+third-party render path. The prompt encouraged pseudo-code for mechanism
+explanations while the format dropped every non-mermaid fence with a warning;
+the format now honors what the guidance teaches. Nested fences keep the
+`fence-unsupported` warning: they sit inside markdown flow, where `MdNode` has
+no slot for them. Rejected: a dedicated pseudo-code tag (a fence already says
+it, and the block stays free under the range budget); rendering nested fences
+(an `MdNode` variant and recursive rendering for marginal authoring value).
+What would move this: authored walkthroughs hitting the nested warning often
+enough that the flow representation needs the variant.
+
 ## Budgets guarantee termination; they never economize for the operator
 
 Inspection budgets scale with the pull request instead of capping it:
@@ -1208,3 +1225,4 @@ nobody asked to save. The suggestion placeholders left `guidance.md` with the
 sizing sentence reduced to "size the walkthrough to the change". What would
 move this: real spend complaints, which would argue for a cheaper default
 tier, never for quality caps.
+||||||| 85281c9
