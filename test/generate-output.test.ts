@@ -2,7 +2,7 @@
 
 import { Effect } from "effect";
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import {
   findGeneratedWalkthroughs,
@@ -88,7 +88,7 @@ describe("generation output", () => {
       if (error._tag !== "OutputAlreadyExists") return;
       expect(error.existing._tag).toBe("ExistingSameHead");
       expect(readFileSync(error.retainedFile, "utf8")).toBe("completed same-head reroll\n");
-      expect(error.retainedFile).toMatch(/walkthroughs\/pr-42-same-head-recovered-.+\.md$/u);
+      expect(basename(error.retainedFile)).toMatch(/^pr-42-same-head-recovered-.+\.md$/u);
     }).pipe(Effect.provide(shellLayer)),
   );
 

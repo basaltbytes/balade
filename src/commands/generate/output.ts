@@ -2,7 +2,7 @@
 
 import { Effect, FileSystem, Path, Result, Schema } from "effect";
 import type { PlatformError } from "effect/PlatformError";
-import { escapesRoot } from "../../contract/paths.js";
+import { escapesRoot, gitPath } from "../../contract/paths.js";
 import { frontmatterBlock, parseFrontmatter } from "../../walkthrough/frontmatter.js";
 
 export class OutputOutsideRepository extends Schema.TaggedErrorClass<OutputOutsideRepository>()(
@@ -266,7 +266,7 @@ const listPullWalkthroughs = Effect.fn("listPullWalkthroughs")(function* (
   const prefix = `pr-${pullNumber}-`;
   return entries
     .filter((entry) => entry.startsWith(prefix) && entry.endsWith(".md"))
-    .map((entry) => path.relative(root, path.join(output, entry)))
+    .map((entry) => gitPath(path, path.relative(root, path.join(output, entry))))
     .sort((left, right) => left.localeCompare(right));
 });
 

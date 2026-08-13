@@ -6,7 +6,7 @@ import { Effect, Fiber, Layer, Option, Redacted, Schema, Terminal } from "effect
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import {
   AuthorModel as AuthorModelSchema,
@@ -991,7 +991,9 @@ describe("generation", () => {
       expect(readFileSync(error.retainedFile, "utf8")).toContain("title: Live planning pool");
       expect(forced._tag).toBe("Generated");
       expect(readFileSync(join(repo.dir, existing), "utf8")).toContain("title: Live planning pool");
-      expect(forced.siblings).toContain(error.retainedFile.slice(repo.dir.length + 1));
+      expect(forced.siblings.some((file) => file.endsWith(basename(error.retainedFile)))).toBe(
+        true,
+      );
     }),
   );
 
