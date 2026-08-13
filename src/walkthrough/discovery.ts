@@ -13,7 +13,7 @@ const WALKTHROUGH_PATH = /(?:^|\/)walkthroughs\/[^/]+\.md$/;
 
 /** What every command says when discovery comes back empty. */
 export const NO_WALKTHROUGH =
-  "No walkthrough found. A walkthrough is a git-tracked `**/walkthroughs/*.md` file whose frontmatter holds the `walkthrough` key.";
+  "No walkthrough found. A walkthrough is a git-tracked `**/walkthroughs/*.md` file whose frontmatter holds the `walkthrough` key. Create one with `npx balade generate <pr>`.";
 
 export const NOT_A_REPO =
   "Not inside a git repository — run balade from the repository that holds the walkthrough.";
