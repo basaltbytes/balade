@@ -32,7 +32,7 @@ export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughF
     return (
       `PR #${this.number} carries no walkthrough. A walkthrough is a git-tracked ` +
       "`**/walkthroughs/*.md` file whose frontmatter holds the `walkthrough` key " +
-      `— and \`pr: ${this.number}\`.`
+      `— and \`pr: ${this.number}\`. Generate one with \`npx balade generate ${this.number}\`.`
     );
   }
 }
