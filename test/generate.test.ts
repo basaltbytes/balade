@@ -17,6 +17,7 @@ import {
 } from "../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
 import { authoringSystemPrompt } from "../src/pi/authoring.js";
+import { inspectionBudget } from "../src/authoring/package.js";
 import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
 import { slugifyTitle } from "../src/commands/generate/output.js";
 import {
@@ -223,8 +224,12 @@ describe("the Pi adapter", () => {
       expect(secondRequest).toContain("submit_walkthrough");
       expect(secondRequest).not.toContain('"bash"');
       expect(secondRequest).not.toContain('"write_file"');
-      expect(authoringSystemPrompt()).toContain("no more than 8 diff reads");
-      expect(authoringSystemPrompt()).toContain("hard maximum of 10 code ranges");
+      expect(authoringSystemPrompt(inspectionBudget(1, "base"))).toContain(
+        "no more than 16 diff reads",
+      );
+      expect(authoringSystemPrompt(inspectionBudget(1, "unlimited"))).toContain(
+        "no inspection budget",
+      );
       expect(progress).toContainEqual({
         _tag: "AuthorAssistantText",
         text: "Inspecting the pinned source.",
@@ -542,8 +547,9 @@ describe("the Pi adapter", () => {
       const harness = yield* Effect.promise(() => piHarness());
       let finalRequest = "";
       const progress: AuthorProgress[] = [];
+      /* One changed file floors the base budget at 16 diff reads. */
       harness.faux.setResponses([
-        ...Array.from({ length: 9 }, () =>
+        ...Array.from({ length: 17 }, () =>
           ai.fauxAssistantMessage(ai.fauxToolCall("read_pr_diff", { path: CHANGED_FILE.path }), {
             stopReason: "toolUse",
           }),
@@ -562,7 +568,7 @@ describe("the Pi adapter", () => {
         );
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
 
-      expect(finalRequest).toContain("Diff inspection budget reached after 8 reads");
+      expect(finalRequest).toContain("Diff inspection budget reached after 16 reads");
       expect(progress.some((event) => event._tag === "AuthorAssistantText")).toBe(false);
       expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(false);
       expect(
@@ -573,23 +579,16 @@ describe("the Pi adapter", () => {
     }),
   );
 
-  it.effect("requires an overlong walkthrough to be focused before submission", () =>
+  it.effect("accepts a draft with many code ranges — the walkthrough has no range cap", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
-      let secondRequest = "";
-      const overlongBody = Array.from(
+      const manyRanges = Array.from(
         { length: 11 },
         (_, index) =>
           `{% code file="models/planning_pool_item.py" from=1 to=1 expect="${PINNED_LINE}" /%}\n${index}`,
       ).join("\n");
-      harness.faux.setResponses([
-        submitted(overlongBody),
-        (context) => {
-          secondRequest = JSON.stringify(context.messages);
-          return submitted(validBody);
-        },
-      ]);
+      harness.faux.setResponses([submitted(manyRanges)]);
 
       const turn = yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
@@ -598,8 +597,7 @@ describe("the Pi adapter", () => {
         return session.initial;
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
 
-      expect(secondRequest).toContain("the hard maximum is 10");
-      expect(turn.draft.body).toBe(validBody);
+      expect(turn.draft.body).toBe(manyRanges);
     }),
   );
 

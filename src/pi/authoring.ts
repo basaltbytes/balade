@@ -8,24 +8,29 @@
 import { Option } from "effect";
 import { sharedGuidance } from "../authoring/guidance.js";
 import {
-  AUTHORING_LIMITS,
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
+  type InspectionBudget,
 } from "../authoring/package.js";
 import { plainHeadings, proseTemplate, renderProse } from "../authoring/prose.js";
 import type { Lang } from "../contract/types.js";
 import type { AuthoringPreset, AuthoringRequest } from "./author.js";
 
+/** The budget sentence: exact numbers on sized tiers, no cap on `unlimited`. */
+function inspectionBudgetSentence(budget: InspectionBudget): string {
+  return Number.isFinite(budget.diffReads)
+    ? `Use no more than ${budget.diffReads} diff reads, ${budget.searches} searches, and ${budget.sourceReads} source reads.`
+    : "This run has no inspection budget: read every diff, search result, and source range the walkthrough needs.";
+}
+
 /* The prompt host is plain text, so the document's `##` headings render bare. */
-function baseSystemPrompt(): string {
+function baseSystemPrompt(budget: InspectionBudget): string {
   return renderProse(plainHeadings(proseTemplate(import.meta.url, "system-prompt.md")), {
     "schema-version": String(AUTHORING_WALKTHROUGH_SCHEMA_VERSION),
     "meta-key": AUTHORING_META_KEY,
     "package-version": AUTHORING_PACKAGE_VERSION,
-    "diff-reads": String(AUTHORING_LIMITS.diffReads),
-    searches: String(AUTHORING_LIMITS.searches),
-    "source-reads": String(AUTHORING_LIMITS.sourceReads),
+    "inspection-budget": inspectionBudgetSentence(budget),
     "shared-guidance": sharedGuidance("plain"),
     /* A preset block appends directly below, so the file's trailing newline is trimmed. */
   }).trimEnd();
@@ -35,8 +40,8 @@ function baseSystemPrompt(): string {
  * The system prompt for one session. A preset appends its own tag guidance,
  * so the engine carries no knowledge of any particular preset.
  */
-export function authoringSystemPrompt(preset?: AuthoringPreset): string {
-  const base = baseSystemPrompt();
+export function authoringSystemPrompt(budget: InspectionBudget, preset?: AuthoringPreset): string {
+  const base = baseSystemPrompt(budget);
   if (preset === undefined) return base;
   return `${base}
 

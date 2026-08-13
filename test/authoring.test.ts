@@ -6,6 +6,7 @@ import {
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
   AUTHORING_WALKTHROUGH_SCHEMA_VERSION,
+  inspectionBudget,
 } from "../src/authoring/package.js";
 import { AUTHORING_RUBRIC } from "../src/authoring/rubric.js";
 import { AUTHORING_SECTION_TEMPLATES } from "../src/authoring/templates.js";
@@ -88,8 +89,28 @@ describe("the authoring package", () => {
     ]);
   });
 
+  it("scales inspection budgets with the pull request and honors the tier", () => {
+    /* Floors keep a small pull request free to explore. */
+    expect(inspectionBudget(1, "base")).toEqual({ diffReads: 16, searches: 30, sourceReads: 24 });
+    /* Past the floors, every changed file keeps paging and adjacent-file slack. */
+    expect(inspectionBudget(27, "base")).toEqual({
+      diffReads: 54,
+      searches: 54,
+      sourceReads: 81,
+    });
+    expect(inspectionBudget(27, "x2")).toEqual({
+      diffReads: 108,
+      searches: 108,
+      sourceReads: 162,
+    });
+    const unlimited = inspectionBudget(27, "unlimited");
+    expect(Number.isFinite(unlimited.diffReads)).toBe(false);
+    expect(Number.isFinite(unlimited.searches)).toBe(false);
+    expect(Number.isFinite(unlimited.sourceReads)).toBe(false);
+  });
+
   it("teaches every core tag's syntax in the catalog", () => {
-    const prompt = authoringSystemPrompt();
+    const prompt = authoringSystemPrompt(inspectionBudget(1, "base"));
     for (const tag of CORE_TAG_NAMES) {
       /* Pipe tables render as-is; the catalog shows no `{% table %}` wrapper. */
       if (tag === "table") continue;
@@ -225,8 +246,8 @@ describe("the authoring package", () => {
   });
 
   it("teaches a named preset's tags and says balade stamps the preset", () => {
-    const plain = authoringSystemPrompt();
-    const withOdoo = authoringSystemPrompt({
+    const plain = authoringSystemPrompt(inspectionBudget(1, "base"));
+    const withOdoo = authoringSystemPrompt(inspectionBudget(1, "base"), {
       name: odooPreset.name,
       authoring: odooPreset.authoring,
     });

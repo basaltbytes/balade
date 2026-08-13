@@ -1,7 +1,7 @@
 # Authoring package
 
 The versioned authoring data lives in [`src/authoring/`](../src/authoring/):
-section templates, core tag catalog, writing rubric, and inspection limits.
+section templates, core tag catalog, writing rubric, and inspection budgets.
 It renders twice — into the Pi system prompt
 ([`src/pi/authoring.ts`](../src/pi/authoring.ts)) that `balade generate`
 loads, and into the generated `balade-authoring` skill
@@ -15,7 +15,7 @@ slots carrying the typed data in. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.16.0`. Its major version matches the
+The current package version is `1.17.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -80,21 +80,26 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.16.0
+  balade-authoring: 1.17.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
 through the same walkthrough v1 contract used by hand-authored files and
 confirms each code path, range, and `expect=` boundary echo.
 
-One turn may read at most eight diffs, run twenty source searches, and read
-twelve source ranges across the pin and base. Search results are repo-relative,
+Inspection budgets scale with the pull request. The base tier allows two diff
+reads and two searches per changed file, and three source reads — room for the
+adjacent files a claim depends on — with floors of sixteen, thirty, and
+twenty-four so small changes stay free to explore. `--budget x2` doubles the
+estimate; `--budget unlimited` removes enforcement. The budgets exist to
+guarantee termination, never to economize on the operator's behalf, and a
+draft has no cap on sections or code ranges. Search results are repo-relative,
 sorted by path and line, capped at 200 matches, and character-truncated. They
 do not depend on ignore files or on the user's own ripgrep configuration. The
 session installs one balade-owned ripgrep configuration for its whole process,
 so parallel tool calls cannot restore a competing configuration between spawn
-steps. A draft may contain at most ten code ranges. Those limits live beside the
-prompt and are also used by the Pi tool adapter.
+steps. The budget function lives beside the prompt and is also used by the Pi
+tool adapter.
 
 ## Version policy
 

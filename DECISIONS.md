@@ -1192,3 +1192,28 @@ Committing the export was rejected: multi-megabyte generated HTML in history,
 re-blessed by hand on every renderer change. What would move this: deploys
 leaving the maintainer's machine (CI would need the demo built from a pinned
 CLI), or more than one hosted example, which would turn the knob into a list.
+
+## Budgets guarantee termination; they never economize for the operator
+
+Inspection budgets scale with the pull request instead of capping it:
+`inspectionBudget(changedFiles, tier)` allows two diff reads and two searches
+per changed file and three source reads — slack for paging long diffs and for
+the adjacent files a claim depends on — with floors (16/30/24) so small pull
+requests explore freely. The operator owns spending through `--budget`:
+`base`, `x2`, or `unlimited` (no enforcement; the prompt drops the budget
+sentence). The fixed caps are gone with the same rationale: the ten-code-range
+submit rejection and the numeric section/range suggestions actively shrank
+walkthroughs on agent-scale input — the product's own target — to save money
+nobody asked to save. The suggestion placeholders left `guidance.md` with the
+sizing sentence reduced to "size the walkthrough to the change". What would
+move this: real spend complaints, which would argue for a cheaper default
+tier, never for quality caps.
+
+## No prompt-printing command
+
+A `balade prompt` command that prints the assembled system prompt was
+considered while mapping the prompt assembly and rejected: the CLI's verb set
+is the product surface, and a maintainer debugging aid does not belong on it.
+If prompt visibility is needed later, it enters as an internal debug affordance
+(env var or hidden flag), not a documented command. Future architecture passes
+should not re-propose the command form.

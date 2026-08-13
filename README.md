@@ -110,6 +110,7 @@ npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --preset odoo
 npx balade generate 96 --lang fr
 npx balade generate 96 --prompt "focus on the migration; the cache change is the risky part"
+npx balade generate 96 --budget x2
 npx balade generate 96 --dir docs/walkthroughs
 npx balade generate 96 --force
 npx balade generate 96 --trust-head-instructions
@@ -124,6 +125,10 @@ npx balade generate 96 --no-open
 part is risky, what to emphasize, what a previous draft missed. It stacks with
 `--preset` and is not recorded in the generated file.
 
+`--budget` sizes how much the model may inspect. `base` scales with the pull
+request's changed-file count, `x2` doubles that estimate, and `unlimited`
+removes the caps entirely.
+
 The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Without
 `--force`, balade warns before the model run when that directory already contains
 a walkthrough for the same PR. It won't overwrite a matching filename; a
@@ -137,7 +142,7 @@ still fails, the draft stays on disk and the command exits with status 1.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.16.0`. See the
+Generated frontmatter records authoring package version `1.17.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 

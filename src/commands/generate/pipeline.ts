@@ -21,7 +21,11 @@ import {
   type AuthoringPreset,
   type HeadInstructionPolicy,
 } from "../../pi/author.js";
-import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
+import {
+  AUTHORING_META_KEY,
+  AUTHORING_PACKAGE_VERSION,
+  type InspectionTier,
+} from "../../authoring/package.js";
 import {
   DraftRetentionFailed,
   DraftWriteFailed,
@@ -59,6 +63,8 @@ export interface RunGenerationOptions {
   readonly lang?: Lang;
   /** Named by `--prompt`; operator-typed steering forwarded to the authoring request. */
   readonly guidance?: string;
+  /** Named by `--budget`; sizes the inspection budget. */
+  readonly budget?: InspectionTier;
   readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
@@ -115,6 +121,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       ...(options.preset === undefined ? {} : { preset: options.preset }),
       ...(options.lang === undefined ? {} : { lang: options.lang }),
       ...(options.guidance === undefined ? {} : { guidance: options.guidance }),
+      ...(options.budget === undefined ? {} : { budget: options.budget }),
       headInstructionPolicy: options.headInstructionPolicy,
       progressMode: options.progressMode,
       progress: options.progress,

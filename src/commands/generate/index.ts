@@ -81,6 +81,13 @@ const guidance = Flag.string("prompt").pipe(
   ),
 );
 
+const budget = Flag.choice("budget", ["base", "x2", "unlimited"]).pipe(
+  Flag.withDescription(
+    "Inspection budget: base scales with the pull request, x2 doubles it, unlimited removes it",
+  ),
+  Flag.withDefault("base" as const),
+);
+
 const force = Flag.boolean("force").pipe(
   Flag.withDescription("Replace an existing walkthrough with the same filename"),
 );
@@ -120,6 +127,7 @@ export const generateCommand = Command.make(
     lang,
     directory,
     guidance,
+    budget,
     force,
     verbose,
     trustHeadInstructions,
@@ -162,6 +170,7 @@ export const generateCommand = Command.make(
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
+        budget: config.budget,
         directory: config.directory,
         collisionPolicy: config.force ? "replace" : "exclusive",
         onExistingWalkthroughs: (files) => {
