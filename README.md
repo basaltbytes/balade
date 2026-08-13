@@ -14,14 +14,24 @@
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/balade" alt="MIT license" /></a>
 </p>
 
-`balade` transforms big agent-driven PR into a beautiful human-readable PR-walkthrough local webpage. It combines a powerful markdoc authoring system and renders it into a mini webapp with local state to review the PR with interactive components. 
+`balade` turns large, agent-generated pull requests into guided, human-readable
+walkthroughs. It connects explanations to the exact code, validates them
+against git, and preserves the complete diff for human review — all rendered
+locally from a Markdoc file committed to your repository.
+
+Unlike automated AI review tools, balade doesn't judge the change: it
+organizes the change so a human can review it.
 
 Example output:
 <img width="2456" height="1770" alt="balade-pr-screenshot" src="https://github.com/user-attachments/assets/b14c800f-d88b-40d7-88f1-5a4dc820d294" />
 
-Let `balade generate` the PR walkthrough for you by bringing your own model (authentication with OpenAI Codex or Anthropic API Key, based on pi.dev). Or install the skills and let your agent commit the walkthrough Markdoc file that you can then render with `balade open`.
+Let `balade generate` draft the walkthrough with your own model (sign in with
+OpenAI Codex or an Anthropic API key; built on pi.dev). Or install the
+authoring skill and let your coding agent commit the walkthrough Markdoc file,
+then render it with `balade open`.
 
-Agents can self-check correctness of the authored walkthrough with `balade check` and good error handling, always gibing you a working PR walkthrough.
+Agents self-check what they authored with `balade check`: validation errors
+say exactly what to fix, so the walkthrough you open is a working one.
 
 ## Requirements
 
@@ -219,7 +229,7 @@ npx balade skills install
 This writes `.agents/skills/balade-authoring/SKILL.md`. If the repository has a
 `.claude/` directory, it also writes
 `.claude/skills/balade-authoring/SKILL.md`. Re-run the command after upgrading
-balade. Anyway `check` will report a version mismatch.
+balade; if the installed skill is stale, `check` reports the version mismatch.
 
 Use `--out <dir>` for another skill layout (other coding agent harnesses). The npm package also includes the rendered skill under `dist/skill/`.
 
