@@ -120,7 +120,7 @@ export const writeGenerationDraft = Effect.fn("writeGenerationDraft")(
         yield* writeExclusive(fs, path, file, options.contents, options.currentHead);
       }
 
-      const relativeFile = path.relative(options.root, file);
+      const relativeFile = gitPath(path, path.relative(options.root, file));
       const siblings = (yield* listPullWalkthroughs(
         fs,
         path,
