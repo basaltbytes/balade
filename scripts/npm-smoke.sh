@@ -60,6 +60,21 @@ test -f "$PROJECT/node_modules/balade/dist/export/app.js"
 test -f "$PROJECT/node_modules/balade/dist/skill/balade-authoring/SKILL.md"
 grep -q "^balade-authoring: " "$PROJECT/node_modules/balade/dist/skill/balade-authoring/SKILL.md"
 
+# Generation announces the installed CLI and authoring identities before resolution starts.
+AUTHORING_VERSION="$(sed -n 's/^balade-authoring: //p' "$PROJECT/node_modules/balade/dist/skill/balade-authoring/SKILL.md")"
+GENERATE_STDOUT="$TMP_ROOT/generate.stdout"
+GENERATE_STDERR="$TMP_ROOT/generate.stderr"
+if "$BIN" generate 1 >"$GENERATE_STDOUT" 2>"$GENERATE_STDERR"; then
+  echo "generate unexpectedly succeeded outside a git repository" >&2
+  exit 1
+fi
+EXPECTED_BANNER="balade $PACKAGE_VERSION (authoring package $AUTHORING_VERSION)"
+if [[ "$(<"$GENERATE_STDOUT")" != "$EXPECTED_BANNER" ]]; then
+  echo "generate did not print its version banner first" >&2
+  exit 1
+fi
+grep -Fqi "Not inside a git repository" "$GENERATE_STDERR"
+
 "$BIN" skills --help | grep -qi "authoring"
 "$BIN" skills install --help | grep -qi -- "--out"
 
