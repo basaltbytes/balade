@@ -43,7 +43,7 @@ function restamp(repoDir: string, location: string, version: string): void {
 
 describe("the generated authoring skill", () => {
   it("renders a stamped, self-describing SKILL.md", () => {
-    const skill = skillMd;
+    const skill = skillMd();
     const block = frontmatterBlock(skill);
     expect(block).not.toBeNull();
     expect(block).toContain(`name: ${SKILL_NAME}`);
@@ -55,7 +55,7 @@ describe("the generated authoring skill", () => {
   });
 
   it("teaches every core tag's syntax, like the Pi prompt does", () => {
-    const skill = skillMd;
+    const skill = skillMd();
     for (const tag of CORE_TAG_NAMES) {
       /* Pipe tables render as-is; the catalog shows no `{% table %}` wrapper. */
       if (tag === "table") continue;
@@ -98,7 +98,7 @@ describe("skills install and the check staleness hint", () => {
     mkdirSync(join(repo.dir, ".claude"), { recursive: true });
     const written = await install({ cwd: repo.dir });
     expect(written.map(canon)).toEqual([claude(), shared()]);
-    for (const file of written) expect(readFileSync(file, "utf8")).toBe(skillMd);
+    for (const file of written) expect(readFileSync(file, "utf8")).toBe(skillMd());
     /* A refresh overwrites in place. */
     expect((await install({ cwd: repo.dir })).map(canon)).toEqual(written.map(canon));
   });
@@ -106,7 +106,7 @@ describe("skills install and the check staleness hint", () => {
   it("writes one custom directory with --out", async () => {
     const written = await install({ cwd: repo.dir, out: "dist/skill" });
     expect(written).toEqual([join(repo.dir, "dist/skill", SKILL_NAME, "SKILL.md")]);
-    expect(readFileSync(written[0] ?? "", "utf8")).toBe(skillMd);
+    expect(readFileSync(written[0] ?? "", "utf8")).toBe(skillMd());
   });
 
   it("fails outside a git repository when no --out names a target", async () => {

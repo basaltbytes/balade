@@ -1,60 +1,34 @@
 /**
  * The prose the Pi prompt and the generated skill share verbatim, as one
- * document that reads top to bottom. Both renderings interpolate
- * `sharedGuidance` whole — edit once, and neither surface can drift from the
- * other. Only the section headings differ between the two hosts, through the
- * `heading` seam. Rendering-specific prose (the Pi tool contract, the skill's
- * authoring loop) stays in each renderer.
+ * document that reads top to bottom: `guidance.md` beside this module. Both
+ * renderings interpolate it whole — edit once, and neither surface can drift
+ * from the other. Only the section headings differ between the two hosts:
+ * the document's `##` headings render as-is in the skill and as bare titles
+ * in the Pi prompt. Rendering-specific prose (the Pi tool contract, the
+ * skill's authoring loop) stays in each renderer.
  */
 
 import { tagCatalogText } from "./catalog.js";
 import { AUTHORING_LIMITS } from "./package.js";
+import { plainHeadings, proseTemplate, renderProse } from "./prose.js";
 import { rubricText } from "./rubric.js";
 import { sectionTemplatesText } from "./templates.js";
 
-/** The shared authoring course; `heading` renders a section title for the host surface. */
-export const sharedGuidance = (
-  heading: (title: string) => string,
-): string => `Choose the behavioral spine instead of inventorying changed files in narrative sections. A substantial walkthrough usually needs ${AUTHORING_LIMITS.suggestedSections.minimum}-${AUTHORING_LIMITS.suggestedSections.maximum} narrative sections and ${AUTHORING_LIMITS.suggestedCodeRanges.minimum}-${AUTHORING_LIMITS.suggestedCodeRanges.maximum} focused code ranges. The package has a hard maximum of ${AUTHORING_LIMITS.codeRanges} code ranges. Small, mechanical, or documentation-only changes often need one narrative section and few or no code ranges. The mandatory closing full-PR diff is a verification surface, not a narrative inventory, and does not count toward those section guidelines. Omit plumbing and unchanged context unless they carry evidence needed to review the change.
+/** How a host surface renders the document's `##` section headings. */
+export type GuidanceHeadings = "markdown" | "plain";
 
-Write for a member of the public who did not read the code and did not join the coding session. Explain the named behavior before implementation detail. For English, apply ASD-STE100 Simplified Technical English: use one term per concept, short active sentences, and literal wording. For French, use Rédaction technique simplifiée and keep English technical terms that French developers normally use. Do not translate them word for word.
-
-${heading("Section templates")}
-
-Start from this canonical navigation skeleton, adapt section ids and titles, and omit every narrative group without review signal. A changed file does not automatically deserve a narrative section. Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free \`{% files /%}\` block. Keep that group last; it is mandatory and does not count as inventorying the PR. That closing block may instead hold \`{% filegroup /%}\` children to group a large diff into collapsible thematic sections; the block itself stays attribute-free either way, and the groups only partition the changed files, so grouping never hides one.
-
-${sectionTemplatesText}
-
-When the change carries an algorithm or non-obvious logic, explain the solution in the Mechanism group, directly after Orientation. The explanation is the primary content of the section, human comprehension is the goal. Explain the overall concepts, the logic, models, actors and algorithms that are in this PR. This section doesn't need to go over translation files, or documentation updates or other transversal or trivial changes, it is used to understand pieces of code that are introduced in the PR. Feel free to use plain-text, or pseudo-code to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged \`mermaid\` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding. If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free to give link for reading materials and explaination of the software engineering concept. When explaining the code feel free to directly have the code block shown in-between, in full form or pinned with \`collapsed=true\` to disclose it as a 'If you want to dive deeper' section.
-
-When an absence is a deliberate product rule, explain it with ordinary Markdown and a callout. Do not make a one-card cards block for an empty topic. If translations matter, use one i18n block instead of pasting PO diffs. If tests matter, summarize scenarios and assertions in one tests block instead of pasting test diffs.
-
-${heading("Markdoc rules")}
-
-Use ordinary Markdown for narrative inside group and section tags. Reference pinned code with a self-closing tag:
-
-{% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" /%}
-
-Read the numbered source first, keep the range focused, and copy expect exactly from the first referenced line. A code block is open by default, because the open block is the reading surface. Add collapsed=true on one kind of range only: evidence that sits directly under a substantial explanation in the Mechanism group.
-
-{% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" collapsed=true /%}
-
-The block then starts closed, and the reader opens it on demand. Every other range in the walkthrough stays open. Never collapse every range.
-
-A fenced code block does not reach the payload, with one exception: a fence tagged mermaid renders as a diagram.
-
-Markdoc attributes use double quotes. Escape every embedded double quote with a backslash, for example:
-
-{% method sig="_check_allocation()" decorator="@api.constrains(\\"allocation_id\\")" %}
-Explain the constraint.
-{% /method %}
-
-${heading("Core tag catalog")}
-
-Only code tags count against the range budget; every other block is free. When the content is enumerable — fields, steps, scenarios, access rules, relations — prefer the matching block over a prose list: it is denser to read and renders as a purpose-built widget. Ordinary Markdown pipe tables also render as-is.
-
-${tagCatalogText}
-
-${heading("Writing rubric")}
-
-${rubricText}`;
+/** The shared authoring course, rendered for one host surface. */
+export function sharedGuidance(headings: GuidanceHeadings): string {
+  const template = proseTemplate(import.meta.url, "guidance.md");
+  /* Both hosts embed the guidance mid-document, so the file's trailing newline is trimmed. */
+  return renderProse(headings === "plain" ? plainHeadings(template) : template, {
+    "suggested-sections-minimum": String(AUTHORING_LIMITS.suggestedSections.minimum),
+    "suggested-sections-maximum": String(AUTHORING_LIMITS.suggestedSections.maximum),
+    "suggested-code-ranges-minimum": String(AUTHORING_LIMITS.suggestedCodeRanges.minimum),
+    "suggested-code-ranges-maximum": String(AUTHORING_LIMITS.suggestedCodeRanges.maximum),
+    "code-ranges-maximum": String(AUTHORING_LIMITS.codeRanges),
+    "section-templates": sectionTemplatesText,
+    "tag-catalog": tagCatalogText,
+    rubric: rubricText,
+  }).trimEnd();
+}

@@ -785,14 +785,16 @@ matches. The escape hatch for tail-agent layouts is `--out <dir>` plus the
 `npx skills add` can place; the path points at the installed package, so
 versions still converge.
 
-The source stays TypeScript, not Markdown: the data is typed and CI
-parse-validates every catalog example against the real Markdoc config, which
-a hand-edited `.md` source could not guarantee. The generated SKILL.md is the
-only Markdown and is never edited — install always overwrites. Prose that
-both renderings state verbatim lives once in `src/authoring/guidance.ts` and
-is interpolated by each, so the prompt and the skill cannot drift
-sentence-by-sentence; only rendering-specific prose (the Pi tool contract,
-the skill's authoring loop) is written in a renderer.
+The typed data stays TypeScript: CI parse-validates every catalog example
+against the real Markdoc config, which a hand-edited `.md` source could not
+guarantee. The prose lives in Markdown documents beside the renderers (see
+"Authoring prose lives in Markdown documents" below). The generated SKILL.md
+is never edited — install always overwrites. Prose that both renderings state
+verbatim lives once in `src/authoring/guidance.md` and is interpolated by
+each, so the prompt and the skill cannot drift sentence-by-sentence; only
+rendering-specific prose (the Pi tool contract in `src/pi/system-prompt.md`,
+the skill's authoring loop in `src/authoring/skill.md`) is written per
+renderer.
 
 The staleness guard lives in `check` at the command boundary
 (`commands/check/skill.ts`), not in the checker: it scans both conventional
@@ -1140,3 +1142,37 @@ cache keeps it one file read without adding a shared pass-through module. A
 missing or malformed manifest is a corrupted installation and stops startup as
 a defect. The package smoke test executes the packed binary, covering npm's
 always-included `package.json` and the relative lookups from `dist/`.
+
+## Authoring prose lives in Markdown documents; typed data stays TypeScript
+
+The three prose surfaces of the authoring package are Markdown files beside
+their renderers, not template literals: the shared guidance
+(`src/authoring/guidance.md`), the generated skill's own prose
+(`src/authoring/skill.md`), and the Pi system prompt
+(`src/pi/system-prompt.md`). Editing a prompt is editing a document — no
+escaped backticks, real Markdown tooling, prose-only diffs. The typed data
+(section templates, tag catalog, rubric, limits) stays TypeScript in
+`src/authoring/`, because tests parse every example against the real Markdoc
+config; it reaches the documents through `{{name}}` slots. Substitution
+(`src/authoring/prose.ts`) is strict both ways — a placeholder without a
+slot, a slot without a placeholder, and a malformed placeholder each throw —
+so a rename fails the first rendering test instead of shipping a hole in a
+prompt. Headings are the one transform: a document's `##` headings render
+as-is in SKILL.md and as bare title lines in the plain-text Pi prompt
+(`plainHeadings`, applied to the template before substitution so slot text
+is never rewritten).
+
+The CLI build stays plain tsc; `scripts/copy-prose.mjs` mirrors every
+`src/**/*.md` into `dist/`, and `proseTemplate` resolves the document beside
+the compiled module via `import.meta.url`, so sources under vitest and the
+published package read the same bytes. `build:skill` and `package:smoke`
+both run the installed CLI, so a missing copy fails the build. Reads happen
+inside `sharedGuidance`, `skillMd()`, and the prompt builder, keeping import
+time inert. The migration was verified byte-identical on every rendered
+output (guidance in both heading modes, SKILL.md, the system prompt with and
+without a preset), so the authoring package version did not move. Codegen
+(`.md` compiled to a generated `.ts`) was rejected: the generated file either
+lands in commits, duplicating every prose edit in the diff, or goes stale
+between build steps. What would move this: a renderer that cannot read files
+at runtime — a browser-bundled authoring surface — which would force the
+codegen path.
