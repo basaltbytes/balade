@@ -14,14 +14,22 @@
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/balade" alt="MIT license" /></a>
 </p>
 
-`balade` transforms big agent-driven PR into a beautiful human-readable PR-walkthrough local webpage. It combines a powerful markdoc authoring system and renders it into a mini webapp with local state to review the PR with interactive components. 
+`balade` turns large, agent-generated pull requests into guided, human-readable
+walkthroughs. It connects explanations to the exact code, validates them
+against git, and tailor the complete diff for human review. Balade has its own components and review format in a Markdoc file that you can commit to your repo.
+
+You probably already have an AI review pipeline, balade comes after. It organizes, reframe and explain the changes so human keep a strong understanding of the codebase.
 
 Example output:
 <img width="2456" height="1770" alt="balade-pr-screenshot" src="https://github.com/user-attachments/assets/b14c800f-d88b-40d7-88f1-5a4dc820d294" />
 
-Let `balade generate` the PR walkthrough for you by bringing your own model (authentication with OpenAI Codex or Anthropic API Key, based on pi.dev). Or install the skills and let your agent commit the walkthrough Markdoc file that you can then render with `balade open`.
+Let `balade generate` draft the walkthrough with your own model (sign in with
+OpenAI Codex or an Anthropic API key; built on pi.dev). Or install the
+authoring skill and let your coding agent commit the walkthrough Markdoc file,
+then render it with `balade open`.
 
-Agents can self-check correctness of the authored walkthrough with `balade check` and good error handling, always gibing you a working PR walkthrough.
+Agents self-check what they authored with `balade check`: validation errors
+say exactly what to fix, so the walkthrough you open is a working one.
 
 ## Requirements
 
@@ -99,7 +107,9 @@ Common options:
 npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --preset odoo
 npx balade generate 96 --lang fr
+npx balade generate 96 --prompt "focus on the migration; the cache change is the risky part"
 npx balade generate 96 --dir docs/walkthroughs
+npx balade generate 96 --force
 npx balade generate 96 --trust-head-instructions
 npx balade generate 96 --no-browser
 npx balade generate 96 --no-open
@@ -108,15 +118,24 @@ npx balade generate 96 --no-open
 `--lang` controls the authored language during generation. On `open` and
 `build`, it changes only the app interface.
 
-The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Balade
-won't overwrite an existing file. It validates the draft and allows up to two
-model repair turns. If validation still fails, the draft stays on disk and the
-command exits with status 1.
+`--prompt` steers one run with what you already know about the change — which
+part is risky, what to emphasize, what a previous draft missed. It stacks with
+`--preset` and is not recorded in the generated file.
+
+The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Without
+`--force`, balade warns before the model run when that directory already contains
+a walkthrough for the same PR. It won't overwrite a matching filename; a
+collision keeps the completed new draft under a unique sibling name and reports
+both paths. `--force` atomically replaces only the matching filename, leaving
+other walkthroughs for that PR untouched.
+
+Balade validates the draft and allows up to two model repair turns. If validation
+still fails, the draft stays on disk and the command exits with status 1.
 
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.15.0`. See the
+Generated frontmatter records authoring package version `1.16.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -132,7 +151,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.15.0
+  balade-authoring: 1.16.0
 ---
 ```
 
@@ -208,7 +227,7 @@ npx balade skills install
 This writes `.agents/skills/balade-authoring/SKILL.md`. If the repository has a
 `.claude/` directory, it also writes
 `.claude/skills/balade-authoring/SKILL.md`. Re-run the command after upgrading
-balade. Anyway `check` will report a version mismatch.
+balade; if the installed skill is stale, `check` reports the version mismatch.
 
 Use `--out <dir>` for another skill layout (other coding agent harnesses). The npm package also includes the rendered skill under `dist/skill/`.
 

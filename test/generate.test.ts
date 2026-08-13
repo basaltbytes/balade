@@ -6,7 +6,7 @@ import { Effect, Fiber, Layer, Option, Redacted, Schema, Terminal } from "effect
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import {
   AuthorModel as AuthorModelSchema,
@@ -17,7 +17,8 @@ import {
 } from "../src/pi/author.js";
 import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
 import { authoringSystemPrompt } from "../src/pi/authoring.js";
-import { renderDraft, runGeneration, slugifyTitle } from "../src/commands/generate/pipeline.js";
+import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
+import { slugifyTitle } from "../src/commands/generate/output.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -823,6 +824,8 @@ describe("generation", () => {
           source,
           model,
           directory: "walkthroughs",
+          collisionPolicy: "exclusive",
+          onExistingWalkthroughs: () => {},
           headInstructionPolicy: "trust-changed",
           progressMode: "compact",
           progress: (event) => {
@@ -874,6 +877,8 @@ describe("generation", () => {
           source: prepared(repo.dir, repo.pin),
           model,
           directory: "drafts",
+          collisionPolicy: "exclusive",
+          onExistingWalkthroughs: () => {},
           headInstructionPolicy: "omit-changed",
           progressMode: "compact",
           progress: () => {},
@@ -905,6 +910,8 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "linked/walkthroughs",
+            collisionPolicy: "exclusive",
+            onExistingWalkthroughs: () => {},
             headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
@@ -915,6 +922,8 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: ".git/walkthroughs",
+            collisionPolicy: "exclusive",
+            onExistingWalkthroughs: () => {},
             headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
@@ -929,29 +938,62 @@ describe("generation", () => {
     }),
   );
 
-  it.effect("never overwrites an existing generated filename", () =>
+  it.effect("retains an unforced collision and replaces only that filename with force", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
       const existing = "walkthroughs/pr-42-live-planning-pool.md";
       repo.write(existing, "keep me\n");
-      harness.faux.setResponses([submitted(validBody)]);
-      const error = yield* Effect.gen(function* () {
+      let existingBeforeAuthoring: readonly string[] = [];
+      let preflightSeenByModel = false;
+      harness.faux.setResponses([
+        () => {
+          preflightSeenByModel = existingBeforeAuthoring.includes(existing);
+          return submitted(validBody);
+        },
+        submitted(validBody),
+      ]);
+      const { error, originalAfterCollision, forced } = yield* Effect.gen(function* () {
         const model = yield* fauxModel();
-        return yield* Effect.flip(
+        const error = yield* Effect.flip(
           runGeneration({
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "walkthroughs",
+            collisionPolicy: "exclusive",
+            onExistingWalkthroughs: (files) => {
+              existingBeforeAuthoring = files;
+            },
             headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
           }),
         );
+        const originalAfterCollision = readFileSync(join(repo.dir, existing), "utf8");
+        const forced = yield* runGeneration({
+          source: prepared(repo.dir, repo.pin),
+          model,
+          directory: "walkthroughs",
+          collisionPolicy: "replace",
+          onExistingWalkthroughs: () => {},
+          headInstructionPolicy: "omit-changed",
+          progressMode: "compact",
+          progress: () => {},
+        });
+        return { error, originalAfterCollision, forced };
       }).pipe(Effect.provide(harness.layer));
 
       expect(error._tag).toBe("OutputAlreadyExists");
-      expect(readFileSync(join(repo.dir, existing), "utf8")).toBe("keep me\n");
+      if (error._tag !== "OutputAlreadyExists") return;
+      expect(preflightSeenByModel).toBe(true);
+      expect(error.existing._tag).toBe("ExistingStampInvalid");
+      expect(originalAfterCollision).toBe("keep me\n");
+      expect(readFileSync(error.retainedFile, "utf8")).toContain("title: Live planning pool");
+      expect(forced._tag).toBe("Generated");
+      expect(readFileSync(join(repo.dir, existing), "utf8")).toContain("title: Live planning pool");
+      expect(forced.siblings.some((file) => file.endsWith(basename(error.retainedFile)))).toBe(
+        true,
+      );
     }),
   );
 
@@ -974,6 +1016,8 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "drafts",
+            collisionPolicy: "exclusive",
+            onExistingWalkthroughs: () => {},
             headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: (event) => {

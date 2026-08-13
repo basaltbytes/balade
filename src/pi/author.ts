@@ -147,6 +147,8 @@ export interface AuthoringRequest {
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
   readonly lang?: Lang;
+  /** Named by `--prompt`; typed by the operator, so trusted — unlike PR-derived claims. */
+  readonly guidance?: string;
   readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;

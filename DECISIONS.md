@@ -666,10 +666,17 @@ by the same rule as a root `walkthroughs/`, and `--dir` still overrides it.
 
 Output paths are repository-relative, exclude `.git`, and are checked through
 their nearest existing canonical ancestor before any directory is created.
-The first draft uses an exclusive create. Each repair is written to a temporary
-file beside the draft and atomically renamed, so a failed write cannot truncate
-the retained version. If a model or write fails during repair, the typed error
-keeps both the file path and its last check report for manual recovery.
+The first draft uses an exclusive create unless the operator passes `--force`.
+That flag writes through the same temporary-file-and-rename path as repairs and
+replaces only the exact title-derived filename; it never removes other
+`pr-<n>-*.md` walkthroughs. Without the flag, generation lists matching files
+before the paid authoring turn as a collision warning. If the completed turn
+does collide, balade preserves it under a unique sibling filename before
+reporting whether the existing walkthrough is stamped at the same head, at an
+older head, or cannot be read. Each repair is also written to a temporary file
+beside the draft and atomically renamed, so a failed write cannot truncate the
+retained version. If a model or write fails during repair, the typed error keeps
+both the file path and its last check report for manual recovery.
 
 One semaphore owns each Pi session's turns, and the initial turn runs while the
 scoped session is acquired instead of being exposed as a replayable effect.
@@ -911,6 +918,17 @@ drafts stay English and a model-supplied value stands. The instruction lives in
 the initial request, not the system prompt, because it is per-run input, not a
 versioned authoring decision.
 
+Reviewer steering ([#103](https://github.com/basaltbytes/balade/issues/103)):
+`generate --prompt` appends operator-typed guidance to the initial request in
+its own labeled block after the untrusted claims — the explicit inverse of
+their trust framing. It follows the same law as the language instruction:
+per-run input lives in the request, never in the versioned system prompt, so it
+stacks with `--preset` by construction and survives repair turns through
+session history. The guidance is deliberately not stamped into the frontmatter:
+the walkthrough is committed and shared, while steering notes are
+operator-private. An all-whitespace value is treated as absent at the CLI
+boundary.
+
 ## Code excerpts deep-link to the PR diff without changing the payload
 
 Decided on [#45](https://github.com/basaltbytes/balade/issues/45). Every code
@@ -961,12 +979,11 @@ The tag step is hand-rolled rather than `changeset tag` behind the action's
 `publish` input: gated on the action's `hasChangesets` output, it tags only
 when the checked-out `package.json` version has no tag yet, so every other
 push to main is a cheap, observable no-op and nothing depends on parsing
-changeset stdout. Two version lines stay out of changesets' hands by design:
-`src/cli.ts` hardcodes the CLI's `VERSION` constant, so the version script runs
-`scripts/sync-cli-version.mjs` after `changeset version` and
-`test/version.test.ts` fails CI on drift; and the authoring package version
-(`src/authoring/package.ts`) tracks the walkthrough/prompt contract on its own
-policy and must never be wired in. What would move this: npm dropping
+changeset stdout. `package.json` is the CLI version source; the installed
+binary reads it directly, so changesets has no second CLI constant to update.
+The authoring package version (`src/authoring/package.ts`) tracks the
+walkthrough/prompt contract on its own policy and must never be wired in. What
+would move this: npm dropping
 per-workflow trusted-publisher pinning, or the repository adopting a bot
 identity whose pushes may trigger workflows.
 
@@ -1107,6 +1124,24 @@ its relation-map job. Removal is complete rather than deprecation because the
 project is pre-alpha and untaught-but-renderable tags are exactly the
 compatibility residue the charter says to delete. What would move this:
 evidence that reviewers need an inline step strip that mermaid cannot supply.
+
+## Generation announces both version lines before it resolves the pull request
+
+Decided on [#102](https://github.com/basaltbytes/balade/issues/102). `generate`
+prints `balade <cli> (authoring package <authoring>)` as its first stdout line.
+The CLI version identifies the npm package that `npx` or a global install
+resolved; the independently versioned authoring package identifies the prompt
+contract that governs the draft. Printing both before pull-request resolution
+makes a paid run attributable while it is still running.
+
+The banner belongs only to `generate`. `check` stdout is an agent-facing
+protocol, while the remaining commands finish quickly enough that a startup
+identity would add noise. `package.json` is the single CLI-version source. The
+CLI and generate command schema-decode that manifest at startup; Node's module
+cache keeps it one file read without adding a shared pass-through module. A
+missing or malformed manifest is a corrupted installation and stops startup as
+a defect. The package smoke test executes the packed binary, covering npm's
+always-included `package.json` and the relative lookups from `dist/`.
 
 ## Authoring prose lives in Markdown documents; typed data stays TypeScript
 

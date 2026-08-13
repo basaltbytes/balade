@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /** Entry point: mount the commands, compose the live layers once, run. */
 
+import { createRequire } from "node:module";
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
 import { buildCommand } from "./commands/build/index.js";
 import { checkCommand } from "./commands/check/index.js";
@@ -15,7 +16,9 @@ import { PrLocator } from "./commands/open/locator.js";
 import { BrowserLauncher } from "./server/browser.js";
 import { CommandExecutor } from "./shell.js";
 
-const VERSION = "0.9.0";
+const PackageManifest = Schema.Struct({ version: Schema.String });
+const packageManifest: unknown = createRequire(import.meta.url)("../package.json");
+const packageVersion = Schema.decodeUnknownSync(PackageManifest)(packageManifest).version;
 
 /** Host services and the process adapters used by the effectful shell. */
 const shellLayer = Layer.mergeAll(NodeServices.layer, CommandExecutor.layer, BrowserLauncher.layer);
@@ -36,4 +39,6 @@ const balade = Command.make("balade").pipe(
   ]),
 );
 
-NodeRuntime.runMain(Command.run(balade, { version: VERSION }).pipe(Effect.provide(cliLayer)));
+NodeRuntime.runMain(
+  Command.run(balade, { version: packageVersion }).pipe(Effect.provide(cliLayer)),
+);

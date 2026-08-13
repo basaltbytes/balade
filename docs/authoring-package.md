@@ -15,7 +15,7 @@ slots carrying the typed data in. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.15.0`. Its major version matches the
+The current package version is `1.16.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -32,6 +32,10 @@ Closing issues from another repository remain available in a separate
 third-party claims block, with a notice that names their repository. The agent
 can use this text to guide inspection, but never as evidence of the pull-request
 author's intent.
+
+`generate --prompt` adds reviewer guidance to the request. Unlike every
+PR-derived string, it is typed by the operator on the command line and enters
+the prompt as trusted steering, in its own labeled block after the claims.
 
 All author-stated intent is untrusted text. The agent treats it as claims to
 verify against the pinned diff and source, never as facts or instructions. A
@@ -76,7 +80,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.15.0
+  balade-authoring: 1.16.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file

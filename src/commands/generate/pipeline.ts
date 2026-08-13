@@ -1,6 +1,6 @@
 /** Generate → write → check → repair, with the invalid draft kept for manual recovery. */
 
-import { Effect, FileSystem, Path, Result, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
 import { formatText } from "../../terminal.js";
 import { runCheck } from "../../walkthrough/checker.js";
@@ -8,7 +8,6 @@ import { discoveryErrorMessage } from "../../walkthrough/discovery.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
 import type { Lang, CheckReport } from "../../contract/types.js";
 import type { PullHeadError, PullSnapshot } from "../../git/pr.js";
-import { escapesRoot } from "../../contract/paths.js";
 import {
   DraftMalformed,
   ProviderRequestFailed,
@@ -23,23 +22,19 @@ import {
   type HeadInstructionPolicy,
 } from "../../pi/author.js";
 import { AUTHORING_META_KEY, AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
+import {
+  DraftRetentionFailed,
+  DraftWriteFailed,
+  findGeneratedWalkthroughs,
+  type CollisionPolicy,
+  OutputAccessFailed,
+  OutputAlreadyExists,
+  OutputOutsideRepository,
+  replaceGeneratedDraft,
+  writeGenerationDraft,
+} from "./output.js";
 
 const MAX_REPAIR_ATTEMPTS = 2;
-
-export class OutputOutsideRepository extends Schema.TaggedErrorClass<OutputOutsideRepository>()(
-  "OutputOutsideRepository",
-  { directory: Schema.String, root: Schema.String },
-) {}
-
-export class OutputAlreadyExists extends Schema.TaggedErrorClass<OutputAlreadyExists>()(
-  "OutputAlreadyExists",
-  { file: Schema.String },
-) {}
-
-export class DraftWriteFailed extends Schema.TaggedErrorClass<DraftWriteFailed>()(
-  "DraftWriteFailed",
-  { file: Schema.String, cause: Schema.Defect() },
-) {}
 
 const RepairCause = Schema.Union([ProviderRequestFailed, DraftMalformed, DraftWriteFailed]);
 type RepairCause = typeof RepairCause.Type;
@@ -54,10 +49,16 @@ export interface RunGenerationOptions {
   readonly source: PullSnapshot;
   readonly model: AuthorModel;
   readonly directory: string;
+  /** `--force` becomes this explicit policy at the command boundary. */
+  readonly collisionPolicy: CollisionPolicy;
+  /** Runs before the paid authoring turn when same-PR outputs already exist. */
+  readonly onExistingWalkthroughs: (files: readonly string[]) => void;
   /** Named by `--preset`; teaches the author its tags and stamps the frontmatter. */
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
   readonly lang?: Lang;
+  /** Named by `--prompt`; operator-typed steering forwarded to the authoring request. */
+  readonly guidance?: string;
   readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
@@ -68,6 +69,7 @@ interface GenerationSummary {
   readonly report: CheckReport;
   readonly usage: AuthorUsage;
   readonly repairs: number;
+  readonly siblings: readonly string[];
 }
 
 export interface Generated extends GenerationSummary {
@@ -86,21 +88,21 @@ export type GenerateError =
   | ProviderRequestFailed
   | DraftMalformed
   | OutputOutsideRepository
+  | OutputAccessFailed
   | OutputAlreadyExists
   | DraftWriteFailed
+  | DraftRetentionFailed
   | RepairFailed;
 
 export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationOptions) =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
     const author = yield* WalkthroughAuthor;
-    const outputDirectory = yield* validateOutputDirectory(
-      fs,
-      path,
-      options.source.root,
-      options.directory,
-    );
+    const existing = yield* findGeneratedWalkthroughs({
+      root: options.source.root,
+      directory: options.directory,
+      pullNumber: options.source.pull.number,
+    });
+    if (existing.length > 0) options.onExistingWalkthroughs(existing);
 
     const session = yield* author.start({
       root: options.source.root,
@@ -112,36 +114,23 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       model: options.model,
       ...(options.preset === undefined ? {} : { preset: options.preset }),
       ...(options.lang === undefined ? {} : { lang: options.lang }),
+      ...(options.guidance === undefined ? {} : { guidance: options.guidance }),
       headInstructionPolicy: options.headInstructionPolicy,
       progressMode: options.progressMode,
       progress: options.progress,
     });
     const initial = session.initial;
 
-    const file = path.join(
-      outputDirectory,
-      `pr-${options.source.pull.number}-${slugifyTitle(initial.draft.title)}.md`,
-    );
-    yield* prepareOutputDirectory(
-      fs,
-      path,
-      options.source.root,
-      outputDirectory,
-      options.directory,
-    );
-    yield* fs
-      .writeFileString(
-        file,
-        renderDraft(options.source, initial.draft, options.preset, options.lang),
-        { flag: "wx" },
-      )
-      .pipe(
-        Effect.mapError((cause) =>
-          cause.reason._tag === "AlreadyExists"
-            ? new OutputAlreadyExists({ file })
-            : new DraftWriteFailed({ file, cause }),
-        ),
-      );
+    const output = yield* writeGenerationDraft({
+      root: options.source.root,
+      directory: options.directory,
+      pullNumber: options.source.pull.number,
+      title: initial.draft.title,
+      contents: renderDraft(options.source, initial.draft, options.preset, options.lang),
+      currentHead: options.source.pin,
+      collisionPolicy: options.collisionPolicy,
+    });
+    const file = output.file;
 
     let turn = initial;
     let repairs = 0;
@@ -151,16 +140,20 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       turn = yield* session
         .repair(formatText({ reports: [report] }))
         .pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
-      yield* replaceDraft(
-        fs,
-        path,
+      yield* replaceGeneratedDraft(
         file,
         renderDraft(options.source, turn.draft, options.preset, options.lang),
       ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
       report = yield* checkGeneratedDraft(options.source.root, file);
     }
 
-    const summary: GenerationSummary = { file, report, usage: turn.usage, repairs };
+    const summary: GenerationSummary = {
+      file,
+      report,
+      usage: turn.usage,
+      repairs,
+      siblings: output.siblings,
+    };
     return report.ok
       ? ({ _tag: "Generated", ...summary } satisfies Generated)
       : ({ _tag: "GeneratedWithDiagnostics", ...summary } satisfies GeneratedWithDiagnostics);
@@ -181,87 +174,6 @@ const checkGeneratedDraft = Effect.fn("checkGeneratedDraft")(function* (
     ? yield* Effect.die(new Error("balade check returned no report for an explicit file."))
     : report;
 });
-
-const validateOutputDirectory = Effect.fn("validateOutputDirectory")(function* (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  root: string,
-  directory: string,
-) {
-  if (path.isAbsolute(directory)) {
-    return yield* new OutputOutsideRepository({ directory, root });
-  }
-  const output = path.resolve(root, directory);
-  const relative = path.relative(root, output);
-  if (escapesRoot(path, relative) || isGitMetadata(path, relative)) {
-    return yield* new OutputOutsideRepository({ directory, root });
-  }
-  const canonicalRoot = yield* fs
-    .realPath(root)
-    .pipe(Effect.mapError((cause) => new DraftWriteFailed({ file: output, cause })));
-  const ancestor = yield* nearestExistingPath(fs, path, output);
-  if (escapesRoot(path, path.relative(canonicalRoot, ancestor))) {
-    return yield* new OutputOutsideRepository({ directory, root });
-  }
-  return output;
-});
-
-const nearestExistingPath = Effect.fn("nearestExistingPath")(function* (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  requested: string,
-) {
-  let current = requested;
-  while (true) {
-    const resolved = yield* Effect.result(fs.realPath(current));
-    if (Result.isSuccess(resolved)) return resolved.success;
-    if (resolved.failure.reason._tag !== "NotFound") {
-      return yield* new DraftWriteFailed({ file: requested, cause: resolved.failure });
-    }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return yield* new DraftWriteFailed({ file: requested, cause: resolved.failure });
-    }
-    current = parent;
-  }
-});
-
-const prepareOutputDirectory = Effect.fn("prepareOutputDirectory")(function* (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  root: string,
-  output: string,
-  requested: string,
-) {
-  yield* fs
-    .makeDirectory(output, { recursive: true })
-    .pipe(Effect.mapError((cause) => new DraftWriteFailed({ file: output, cause })));
-  const [canonicalRoot, canonicalOutput] = yield* Effect.all([
-    fs.realPath(root),
-    fs.realPath(output),
-  ]).pipe(Effect.mapError((cause) => new DraftWriteFailed({ file: output, cause })));
-  if (escapesRoot(path, path.relative(canonicalRoot, canonicalOutput))) {
-    return yield* new OutputOutsideRepository({ directory: requested, root });
-  }
-});
-
-const replaceDraft = Effect.fn("replaceDraft")(
-  (fs: FileSystem.FileSystem, path: Path.Path, file: string, contents: string) =>
-    Effect.gen(function* () {
-      const temporary = yield* fs.makeTempFileScoped({
-        directory: path.dirname(file),
-        prefix: ".balade-repair-",
-      });
-      yield* fs.writeFileString(temporary, contents);
-      yield* fs.rename(temporary, file);
-    }).pipe(
-      Effect.scoped,
-      Effect.mapError((cause) => new DraftWriteFailed({ file, cause })),
-    ),
-);
-
-const isGitMetadata = (path: Path.Path, relative: string): boolean =>
-  relative.toLowerCase() === ".git" || relative.toLowerCase().startsWith(`.git${path.sep}`);
 
 export function renderDraft(
   source: PullSnapshot,
@@ -286,18 +198,6 @@ export function renderDraft(
     ...(active === undefined ? {} : { preset: active }),
   }).trimEnd();
   return `---\n${frontmatter}\n---\n\n${draft.body.trim()}\n`;
-}
-
-export function slugifyTitle(title: string): string {
-  const slug = title
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(/^-|-$/gu, "")
-    .slice(0, 64)
-    .replace(/-$/u, "");
-  return slug === "" ? "walkthrough" : slug;
 }
 
 export function generateErrorMessage(error: GenerateError): string {
@@ -328,14 +228,45 @@ export function generateErrorMessage(error: GenerateError): string {
       return `The model did not submit a usable walkthrough: ${error.detail}`;
     case "OutputOutsideRepository":
       return `Output directory ${error.directory} is not a writable source directory inside ${error.root}.`;
+    case "OutputAccessFailed":
+      return `Could not ${outputAccessAction(error.operation)} at ${error.path} (${error.reason}).`;
     case "OutputAlreadyExists":
-      return `${error.file} already exists; move it or choose another output directory.`;
+      return outputCollisionMessage(error);
     case "DraftWriteFailed":
-      return `Could not write generated walkthrough ${error.file}.`;
+      return `Could not ${error.operation} generated walkthrough ${error.file} (${error.reason}).`;
+    case "DraftRetentionFailed":
+      return `A completed draft collided with ${error.file}, but balade could not retain it beside that file (${error.reason}).`;
     case "RepairFailed":
       return `balade retained ${error.file}, but the repair turn failed: ${repairFailureMessage(error.cause)}`;
   }
 }
+
+function outputCollisionMessage(error: OutputAlreadyExists): string {
+  const retained = `The completed draft was retained at ${error.retainedFile}.`;
+  switch (error.existing._tag) {
+    case "ExistingSameHead":
+      return `${error.file} already exists for this same head. ${retained} Re-run with --force to replace it, or use --dir to redirect the output.`;
+    case "ExistingDifferentHead":
+      return `${error.file} is stamped ${shortCommit(error.existing.pin)}, but the pull-request head is now ${shortCommit(error.currentHead)}. ${retained} Re-run with --force to refresh it, or use --dir to redirect the output.`;
+    case "ExistingStampInvalid":
+      return `${error.file} already exists without a readable walkthrough stamp. ${retained} Re-run with --force to replace it, or use --dir to redirect the output.`;
+    case "ExistingStampUnreadable":
+      return `${error.file} already exists, but its walkthrough stamp could not be read (${error.existing.reason}). ${retained} Re-run with --force to replace it, or use --dir to redirect the output.`;
+  }
+}
+
+function outputAccessAction(operation: OutputAccessFailed["operation"]): string {
+  switch (operation) {
+    case "resolve":
+      return "resolve the output path";
+    case "list":
+      return "list the output directory";
+    case "prepare":
+      return "prepare the output directory";
+  }
+}
+
+const shortCommit = (commit: string): string => commit.slice(0, 7);
 
 function repairFailureMessage(cause: RepairCause): string {
   switch (cause._tag) {

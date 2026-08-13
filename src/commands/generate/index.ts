@@ -1,7 +1,9 @@
 /** Interactive command boundary for provider login, model choice and draft reporting. */
 
-import { Context, Effect, Option, Terminal } from "effect";
+import { createRequire } from "node:module";
+import { Context, Effect, Option, Schema, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
+import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import { parsePrTarget } from "../../git/pr.js";
 import { getPreset, presetNames } from "../../preset/registry.js";
 import { resolvePullHead } from "../../git/pr.js";
@@ -65,6 +67,24 @@ const directory = Flag.string("dir").pipe(
   Flag.withDefault(".agents/walkthroughs"),
 );
 
+const guidance = Flag.string("prompt").pipe(
+  Flag.withDescription(
+    "Additional reviewer guidance and steering appended to the base prompt for this run",
+  ),
+  Flag.optional,
+  /* Trimmed at the boundary; an all-whitespace `--prompt` is absent, never sent to the model. */
+  Flag.map((value) =>
+    value.pipe(
+      Option.map((text) => text.trim()),
+      Option.filter((text) => text !== ""),
+    ),
+  ),
+);
+
+const force = Flag.boolean("force").pipe(
+  Flag.withDescription("Replace an existing walkthrough with the same filename"),
+);
+
 const verbose = Flag.boolean("verbose").pipe(
   Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
 );
@@ -86,6 +106,10 @@ const port = Flag.integer("port").pipe(
   Flag.withDefault(0),
 );
 
+const PackageManifest = Schema.Struct({ version: Schema.String });
+const packageManifest: unknown = createRequire(import.meta.url)("../../../package.json");
+const packageVersion = Schema.decodeUnknownSync(PackageManifest)(packageManifest).version;
+
 export const generateCommand = Command.make(
   "generate",
   {
@@ -95,6 +119,8 @@ export const generateCommand = Command.make(
     preset,
     lang,
     directory,
+    guidance,
+    force,
     verbose,
     trustHeadInstructions,
     noOpen,
@@ -103,6 +129,7 @@ export const generateCommand = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
+      writeStdout(`balade ${packageVersion} (authoring package ${AUTHORING_PACKAGE_VERSION})\n`);
       const pull = parsePrTarget(config.pr);
       if (pull === null) {
         stopMessage(
@@ -134,11 +161,19 @@ export const generateCommand = Command.make(
           ? {}
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+        ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
         directory: config.directory,
+        collisionPolicy: config.force ? "replace" : "exclusive",
+        onExistingWalkthroughs: (files) => {
+          if (!config.force) writeStdout(generationPreflightText(source.pull.number, files));
+        },
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
       });
+      if (result.siblings.length > 0) {
+        writeStdout(generationSiblingText(source.pull.number, result.siblings));
+      }
       if (result._tag === "Generated") {
         if (progressMode === "verbose") writeStdout(formatText({ reports: [result.report] }));
         const summary = {
@@ -452,6 +487,25 @@ export function generationSummaryText(result: {
     `Generated ${result.file}.\n`
   );
 }
+
+export function generationPreflightText(pullNumber: number, files: readonly string[]): string {
+  return (
+    `warning walkthrough-exists\n` +
+    `  PR ${pullNumber} already has ${listFiles(files)}; this run may choose the same filename.\n` +
+    `  fix Pass --force to replace a matching filename, or --dir to redirect the output.\n`
+  );
+}
+
+export function generationSiblingText(pullNumber: number, files: readonly string[]): string {
+  return (
+    `warning walkthrough-siblings\n` +
+    `  Other walkthroughs for PR ${pullNumber}: ${files.join(", ")}.\n` +
+    `  fix Remove any sibling that no longer describes a walkthrough you want to keep.\n`
+  );
+}
+
+const listFiles = (files: readonly string[]): string =>
+  `${files.length === 1 ? "a walkthrough" : "walkthroughs"}: ${files.join(", ")}`;
 
 type GenerationCliError =
   | GenerateError
