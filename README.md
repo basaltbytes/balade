@@ -99,6 +99,7 @@ Common options:
 npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --preset odoo
 npx balade generate 96 --lang fr
+npx balade generate 96 --prompt "focus on the migration; the cache change is the risky part"
 npx balade generate 96 --dir docs/walkthroughs
 npx balade generate 96 --force
 npx balade generate 96 --trust-head-instructions
@@ -108,6 +109,10 @@ npx balade generate 96 --no-open
 
 `--lang` controls the authored language during generation. On `open` and
 `build`, it changes only the app interface.
+
+`--prompt` steers one run with what you already know about the change — which
+part is risky, what to emphasize, what a previous draft missed. It stacks with
+`--preset` and is not recorded in the generated file.
 
 The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Without
 `--force`, balade warns before the model run when that directory already contains
@@ -122,7 +127,7 @@ still fails, the draft stays on disk and the command exits with status 1.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.15.0`. See the
+Generated frontmatter records authoring package version `1.16.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -138,7 +143,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.15.0
+  balade-authoring: 1.16.0
 ---
 ```
 

@@ -67,6 +67,20 @@ const directory = Flag.string("dir").pipe(
   Flag.withDefault(".agents/walkthroughs"),
 );
 
+const guidance = Flag.string("prompt").pipe(
+  Flag.withDescription(
+    "Additional reviewer guidance and steering appended to the base prompt for this run",
+  ),
+  Flag.optional,
+  /* Trimmed at the boundary; an all-whitespace `--prompt` is absent, never sent to the model. */
+  Flag.map((value) =>
+    value.pipe(
+      Option.map((text) => text.trim()),
+      Option.filter((text) => text !== ""),
+    ),
+  ),
+);
+
 const force = Flag.boolean("force").pipe(
   Flag.withDescription("Replace an existing walkthrough with the same filename"),
 );
@@ -105,6 +119,7 @@ export const generateCommand = Command.make(
     preset,
     lang,
     directory,
+    guidance,
     force,
     verbose,
     trustHeadInstructions,
@@ -146,6 +161,7 @@ export const generateCommand = Command.make(
           ? {}
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+        ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
         directory: config.directory,
         collisionPolicy: config.force ? "replace" : "exclusive",
         onExistingWalkthroughs: (files) => {
