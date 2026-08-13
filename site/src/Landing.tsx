@@ -279,8 +279,11 @@ export const Landing = () => {
         </p>
         <code className="mt-10 rounded-md border border-border bg-card px-4 py-2.5 font-machine text-sm">
           <span className="text-muted-foreground select-none">$ </span>
-          npx balade open <span className="text-muted-foreground">&lt;pr-url&gt;</span>
+          npx balade generate <span className="text-muted-foreground">&lt;pr-url&gt;</span>
         </code>
+        <p className="mt-3 font-machine text-[12px] text-muted-foreground">
+          from your repository clone · bring your own model
+        </p>
         <a
           href="https://github.com/basaltbytes/balade"
           className="mt-5 rounded-sm font-machine text-[13px] text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
