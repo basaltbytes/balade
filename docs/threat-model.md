@@ -75,6 +75,13 @@ issues stay under author-stated intent; cross-repository issues remain available
 under a separate third-party claims heading, with a notice naming the foreign
 repository ([#59](https://github.com/basaltbytes/balade/issues/59)).
 
+`generate --prompt` adds the one trusted string in this prompt: reviewer
+guidance typed by the operator on their own command line, in a labeled block
+distinct from the claims. The invariant is that it stays argv-only — a variant
+that read guidance from a file at the PR head would reopen the boundary
+`--trust-head-instructions` guards
+([#103](https://github.com/basaltbytes/balade/issues/103)).
+
 ### 2. PR bytes → the renderer
 
 `balade open <pr-url>` compiles a walkthrough read straight from the untrusted

@@ -65,6 +65,20 @@ const directory = Flag.string("dir").pipe(
   Flag.withDefault(".agents/walkthroughs"),
 );
 
+const guidance = Flag.string("prompt").pipe(
+  Flag.withDescription(
+    "Additional reviewer guidance and steering appended to the base prompt for this run",
+  ),
+  Flag.optional,
+  /* Trimmed at the boundary; an all-whitespace `--prompt` is absent, never sent to the model. */
+  Flag.map((value) =>
+    value.pipe(
+      Option.map((text) => text.trim()),
+      Option.filter((text) => text !== ""),
+    ),
+  ),
+);
+
 const verbose = Flag.boolean("verbose").pipe(
   Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
 );
@@ -95,6 +109,7 @@ export const generateCommand = Command.make(
     preset,
     lang,
     directory,
+    guidance,
     verbose,
     trustHeadInstructions,
     noOpen,
@@ -134,6 +149,7 @@ export const generateCommand = Command.make(
           ? {}
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+        ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
         directory: config.directory,
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,

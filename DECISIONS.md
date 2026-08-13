@@ -909,6 +909,17 @@ drafts stay English and a model-supplied value stands. The instruction lives in
 the initial request, not the system prompt, because it is per-run input, not a
 versioned authoring decision.
 
+Reviewer steering ([#103](https://github.com/basaltbytes/balade/issues/103)):
+`generate --prompt` appends operator-typed guidance to the initial request in
+its own labeled block after the untrusted claims — the explicit inverse of
+their trust framing. It follows the same law as the language instruction:
+per-run input lives in the request, never in the versioned system prompt, so it
+stacks with `--preset` by construction and survives repair turns through
+session history. The guidance is deliberately not stamped into the frontmatter:
+the walkthrough is committed and shared, while steering notes are
+operator-private. An all-whitespace value is treated as absent at the CLI
+boundary.
+
 ## Code excerpts deep-link to the PR diff without changing the payload
 
 Decided on [#45](https://github.com/basaltbytes/balade/issues/45). Every code

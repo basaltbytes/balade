@@ -132,6 +132,16 @@ describe("the authoring package", () => {
     expect(initialAuthoringPrompt(base)).not.toContain("Walkthrough language");
   });
 
+  it("appends flagged reviewer guidance after the claims and stays silent without it", () => {
+    const base = { pin: source.pin, pull: source.pull, claims: source.claims, files: [] };
+    const steering = "Focus on the cache invalidation path.";
+    const steered = initialAuthoringPrompt({ ...base, guidance: steering });
+    expect(steered).toContain(steering);
+    expect(steered.indexOf(steering)).toBeGreaterThan(steered.indexOf("Author-stated intent"));
+    expect(steered.indexOf(steering)).toBeLessThan(steered.indexOf("Changed files:"));
+    expect(initialAuthoringPrompt(base)).not.toContain(steering);
+  });
+
   it("stamps the flagged lang over a model-supplied one, and keeps the model's without a flag", () => {
     const draft = {
       title: "Lang draft",
