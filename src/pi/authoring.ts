@@ -27,6 +27,7 @@ function baseSystemPrompt(): string {
     searches: String(AUTHORING_LIMITS.searches),
     "source-reads": String(AUTHORING_LIMITS.sourceReads),
     "shared-guidance": sharedGuidance("plain"),
+    /* A preset block appends directly below, so the file's trailing newline is trimmed. */
   }).trimEnd();
 }
 
