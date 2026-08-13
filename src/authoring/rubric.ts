@@ -18,7 +18,7 @@ export const AUTHORING_RUBRIC: readonly AuthoringRubricCriterion[] = [
   {
     id: "section-selection",
     question: "Does each narrative section earn its place in the review story?",
-    pass: "The narrative follows the behavioral spine and omits files or topics that add no review signal; the required bare full-PR diff remains last.",
+    pass: "The narrative follows the behavioral spine and the sequence should help comprehension, the last section is always the full-PR diff organized for concistency and human readability.",
     reject:
       "The narrative inventories files, copies all five narrative groups by habit, gives a mechanical change its own mechanism section, draws a diagram that restates a list or a sequence as boxes, or omits, filters, or moves the closing full-PR diff.",
   },

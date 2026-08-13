@@ -4,7 +4,7 @@ Write for a member of the public who did not read the code and did not join the 
 
 ## Section templates
 
-Start from this canonical navigation skeleton, adapt section ids and titles, and omit every narrative group without review signal. A changed file does not automatically deserve a narrative section. Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. Keep that group last; it is mandatory and does not count as inventorying the PR. That closing block may instead hold `{% filegroup /%}` children to group a large diff into collapsible thematic sections; the block itself stays attribute-free either way, and the groups only partition the changed files, so grouping never hides one.
+Start from this canonical navigation skeleton, adapt section ids and titles, and omit every narrative group without review signal. A changed file does not automatically deserve a narrative section. Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. Keep that group last; it is mandatory and does not count as inventorying the PR. That closing block should instead hold `{% filegroup /%}` children to group a large diff into collapsible thematic sections; the block itself stays attribute-free either way, and the groups only partition the changed files, so grouping never hides one.
 
 {{section-templates}}
 
