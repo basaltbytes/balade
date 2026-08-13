@@ -16,12 +16,14 @@
 
 `balade` turns large, agent-generated pull requests into guided, human-readable
 walkthroughs. It connects explanations to the exact code, validates them
-against git, and tailor the complete diff for human review. Balade has its own components and review format in a Markdoc file that you can commit to your repo.
+against git, and tailors the complete diff for human review. Balade has its own components and review format in a Markdoc file that you can commit to your repo.
 
-You probably already have an AI review pipeline, balade comes after. It organizes, reframe and explain the changes so human keep a strong understanding of the codebase.
+You probably already have an AI review pipeline; balade comes after. It organizes, reframes and explains the changes so humans keep a strong understanding of the codebase.
 
 Example output:
 <img width="2456" height="1770" alt="balade-pr-screenshot" src="https://github.com/user-attachments/assets/b14c800f-d88b-40d7-88f1-5a4dc820d294" />
+
+Browse a live walkthrough: [balade.dev/demo](https://balade.dev/demo/).
 
 Let `balade generate` draft the walkthrough with your own model (sign in with
 OpenAI Codex or an Anthropic API key; built on pi.dev). Or install the
