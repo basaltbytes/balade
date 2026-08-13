@@ -6,7 +6,12 @@ It renders twice — into the Pi system prompt
 ([`src/pi/authoring.ts`](../src/pi/authoring.ts)) that `balade generate`
 loads, and into the generated `balade-authoring` skill
 ([`src/authoring/skill.ts`](../src/authoring/skill.ts)) that teaches an
-external coding agent the same format. The package ships with the CLI, so a
+external coding agent the same format. The prose of those surfaces lives in
+Markdown documents beside their renderers —
+[`src/authoring/guidance.md`](../src/authoring/guidance.md) (shared by both),
+[`src/authoring/skill.md`](../src/authoring/skill.md), and
+[`src/pi/system-prompt.md`](../src/pi/system-prompt.md) — with `{{name}}`
+slots carrying the typed data in. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 

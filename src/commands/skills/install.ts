@@ -35,12 +35,13 @@ export const runSkillsInstall = Effect.fn("runSkillsInstall")(function* (
   } else {
     bases.push(path.resolve(options.cwd, options.out));
   }
+  const skill = skillMd();
   const written: string[] = [];
   for (const base of bases) {
     const dir = path.join(base, SKILL_NAME);
     yield* fs.makeDirectory(dir, { recursive: true });
     const file = path.join(dir, "SKILL.md");
-    yield* fs.writeFileString(file, skillMd);
+    yield* fs.writeFileString(file, skill);
     written.push(file);
   }
   return written;
