@@ -1,5 +1,14 @@
 # balade
 
+## 0.10.0
+
+### Minor Changes
+
+- 0367335: The authoring guidance now teaches the `pseudo` fence for pseudo-code explanations in the Mechanism group, tells the model not to omit load-bearing files, and states the current fence rendering rules. Authoring package 1.19.0.
+- 7f663b3: Top-level fenced code blocks now render in the review app as read-only text — highlighted when the language is known, plain otherwise, so pseudo-code explanations reach the reader. ```mermaid fences still render as diagrams. A fence nested in a blockquote or list keeps the warning.
+- e19d463: The authoring skeleton's closing Full PR diff section now demonstrates the grouped `{% filegroup /%}` form, so generated walkthroughs group large diffs into thematic sections instead of leaving one flat file list.
+- 328dc0a: `balade generate` now sizes its inspection budget from the pull request's changed-file count, with room for reading files adjacent to the diff, and a new `--budget` flag selects the tier: `base` (scaled), `x2` (doubled), or `unlimited` (no caps). The ten-code-range ceiling and the fixed section suggestions are gone — the walkthrough is sized by the change, not by constants.
+
 ## 0.9.1
 
 ### Patch Changes
