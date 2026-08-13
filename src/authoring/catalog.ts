@@ -100,8 +100,27 @@ What it does and when it runs.
     example: `{% attrs items=["readonly", "cascade"] /%}`,
   },
   {
+    label: "pseudo fence",
+    note: "Plain Markdown, not a tag: a fenced block tagged pseudo renders as plain pseudo-code. Use it in the Mechanism explanation for the logic of one algorithm: condition/action lines for a decision path, an indented call tree for runtime flow. Pick the smallest view that clarifies the key point. Keep each line to a few words; include only the essential calls, decisions and boundaries. Interactions between parts belong in a mermaid fence; real code belongs in code ranges, as evidence.",
+    example: `\`\`\`pseudo
+on upload(file)
+  if size over quota
+    reject with quota error
+  store the file
+  queue a thumbnail job
+\`\`\`
+
+\`\`\`pseudo
+publishDraft
+  validateFrontmatter
+    checkCommitReachable
+  writePayload
+  notifyReviewers
+\`\`\``,
+  },
+  {
     label: "mermaid fence",
-    note: "Plain Markdown, not a tag: a fenced block tagged mermaid renders as a diagram. It is the tool for showing a sequence of steps, branching logic, or an interaction between parts, most often inside the Mechanism explanation. Choose the type that fits the logic: a flowchart for an ordered path or branches, a sequence diagram for interactions between parts. Keep every node label to a few words; a sentence inside a node defeats the diagram.",
+    note: "Plain Markdown, not a tag: a fenced block tagged mermaid renders as a diagram. It is the tool for showing an interaction between parts or branching logic, most often inside the Mechanism explanation; the straight-line logic of one algorithm reads better as a pseudo fence. Choose the type that fits the logic: a flowchart for an ordered path or branches, a sequence diagram for interactions between parts. Keep every node label to a few words; a sentence inside a node defeats the diagram.",
     example: `\`\`\`mermaid
 flowchart TD
   req[Request] --> status{Retryable status?}
