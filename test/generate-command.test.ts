@@ -3,11 +3,20 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 import {
+  generationPreflightText,
+  generationSiblingText,
   generationSummaryText,
   generationSuccessText,
   makeGenerationProgress,
 } from "../src/commands/generate/index.js";
 import { generateErrorMessage } from "../src/commands/generate/pipeline.js";
+import {
+  ExistingDifferentHead,
+  ExistingSameHead,
+  ExistingStampInvalid,
+  ExistingStampUnreadable,
+  OutputAlreadyExists,
+} from "../src/commands/generate/output.js";
 import {
   AuthorModelId,
   AuthorModelUnavailable,
@@ -117,6 +126,53 @@ describe("generation command output", () => {
       "1 | export const value = 1;\n",
       "[/read_source]\n",
     ]);
+  });
+
+  it("explains preflight matches and post-write siblings", () => {
+    expect(generationPreflightText(100, ["walkthroughs/pr-100-existing.md"])).toContain(
+      "this run may choose the same filename",
+    );
+    expect(
+      generationSiblingText(100, ["walkthroughs/pr-100-en.md", "walkthroughs/pr-100-fr.md"]),
+    ).toContain("Other walkthroughs for PR 100");
+  });
+
+  it("distinguishes collision stamps while always naming the retained draft", () => {
+    const base = {
+      file: "/repo/walkthroughs/pr-100-review.md",
+      retainedFile: "/repo/walkthroughs/pr-100-review-recovered-123.md",
+      currentHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    } as const;
+    const messages = [
+      generateErrorMessage(new OutputAlreadyExists({ ...base, existing: new ExistingSameHead() })),
+      generateErrorMessage(
+        new OutputAlreadyExists({
+          ...base,
+          existing: new ExistingDifferentHead({
+            pin: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          }),
+        }),
+      ),
+      generateErrorMessage(
+        new OutputAlreadyExists({ ...base, existing: new ExistingStampInvalid() }),
+      ),
+      generateErrorMessage(
+        new OutputAlreadyExists({
+          ...base,
+          existing: new ExistingStampUnreadable({
+            reason: "PermissionDenied",
+            cause: new Error("private detail"),
+          }),
+        }),
+      ),
+    ];
+
+    expect(messages[0]).toContain("same head");
+    expect(messages[1]).toContain("stamped aaaaaaa");
+    expect(messages[1]).toContain("head is now bbbbbbb");
+    expect(messages[2]).toContain("without a readable walkthrough stamp");
+    expect(messages[3]).toContain("PermissionDenied");
+    for (const message of messages) expect(message).toContain(base.retainedFile);
   });
 
   it("gives each startup failure an action-specific message", () => {

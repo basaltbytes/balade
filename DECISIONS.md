@@ -666,10 +666,17 @@ by the same rule as a root `walkthroughs/`, and `--dir` still overrides it.
 
 Output paths are repository-relative, exclude `.git`, and are checked through
 their nearest existing canonical ancestor before any directory is created.
-The first draft uses an exclusive create. Each repair is written to a temporary
-file beside the draft and atomically renamed, so a failed write cannot truncate
-the retained version. If a model or write fails during repair, the typed error
-keeps both the file path and its last check report for manual recovery.
+The first draft uses an exclusive create unless the operator passes `--force`.
+That flag writes through the same temporary-file-and-rename path as repairs and
+replaces only the exact title-derived filename; it never removes other
+`pr-<n>-*.md` walkthroughs. Without the flag, generation lists matching files
+before the paid authoring turn as a collision warning. If the completed turn
+does collide, balade preserves it under a unique sibling filename before
+reporting whether the existing walkthrough is stamped at the same head, at an
+older head, or cannot be read. Each repair is also written to a temporary file
+beside the draft and atomically renamed, so a failed write cannot truncate the
+retained version. If a model or write fails during repair, the typed error keeps
+both the file path and its last check report for manual recovery.
 
 One semaphore owns each Pi session's turns, and the initial turn runs while the
 scoped session is acquired instead of being exposed as a replayable effect.
