@@ -1,5 +1,11 @@
 # balade
 
+## 0.11.0
+
+### Minor Changes
+
+- 18b6ed2: The core tag catalog now teaches the `pseudo` fence by example, in both of its shapes: condition/action lines for a decision path and an indented call tree for runtime flow. The mermaid entry cedes straight-line algorithm logic to it. Authoring package 1.20.0.
+
 ## 0.10.0
 
 ### Minor Changes
