@@ -65,6 +65,10 @@ const directory = Flag.string("dir").pipe(
   Flag.withDefault(".agents/walkthroughs"),
 );
 
+const force = Flag.boolean("force").pipe(
+  Flag.withDescription("Replace an existing walkthrough with the same filename"),
+);
+
 const verbose = Flag.boolean("verbose").pipe(
   Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
 );
@@ -95,6 +99,7 @@ export const generateCommand = Command.make(
     preset,
     lang,
     directory,
+    force,
     verbose,
     trustHeadInstructions,
     noOpen,
@@ -135,10 +140,17 @@ export const generateCommand = Command.make(
           : { preset: { name: chosen.name, authoring: chosen.authoring } }),
         ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
         directory: config.directory,
+        collisionPolicy: config.force ? "replace" : "exclusive",
+        onExistingWalkthroughs: (files) => {
+          if (!config.force) writeStdout(generationPreflightText(source.pull.number, files));
+        },
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
       });
+      if (result.siblings.length > 0) {
+        writeStdout(generationSiblingText(source.pull.number, result.siblings));
+      }
       if (result._tag === "Generated") {
         if (progressMode === "verbose") writeStdout(formatText({ reports: [result.report] }));
         const summary = {
@@ -452,6 +464,25 @@ export function generationSummaryText(result: {
     `Generated ${result.file}.\n`
   );
 }
+
+export function generationPreflightText(pullNumber: number, files: readonly string[]): string {
+  return (
+    `warning walkthrough-exists\n` +
+    `  PR ${pullNumber} already has ${listFiles(files)}; this run may choose the same filename.\n` +
+    `  fix Pass --force to replace a matching filename, or --dir to redirect the output.\n`
+  );
+}
+
+export function generationSiblingText(pullNumber: number, files: readonly string[]): string {
+  return (
+    `warning walkthrough-siblings\n` +
+    `  Other walkthroughs for PR ${pullNumber}: ${files.join(", ")}.\n` +
+    `  fix Remove any sibling that no longer describes a walkthrough you want to keep.\n`
+  );
+}
+
+const listFiles = (files: readonly string[]): string =>
+  `${files.length === 1 ? "a walkthrough" : "walkthroughs"}: ${files.join(", ")}`;
 
 type GenerationCliError =
   | GenerateError
