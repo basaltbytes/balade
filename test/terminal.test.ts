@@ -8,6 +8,7 @@ import {
   formatText,
   makeSpinner,
   sanitizeStyledTerminalText,
+  stdoutTheme,
   warningText,
   type Theme,
 } from "../src/terminal.js";
@@ -34,6 +35,21 @@ describe("styled write edge", () => {
   it("keeps the theme's own color sequences", () => {
     const styled = "\u001b[1m\u001b[31merror\u001b[39m\u001b[22m plain \u001b[2mdim\u001b[22m";
     expect(sanitizeStyledTerminalText(styled)).toBe(styled);
+  });
+
+  it("passes every sequence the live theme emits", () => {
+    /* Pins the allowlist to the palette: a slot repainted with a color the
+       writers do not admit would otherwise lose its styling silently. */
+    vi.stubEnv("FORCE_COLOR", "1");
+    try {
+      for (const paint of Object.values(stdoutTheme)) {
+        const painted = paint("text");
+        expect(painted).not.toBe("text");
+        expect(sanitizeStyledTerminalText(painted)).toBe(painted);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("strips every control that is not a palette color", () => {

@@ -14,6 +14,7 @@ import {
   plainTheme,
   sanitizeTerminalText,
   stdoutTheme,
+  stderrTheme,
   stopMessage,
   warningText,
   writeStderr,
@@ -262,7 +263,7 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
       Effect.catchTag("AuthorPreferenceWriteFailed", () =>
         Effect.sync(() => {
           writeStderr(
-            "warning Pi's model preference could not be saved; this run will continue.\n",
+            `${stderrTheme.warning("warning")} Pi's model preference could not be saved; this run will continue.\n`,
           );
         }),
       ),
@@ -282,7 +283,9 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
     const preference = yield* author.modelPreference.pipe(
       Effect.catchTag("AuthorPreferenceReadFailed", () =>
         Effect.sync(() => {
-          writeStderr("warning Pi's saved model preference could not be read; choose a model.\n");
+          writeStderr(
+            `${stderrTheme.warning("warning")} Pi's saved model preference could not be read; choose a model.\n`,
+          );
           return Option.none();
         }),
       ),
@@ -337,7 +340,7 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
   }
   if (picker.usedFallback) {
     writeStderr(
-      `warning No available Pi model matches ${requestedModel(filter)}; choose from the available models.\n`,
+      `${stderrTheme.warning("warning")} No available Pi model matches ${requestedModel(filter)}; choose from the available models.\n`,
     );
   }
 

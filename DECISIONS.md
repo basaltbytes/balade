@@ -1241,7 +1241,8 @@ and the writers keep only the theme's own single-parameter SGR sequences
 worst borrow a palette color. `balade generate` adds a stderr activity spinner
 (`makeSpinner`), animated only on an interactive terminal and fed by the
 progress events' activity labels; printed lines interleave through
-`spinner.print`, and `Effect.ensuring` clears the frame on every exit path.
+`spinner.print`, and an `Effect.acquireUseRelease` bracket owns the lifecycle,
+so the frame clears on every exit path.
 The pipeline reports its own phase transitions (draft check, repair turns) as
 `GenerationPhase` events on the same progress channel as the author's events —
 one channel, one handler, so the display policy (retitle the spinner, then

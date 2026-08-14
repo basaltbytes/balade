@@ -236,9 +236,9 @@ export const size = (bytes: number): string =>
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 80;
-const ERASE_LINE = "\r\x1b[2K";
-const HIDE_CURSOR = "\x1b[?25l";
-const SHOW_CURSOR = "\x1b[?25h";
+const ERASE_LINE = "\r\u001b[2K";
+const HIDE_CURSOR = "\u001b[?25l";
+const SHOW_CURSOR = "\u001b[?25h";
 
 export interface Spinner {
   readonly start: (label: string) => void;
