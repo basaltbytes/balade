@@ -1210,21 +1210,25 @@ it, and the block stays free under the range budget); rendering nested fences
 What would move this: authored walkthroughs hitting the nested warning often
 enough that the flow representation needs the variant.
 
-## Budgets guarantee termination; they never economize for the operator
+## Budgets guarantee termination; only the operator opts into economy
 
-Inspection budgets scale with the pull request instead of capping it:
+Inspection budgets come as three `--budget` tiers named for spend, not for
+mechanism. `medium`, the default, scales with the pull request:
 `inspectionBudget(changedFiles, tier)` allows two diff reads and two searches
 per changed file and three source reads — slack for paging long diffs and for
 the adjacent files a claim depends on — with floors (16/30/24) so small pull
-requests explore freely. The operator owns spending through `--budget`:
-`base`, `x2`, or `unlimited` (no enforcement; the prompt drops the budget
-sentence). The fixed caps are gone with the same rationale: the ten-code-range
-submit rejection and the numeric section/range suggestions actively shrank
-walkthroughs on agent-scale input — the product's own target — to save money
-nobody asked to save. The suggestion placeholders left `guidance.md` with the
-sizing sentence reduced to "size the walkthrough to the change". What would
-move this: real spend complaints, which would argue for a cheaper default
-tier, never for quality caps.
+requests explore freely. `high` removes enforcement (the prompt drops the
+budget sentence). `low` allows one read of each kind per changed file — no
+paging or adjacent-file slack — floored at the fixed caps balade shipped
+before scaled budgets (8/20/12), for runs where spend is constrained but a
+walkthrough is still wanted; choosing economy is the operator's explicit
+call, never the tool's default. The earlier rationale
+stands for the default: fixed caps actively shrank walkthroughs on
+agent-scale input — the product's own target — to save money nobody asked to
+save. The `x2` tier is gone: doubling an estimate few runs exhausted was a
+knob without a question, and `high` already covers "don't stop me". What
+would move this: spend complaints against `medium`, which would argue for
+tuning its scale factors, never for capping the default.
 
 ## Color is a theme the formatter opts into; the write edge admits only its palette
 

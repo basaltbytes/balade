@@ -224,12 +224,10 @@ describe("the Pi adapter", () => {
       expect(secondRequest).toContain("submit_walkthrough");
       expect(secondRequest).not.toContain('"bash"');
       expect(secondRequest).not.toContain('"write_file"');
-      expect(authoringSystemPrompt(inspectionBudget(1, "base"))).toContain(
+      expect(authoringSystemPrompt(inspectionBudget(1, "medium"))).toContain(
         "no more than 16 diff reads",
       );
-      expect(authoringSystemPrompt(inspectionBudget(1, "unlimited"))).toContain(
-        "no inspection budget",
-      );
+      expect(authoringSystemPrompt(inspectionBudget(1, "high"))).toContain("no inspection budget");
       expect(progress).toContainEqual({
         _tag: "AuthorAssistantText",
         text: "Inspecting the pinned source.",
@@ -547,7 +545,7 @@ describe("the Pi adapter", () => {
       const harness = yield* Effect.promise(() => piHarness());
       let finalRequest = "";
       const progress: AuthorProgress[] = [];
-      /* One changed file floors the base budget at 16 diff reads. */
+      /* One changed file floors the medium budget at 16 diff reads. */
       harness.faux.setResponses([
         ...Array.from({ length: 17 }, () =>
           ai.fauxAssistantMessage(ai.fauxToolCall("read_pr_diff", { path: CHANGED_FILE.path }), {

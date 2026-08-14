@@ -110,7 +110,7 @@ npx balade generate 96 --provider openai-codex --model gpt-5.4
 npx balade generate 96 --preset odoo
 npx balade generate 96 --lang fr
 npx balade generate 96 --prompt "focus on the migration; the cache change is the risky part"
-npx balade generate 96 --budget x2
+npx balade generate 96 --budget low
 npx balade generate 96 --dir docs/walkthroughs
 npx balade generate 96 --force
 npx balade generate 96 --trust-head-instructions
@@ -125,8 +125,10 @@ npx balade generate 96 --no-open
 part is risky, what to emphasize, what a previous draft missed. It stacks with
 `--preset` and is not recorded in the generated file.
 
-`--budget` sizes how much the model may inspect. `base` scales with the pull
-request's changed-file count, `x2` doubles that estimate, and `unlimited`
+`--budget` sizes how much the model may inspect. Both sized tiers scale with
+the pull request's changed-file count: `medium`, the default, keeps slack for
+paging and adjacent files, while `low` allows one read of each kind per
+changed file — a constrained spend that still yields a walkthrough. `high`
 removes the caps entirely.
 
 The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Without
@@ -142,7 +144,7 @@ still fails, the draft stays on disk and the command exits with status 1.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.20.0`. See the
+Generated frontmatter records authoring package version `1.21.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -158,7 +160,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.20.0
+  balade-authoring: 1.21.0
 ---
 ```
 
