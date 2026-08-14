@@ -5,14 +5,17 @@
  */
 
 import type { Node } from "@markdoc/markdoc";
+import { Predicate } from "effect";
 import type { Inline, MdNode } from "../contract/types.js";
+
+type ListFacets = { ordered?: boolean };
 
 /** Joins neighbouring strings so the payload carries one text run per span. */
 function merge(parts: Inline[]): Inline[] {
   const out: Inline[] = [];
   for (const part of parts) {
     const last = out[out.length - 1];
-    if (typeof part === "string" && typeof last === "string") out[out.length - 1] = last + part;
+    if (Predicate.isString(part) && Predicate.isString(last)) out[out.length - 1] = last + part;
     else out.push(part);
   }
   return out.filter((part) => part !== "");
@@ -127,10 +130,9 @@ export function mdNodesOf(nodes: readonly Node[]): MdResult {
           .map((item) => inlineOf(item.children))
           .filter((item) => item.length > 0);
         if (items.length > 0) {
-          out.push({
-            list: items,
-            ...(node.attributes["ordered"] === true ? { ordered: true } : {}),
-          });
+          const facets: ListFacets = {};
+          if (node.attributes["ordered"] === true) facets.ordered = true;
+          out.push({ list: items, ...facets });
         }
         break;
       }
@@ -153,7 +155,7 @@ export function mdNodesOf(nodes: readonly Node[]): MdResult {
 export function plainText(parts: readonly Inline[]): string {
   let out = "";
   for (const part of parts) {
-    if (typeof part === "string") out += part;
+    if (Predicate.isString(part)) out += part;
     else if (Array.isArray(part)) out += plainText(part);
     else if ("c" in part) out += part.c;
     else if ("m" in part) out += part.m;

@@ -3,7 +3,7 @@
  * optional `meta` map and `preset`; every other top-level key is an error.
  */
 
-import { Result, Schema, SchemaIssue } from "effect";
+import { Predicate, Result, Schema, SchemaIssue } from "effect";
 import { Frontmatter as FrontmatterSchema } from "../contract/schema.js";
 import type { CheckDiagnostic, Frontmatter as FrontmatterType } from "../contract/types.js";
 import { parse as parseYaml } from "yaml";
@@ -18,17 +18,17 @@ const KNOWN: readonly string[] = [...REQUIRED, ...OPTIONAL];
 
 type RequiredKey = (typeof REQUIRED)[number];
 
-const REQUIRED_HINTS: Readonly<Record<RequiredKey, string>> = {
+const REQUIRED_HINTS = {
   walkthrough: `Write \`walkthrough: ${SCHEMA_VERSION}\` — it declares the schema version.`,
   title: 'Write `title: "…"` — it heads the walkthrough.',
   pr: "Write `pr: 96` — the pull-request number the walkthrough describes.",
   commit: "Write `commit: <sha>` — the commit the walkthrough was authored against.",
-};
+} satisfies Readonly<Record<RequiredKey, string>>;
 
 const INVALID_FIELDS = [
   {
     key: "walkthrough",
-    message: (value: unknown) => `Unsupported schema version \`${String(value)}\`.`,
+    message: (value: string) => `Unsupported schema version \`${value}\`.`,
     hint: `This build reads schema version ${SCHEMA_VERSION}. Write \`walkthrough: ${SCHEMA_VERSION}\`, or run a newer balade.`,
   },
   {
@@ -176,7 +176,7 @@ export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
   for (const field of INVALID_FIELDS) {
     const value = map[field.key];
     if (value !== undefined && invalid.has(pathKey(field.key))) {
-      bad("frontmatter-invalid", field.key, field.message(value), field.hint);
+      bad("frontmatter-invalid", field.key, field.message(String(value)), field.hint);
     }
   }
 
@@ -214,15 +214,15 @@ export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
   const meta = Object.fromEntries(metaEntries);
 
   const preset = map["preset"];
+  const presetFacet: PresetFacet = {};
+  if (Predicate.isString(preset)) presetFacet.preset = preset;
   return {
-    frontmatter: decodeFrontmatter({
-      ...required.success,
-      meta,
-      ...(typeof preset === "string" ? { preset } : {}),
-    }),
+    frontmatter: decodeFrontmatter({ ...required.success, meta, ...presetFacet }),
     diagnostics,
   };
 }
+
+type PresetFacet = { preset?: string };
 
 /** Schema issue paths flattened into stable string keys for diagnostic mapping. */
 function invalidPaths(result: ReturnType<typeof decodeInput>): ReadonlySet<string> {
@@ -230,7 +230,7 @@ function invalidPaths(result: ReturnType<typeof decodeInput>): ReadonlySet<strin
   const paths = new Set<string>();
   for (const issue of formatIssues(result.failure.issue).issues) {
     const parts = (issue.path ?? []).map((part) =>
-      typeof part === "object" && part !== null ? part.key : part,
+      Predicate.isPropertyKey(part) ? part : part.key,
     );
     paths.add(pathKey(...parts));
   }

@@ -5,7 +5,7 @@
  */
 
 import { Effect, Path, Result } from "effect";
-import { loadErrorDiagnostic, loadWalkthrough, type LoadResult } from "./pipeline.js";
+import { loadErrorDiagnostic, loadWalkthrough, type LoadOptions, type LoadResult } from "./pipeline.js";
 import type { CheckReport } from "../contract/types.js";
 import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discovery.js";
 
@@ -41,25 +41,27 @@ export interface CheckFailed {
 
 export type CheckOutcome = CheckPassed | CheckFailed;
 
+type OutcomeFacets = { note?: string };
+
 const checkPassed = (
   reports: readonly CheckReport[],
   /** Set when zero-argument discovery found nothing. */
   note?: string,
-): CheckPassed => ({
-  _tag: "CheckPassed",
-  reports,
-  ...(note === undefined ? {} : { note }),
-});
+): CheckPassed => {
+  const facets: OutcomeFacets = {};
+  if (note !== undefined) facets.note = note;
+  return { _tag: "CheckPassed", reports, ...facets };
+};
 
 const checkFailed = (
   reports: readonly CheckReport[],
   /** Set when discovery itself failed before a report could be built. */
   note?: string,
-): CheckFailed => ({
-  _tag: "CheckFailed",
-  reports,
-  ...(note === undefined ? {} : { note }),
-});
+): CheckFailed => {
+  const facets: OutcomeFacets = {};
+  if (note !== undefined) facets.note = note;
+  return { _tag: "CheckFailed", reports, ...facets };
+};
 
 /** Builds the outcome tag from report values; diagnostics never enter the Effect error channel. */
 export const outcomeFromReports = (reports: readonly CheckReport[]): CheckOutcome =>
@@ -67,12 +69,11 @@ export const outcomeFromReports = (reports: readonly CheckReport[]): CheckOutcom
 
 export const runCheck = Effect.fn("runCheck")(function* (options: CheckOptions) {
   const pathService = yield* Path.Path;
-  const one = (path: string) =>
-    checkOne({
-      cwd: options.cwd,
-      path,
-      ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-    });
+  const one = (path: string) => {
+    const fileOptions: CheckFileOptions = { cwd: options.cwd, path };
+    if (options.useGh !== undefined) fileOptions.useGh = options.useGh;
+    return checkOne(fileOptions);
+  };
 
   const explicit = options.paths ?? [];
   if (explicit.length > 0) {
@@ -109,11 +110,9 @@ export function softReport(loaded: LoadResult): CheckReport {
 
 export const checkOne = Effect.fn("checkOne")(function* (options: CheckFileOptions) {
   const { cwd, path } = options;
-  return yield* loadWalkthrough({
-    cwd,
-    path,
-    ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-  }).pipe(
+  const loadOptions: LoadOptions = { cwd, path };
+  if (options.useGh !== undefined) loadOptions.useGh = options.useGh;
+  return yield* loadWalkthrough(loadOptions).pipe(
     Effect.match({
       onFailure: (error): CheckReport => ({
         file: path,

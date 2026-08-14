@@ -27,7 +27,8 @@ export interface ParsedDocument extends Omit<ValidDocument, "frontmatter"> {
   diagnostics: CheckDiagnostic[];
 }
 
-const HINTS: Record<string, string> = {
+const HINTS = new Map(
+  Object.entries({
   "tag-undefined": `The core catalog is: ${CORE_TAG_NAMES.filter((name) => name !== "table").join(", ")}. Check the spelling.`,
   "tag-selfclosing-has-children": "Close the tag with `/%}` and move the prose out of it.",
   "tag-placement-invalid": "Put the tag on its own line, between blank lines.",
@@ -40,7 +41,8 @@ const HINTS: Record<string, string> = {
   "child-invalid": "Move the tag under the parent its family expects.",
   "variable-undefined": "The format holds no variables; write the value in place.",
   "function-undefined": "The format holds no functions; write the value in place.",
-};
+  }),
+);
 
 function levelOf(error: ValidateError): "error" | "warning" {
   return error.error.level === "warning" ||
@@ -78,7 +80,7 @@ export function parseDocument(source: string, file: string): ParsedDocument {
       file,
       line,
       message: error.error.message,
-      hint: HINTS[error.error.id] ?? "Match the tag to the schema of the core catalog.",
+      hint: HINTS.get(error.error.id) ?? "Match the tag to the schema of the core catalog.",
     });
   }
 
