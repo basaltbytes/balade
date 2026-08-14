@@ -129,6 +129,9 @@ const port = Flag.integer("port").pipe(
   Flag.withDefault(0),
 );
 
+/** The spinner's resting label: between events the model is generating. */
+const AUTHORING_ACTIVITY = "Authoring the walkthrough…";
+
 const PackageManifest = Schema.Struct({ version: Schema.String });
 const packageManifest: unknown = createRequire(import.meta.url)("../../../package.json");
 const packageVersion = Schema.decodeUnknownSync(PackageManifest)(packageManifest).version;
@@ -188,7 +191,7 @@ export const generateCommand = Command.make(
         onActivity: spinner.update,
       });
       const result = yield* Effect.acquireUseRelease(
-        Effect.sync(() => spinner.start("Authoring the walkthrough…")),
+        Effect.sync(() => spinner.start(AUTHORING_ACTIVITY)),
         () =>
           runGeneration({
             source,
@@ -476,6 +479,10 @@ export function makeGenerationProgress(
         }
         break;
       case "AuthorToolFinished":
+        /* A tool label is true only while the tool runs — milliseconds of
+           local snapshot work. The minutes live in the gaps between events,
+           where the model is generating, so the label returns to authoring. */
+        display.onActivity?.(AUTHORING_ACTIVITY);
         if (mode === "verbose") {
           if (event.output !== "") write(withTrailingNewline(sanitizeTerminalText(event.output)));
           write(`[/${sanitizeTerminalText(event.name)}${event.failed ? " error" : ""}]\n`);

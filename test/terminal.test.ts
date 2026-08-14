@@ -177,6 +177,8 @@ describe("spinner", () => {
       spinner.update("Reading diffs…");
       vi.advanceTimersByTime(100);
       expect(tty.chunks.at(-1)).toContain("Reading diffs…");
+      vi.advanceTimersByTime(61_000);
+      expect(tty.chunks.at(-1)).toContain("1m01s");
       spinner.stop();
       const trailing = tty.chunks.at(-1) ?? "";
       expect(trailing).toContain("\r\u001b[2K");

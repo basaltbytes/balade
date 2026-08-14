@@ -103,6 +103,21 @@ describe("generation command output", () => {
     );
   });
 
+  it("labels the activity as a tool only while it runs", () => {
+    const labels: string[] = [];
+    const progress = makeGenerationProgress(() => {}, "compact", {
+      onActivity: (label) => labels.push(label),
+    });
+    progress({ _tag: "AuthorToolStarted", name: "read_source", input: "{}" });
+    progress({ _tag: "AuthorToolFinished", name: "read_source", output: "", failed: false });
+    progress({ _tag: "GenerationPhase", label: "Checking the draft against the pinned source…" });
+    expect(labels).toEqual([
+      "Confirming pinned source ranges…",
+      "Authoring the walkthrough…",
+      "Checking the draft against the pinned source…",
+    ]);
+  });
+
   it("shows model prose and tool details only in verbose progress", () => {
     const output: string[] = [];
     const progress = makeGenerationProgress((value) => output.push(value), "verbose");

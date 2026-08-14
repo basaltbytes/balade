@@ -254,17 +254,27 @@ export interface Spinner {
  * trusted constants and the label is control-stripped, so this direct write
  * path stays inside the terminal-injection invariant.
  */
+const elapsedText = (milliseconds: number): string => {
+  const seconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0 ? `${minutes}m${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
+};
+
 export const makeSpinner = (stream: NodeJS.WriteStream = process.stderr): Spinner => {
   const animated = stream.isTTY === true;
   let label = "";
   let frame = 0;
+  let startedAt = 0;
   let timer: NodeJS.Timeout | undefined;
 
+  /* The clock is what separates "waiting on the model" from "frozen": the
+     label alone cannot, because the long stretches produce no events. */
   const render = () => {
     const glyph = styleText("cyan", SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "", {
       stream,
     });
-    stream.write(`${ERASE_LINE}${glyph} ${label}`);
+    const elapsed = styleText("dim", elapsedText(Date.now() - startedAt), { stream });
+    stream.write(`${ERASE_LINE}${glyph} ${label} ${elapsed}`);
     frame++;
   };
 
@@ -272,6 +282,7 @@ export const makeSpinner = (stream: NodeJS.WriteStream = process.stderr): Spinne
     start(text) {
       label = sanitizeTerminalText(text);
       if (!animated || timer !== undefined) return;
+      startedAt = Date.now();
       stream.write(HIDE_CURSOR);
       render();
       timer = setInterval(render, SPINNER_INTERVAL_MS);
