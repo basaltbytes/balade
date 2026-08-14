@@ -13,7 +13,7 @@ describe("the code block's GitHub diff link", () => {
   let root: Root;
 
   beforeEach(() => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     Object.defineProperty(globalThis, "crypto", { configurable: true, value: webcrypto });
     container = document.createElement("div");
     document.body.append(container);
@@ -24,7 +24,7 @@ describe("the code block's GitHub diff link", () => {
     await act(async () => root.unmount());
     container.remove();
     Object.defineProperty(globalThis, "crypto", { configurable: true, value: jsdomCrypto });
-    delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    globalThis.IS_REACT_ACT_ENVIRONMENT = undefined;
   });
 
   it("upgrades the fallback to the file and right-side line anchor", async () => {

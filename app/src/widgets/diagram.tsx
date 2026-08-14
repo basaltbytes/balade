@@ -48,24 +48,27 @@ function labelSpot(container: DOMRect, from: DOMRect, to: DOMRect, chipWidth: nu
   };
 }
 
-const EDGE_COLOR: Record<DiagramEdge["kind"], string> = {
+const EDGE_COLOR = {
   ctx: "var(--color-context)",
   mod: "var(--color-modified)",
   new: "var(--color-added)",
   derived: "var(--color-accent-muted)",
-};
+} satisfies Record<DiagramEdge["kind"], string>;
 
-const BADGE: Record<string, string> = {
-  new: "text-added bg-added/12 border-added/32",
-  mod: "text-modified bg-modified/12 border-modified/32",
-  hub: "text-modified bg-modified/12 border-modified/32",
-};
+const NEW_BADGE = "text-added bg-added/12 border-added/32";
+const BADGE = new Map(
+  Object.entries({
+    new: NEW_BADGE,
+    mod: "text-modified bg-modified/12 border-modified/32",
+    hub: "text-modified bg-modified/12 border-modified/32",
+  }),
+);
 
-const NODE_BORDER: Record<DiagramNode["change"], string> = {
+const NODE_BORDER = {
   new: "border-added/50",
   mod: "border-modified/40",
   ctx: "border-border",
-};
+} satisfies Record<DiagramNode["change"], string>;
 
 const MAX_DIAGRAM_GRID_SIZE = 64;
 
@@ -117,7 +120,7 @@ export function Diagram({
       setSpots(next);
     };
     measure();
-    if (typeof ResizeObserver === "undefined") return;
+    if (globalThis.ResizeObserver === undefined) return;
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     return () => observer.disconnect();
@@ -248,7 +251,7 @@ export function Diagram({
                     <span className="font-mono text-[12px] text-foreground">{node.model}</span>
                     {node.badge !== undefined ? (
                       <span
-                        className={`text-[10.5px] border rounded-md px-[5px] py-[1px] ${BADGE[node.badge] ?? BADGE.new}`}
+                        className={`text-[10.5px] border rounded-md px-[5px] py-[1px] ${BADGE.get(node.badge) ?? NEW_BADGE}`}
                       >
                         {node.badge}
                       </span>

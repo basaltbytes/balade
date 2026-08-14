@@ -11,5 +11,6 @@ export function firstBlock<K extends Block["b"]>(
   if (section === undefined) throw new Error(`no section ${sectionId}`);
   const block = section.blocks.find((entry) => entry.b === kind);
   if (block === undefined) throw new Error(`no ${kind} block in ${sectionId}`);
+  /* SAFETY: the find above matched `entry.b === kind`, so this is the K-tagged member. */
   return block as Extract<Block, { b: K }>;
 }

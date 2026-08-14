@@ -110,6 +110,11 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
     });
     if (existing.length > 0) options.onExistingWalkthroughs(existing);
 
+    const requestFacets: AuthoringRequestFacets = {};
+    if (options.preset !== undefined) requestFacets.preset = options.preset;
+    if (options.lang !== undefined) requestFacets.lang = options.lang;
+    if (options.guidance !== undefined) requestFacets.guidance = options.guidance;
+    if (options.budget !== undefined) requestFacets.budget = options.budget;
     const session = yield* author.start({
       root: options.source.root,
       pin: options.source.pin,
@@ -118,10 +123,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       claims: options.source.claims,
       files: options.source.files,
       model: options.model,
-      ...(options.preset === undefined ? {} : { preset: options.preset }),
-      ...(options.lang === undefined ? {} : { lang: options.lang }),
-      ...(options.guidance === undefined ? {} : { guidance: options.guidance }),
-      ...(options.budget === undefined ? {} : { budget: options.budget }),
+      ...requestFacets,
       headInstructionPolicy: options.headInstructionPolicy,
       progressMode: options.progressMode,
       progress: options.progress,
@@ -182,6 +184,15 @@ const checkGeneratedDraft = Effect.fn("checkGeneratedDraft")(function* (
     : report;
 });
 
+type AuthoringRequestFacets = {
+  preset?: AuthoringPreset;
+  lang?: Lang;
+  guidance?: string;
+  budget?: InspectionTier;
+};
+type MetaLangFacet = { lang?: Lang };
+type StampedPresetFacet = { preset?: string };
+
 export function renderDraft(
   source: PullSnapshot,
   draft: AuthorDraft,
@@ -192,6 +203,10 @@ export function renderDraft(
      what makes its tags active at check time, and a stamped lang is what sets
      the chrome language; a model-supplied value stands only without the flag. */
   const active = preset?.name ?? draft.preset;
+  const langFacet: MetaLangFacet = {};
+  if (lang !== undefined) langFacet.lang = lang;
+  const presetFacet: StampedPresetFacet = {};
+  if (active !== undefined) presetFacet.preset = active;
   const frontmatter = stringifyYaml({
     walkthrough: 1,
     title: draft.title,
@@ -199,10 +214,10 @@ export function renderDraft(
     commit: source.pin,
     meta: {
       ...draft.meta,
-      ...(lang === undefined ? {} : { lang }),
+      ...langFacet,
       [AUTHORING_META_KEY]: AUTHORING_PACKAGE_VERSION,
     },
-    ...(active === undefined ? {} : { preset: active }),
+    ...presetFacet,
   }).trimEnd();
   return `---\n${frontmatter}\n---\n\n${draft.body.trim()}\n`;
 }

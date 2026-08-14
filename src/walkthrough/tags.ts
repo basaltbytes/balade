@@ -4,7 +4,8 @@
  */
 
 import Markdoc from "@markdoc/markdoc";
-import type { Node, Schema, SchemaAttribute, ValidationError } from "@markdoc/markdoc";
+import type { Node, Scalar, Schema, SchemaAttribute, ValidationError } from "@markdoc/markdoc";
+import { Predicate } from "effect";
 
 export const SECTION_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const FILE_STATUSES = ["A", "M", "D", "R"] as const;
@@ -19,18 +20,18 @@ export function statusList(value: string): string[] {
 const CODE_VIEWS = ["plain", "change", "diff"] as const;
 
 /** Tag names that hold a child family; the compiler checks the child names. */
-export const CHILD_TAGS: Record<string, readonly string[]> = {
-  fields: ["field"],
-  tests: ["test"],
-  cards: ["card"],
-  patterns: ["pattern"],
-  files: ["filegroup"],
-};
+export const CHILD_TAGS = new Map<string, readonly string[]>([
+  ["fields", ["field"]],
+  ["tests", ["test"]],
+  ["cards", ["card"]],
+  ["patterns", ["pattern"]],
+  ["files", ["filegroup"]],
+]);
 
 function rangeErrors(node: Node): ValidationError[] {
-  const from = node.attributes["from"] as unknown;
-  const to = node.attributes["to"] as unknown;
-  if (typeof from !== "number" || typeof to !== "number") return [];
+  const from = node.attributes["from"];
+  const to = node.attributes["to"];
+  if (!Predicate.isNumber(from) || !Predicate.isNumber(to)) return [];
   if (from < 1) {
     return [
       { id: "code-range-invalid", level: "error", message: `from (${from}) must be 1 or more.` },
@@ -124,8 +125,8 @@ const matrix: Schema = { render: "Matrix" };
 /** The `status` filter, shared by `files` and the `filegroup` children that split it. */
 const statusFilter: SchemaAttribute = {
   type: String,
-  validate(value: unknown): ValidationError[] {
-    if (typeof value !== "string") return [];
+  validate(value: Scalar): ValidationError[] {
+    if (!Predicate.isString(value)) return [];
     const bad = statusList(value).filter(
       (part) => !FILE_STATUSES.some((status) => status === part),
     );
@@ -170,7 +171,7 @@ const cards: Schema = {
     cols: {
       type: Number,
       default: 2,
-      validate(value: unknown): ValidationError[] {
+      validate(value: Scalar | undefined): ValidationError[] {
         return value === undefined || value === 1 || value === 2 || value === 3
           ? []
           : [
@@ -216,7 +217,7 @@ const diagram: Schema = {
   },
 };
 
-export const CORE_TAGS: Record<string, Schema> = {
+export const CORE_TAGS = {
   section,
   group,
   code,

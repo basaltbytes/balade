@@ -3,8 +3,8 @@
  * plus the resolved PR context; git access happens through `ResolveContext`.
  */
 
-import type { Node } from "@markdoc/markdoc";
-import { Option } from "effect";
+import type { Node, Scalar } from "@markdoc/markdoc";
+import { Option, Predicate } from "effect";
 import type {
   Block,
   CardItem,
@@ -53,7 +53,7 @@ export function lineOf(node: Node): number {
 
 function attrString(node: Node, name: string): string | undefined {
   const value = node.attributes[name];
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 export function attrStrings(node: Node, name: string): string[] {
@@ -62,7 +62,7 @@ export function attrStrings(node: Node, name: string): string[] {
 }
 
 /** `mark="12-14,20"` or `mark=[12, 13]` — absolute line numbers to highlight. */
-export function parseMark(value: unknown): number[] {
+export function parseMark(value: Scalar | undefined): number[] {
   const out: number[] = [];
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -71,7 +71,7 @@ export function parseMark(value: unknown): number[] {
     }
     return out;
   }
-  if (typeof value !== "string") return out;
+  if (!Predicate.isString(value)) return out;
   for (const part of value.split(",")) {
     const piece = part.trim();
     if (piece === "") continue;
@@ -91,9 +91,9 @@ export function parseMark(value: unknown): number[] {
 /** A top-level fence becomes a block: ```mermaid draws a diagram, any other language renders as read-only text. */
 function fenceBlockOf(node: Node): Block {
   const language = node.attributes["language"];
-  const lang = typeof language === "string" ? language.trim().toLowerCase() : "";
+  const lang = Predicate.isString(language) ? language.trim().toLowerCase() : "";
   const content = node.attributes["content"];
-  const source = typeof content === "string" ? content.trim() : "";
+  const source = Predicate.isString(content) ? content.trim() : "";
   return lang === "mermaid" ? { b: "mermaid", source } : { b: "fence", lang, source };
 }
 
@@ -159,6 +159,9 @@ function presetActive(node: Node, owner: Preset, env: CompileEnv, fallback: stri
   return false;
 }
 
+type CalloutFacets = { tone?: "key" | "warn" };
+type MethodFacets = { decorator?: string; chips?: readonly string[] };
+
 function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
   const tag = node.tag ?? "";
 
@@ -183,13 +186,9 @@ function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
   switch (tag) {
     case "callout": {
       const tone = attrString(node, "tone");
-      return [
-        {
-          b: "callout",
-          body: bodyInline(node),
-          ...(tone === "key" || tone === "warn" ? { tone } : {}),
-        },
-      ];
+      const facets: CalloutFacets = {};
+      if (tone === "key" || tone === "warn") facets.tone = tone;
+      return [{ b: "callout", body: bodyInline(node), ...facets }];
     }
     case "fields":
       return [{ b: "fields", rows: fieldRows(node, env) }];
@@ -197,14 +196,11 @@ function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
       const decorator = attrString(node, "decorator");
       const declared = attrStrings(node, "chips");
       const chips = declared.length > 0 ? declared : env.preset?.methodChips(decorator);
+      const facets: MethodFacets = {};
+      if (decorator !== undefined) facets.decorator = decorator;
+      if (chips !== undefined && chips.length > 0) facets.chips = chips;
       return [
-        {
-          b: "method",
-          sig: attrString(node, "sig") ?? "",
-          body: bodyInline(node),
-          ...(decorator !== undefined ? { decorator } : {}),
-          ...(chips !== undefined && chips.length > 0 ? { chips } : {}),
-        },
+        { b: "method", sig: attrString(node, "sig") ?? "", body: bodyInline(node), ...facets },
       ];
     }
     case "tests":
@@ -267,7 +263,7 @@ function tagChildren(node: Node): Node[] {
 
 /** Child tags of a family, with a diagnostic for anything unexpected. */
 function childTags(node: Node, family: string, env: CompileEnv): Node[] {
-  const allowed = CHILD_TAGS[family] ?? [];
+  const allowed = CHILD_TAGS.get(family) ?? [];
   const out: Node[] = [];
   for (const child of tagChildren(node)) {
     if (child.type !== "tag") continue;
@@ -289,6 +285,8 @@ function childTags(node: Node, family: string, env: CompileEnv): Node[] {
   return out;
 }
 
+type FieldRowFacets = { badges?: readonly string[]; tags?: readonly string[] };
+
 function fieldRows(node: Node, env: CompileEnv): FieldRow[] {
   const rows: FieldRow[] = [];
   for (const child of childTags(node, "fields", env)) {
@@ -304,48 +302,55 @@ function fieldRows(node: Node, env: CompileEnv): FieldRow[] {
     }
     const badges = attrStrings(child, "badges");
     const tags = attrStrings(child, "tags");
+    const facets: FieldRowFacets = {};
+    if (badges.length > 0) facets.badges = badges;
+    if (tags.length > 0) facets.tags = tags;
     rows.push({
       name: attrString(child, "name") ?? "",
       kind: attrString(child, "kind") ?? "",
       note: bodyInline(child),
-      ...(badges.length > 0 ? { badges } : {}),
-      ...(tags.length > 0 ? { tags } : {}),
+      ...facets,
     });
   }
   return rows;
 }
 
+type TestItemFacets = { ref?: string };
+
 function testItem(node: Node): TestItem {
   const kind = attrString(node, "kind");
   const ref = attrString(node, "ref");
+  const facets: TestItemFacets = {};
+  if (ref !== undefined) facets.ref = ref;
   return {
     name: attrString(node, "name") ?? "",
     kind: kind === "tour" || kind === "http" ? kind : "unit",
     scenario: bodyInline(node),
     asserts: attrStrings(node, "asserts").map((text) => [text]),
-    ...(ref !== undefined ? { ref } : {}),
+    ...facets,
   };
 }
+
+type CardItemFacets = { icon?: string; title?: string };
 
 function cardItem(node: Node): CardItem {
+  const facets: CardItemFacets = {};
   const icon = attrString(node, "icon");
+  if (icon !== undefined) facets.icon = icon;
   const title = attrString(node, "title");
-  return {
-    body: paragraphsOf(node),
-    ...(icon !== undefined ? { icon } : {}),
-    ...(title !== undefined ? { title } : {}),
-  };
+  if (title !== undefined) facets.title = title;
+  return { body: paragraphsOf(node), ...facets };
 }
 
+type PatternItemFacets = { icon?: string; ref?: string };
+
 function patternItem(node: Node): PatternItem {
+  const facets: PatternItemFacets = {};
   const icon = attrString(node, "icon");
+  if (icon !== undefined) facets.icon = icon;
   const ref = attrString(node, "ref");
-  return {
-    term: attrString(node, "term") ?? "",
-    body: bodyInline(node),
-    ...(icon !== undefined ? { icon } : {}),
-    ...(ref !== undefined ? { ref } : {}),
-  };
+  if (ref !== undefined) facets.ref = ref;
+  return { term: attrString(node, "term") ?? "", body: bodyInline(node), ...facets };
 }
 
 function innerTable(node: Node): Node | undefined {
@@ -389,24 +394,17 @@ function tableData(node: Node): TableData {
   return { head, rows };
 }
 
+type TableFacets = { firstColMono?: boolean };
+
 function tableBlock(node: Node): Block {
   const { head, rows } = tableData(node);
   const firstColMono = rows.every((row) => {
     const cell = row[0];
-    return (
-      cell !== undefined &&
-      cell.length === 1 &&
-      typeof cell[0] === "object" &&
-      cell[0] !== null &&
-      "c" in cell[0]
-    );
+    return cell !== undefined && cell.length === 1 && Predicate.isObject(cell[0]) && "c" in cell[0];
   });
-  return {
-    b: "table",
-    head,
-    rows,
-    ...(rows.length > 0 && firstColMono ? { firstColMono: true } : {}),
-  };
+  const facets: TableFacets = {};
+  if (rows.length > 0 && firstColMono) facets.firstColMono = true;
+  return { b: "table", head, rows, ...facets };
 }
 
 const TRUE_CELLS = ["✓", "✔", "x", "X", "yes", "true", "✅"];
@@ -454,10 +452,12 @@ function fileFilter(node: Node): FileFilter {
   };
 }
 
+type FilesFacets = { groups?: readonly FileGroup[] };
+
 function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
   const filter = fileFilter(node);
   const why = node.attributes["why"];
-  const whyMap = typeof why === "object" && why !== null && !Array.isArray(why) ? why : {};
+  const whyMap = Predicate.isObject(why) ? why : {};
 
   const children = childTags(node, "files", env);
   const groups: FileGroup[] = [];
@@ -521,8 +521,12 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
       hint: `Check the filter: ${filter.text}. Statuses are ${FILE_STATUSES.join(", ")}.`,
     });
   }
-  return { b: "files", paths, ...(children.length > 0 ? { groups } : {}) };
+  const facets: FilesFacets = {};
+  if (children.length > 0) facets.groups = groups;
+  return { b: "files", paths, ...facets };
 }
+
+type I18nRowFacets = { lang?: string };
 
 function i18nBlock(env: CompileEnv, sectionId: string): Block {
   const rows: I18nRow[] = [];
@@ -530,17 +534,25 @@ function i18nBlock(env: CompileEnv, sectionId: string): Block {
     if (!isGettext(entry.path)) continue;
     env.fileRef(entry.path, sectionId);
     const lang = poLanguage(entry.path);
+    const facets: I18nRowFacets = {};
+    if (lang !== null) facets.lang = lang;
     rows.push({
       path: entry.path,
       status: entry.status,
       additions: entry.additions,
       deletions: entry.deletions,
       entries: countEntries(entry.diff?.oldContent ?? null, entry.diff?.newContent ?? null),
-      ...(lang !== null ? { lang } : {}),
+      ...facets,
     });
   }
   return { b: "i18n", rows };
 }
+
+type CodeFacets = {
+  collapsed?: boolean;
+  mark?: readonly number[];
+  expect?: NonNullable<CodeBlock["expect"]>;
+};
 
 function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
   const file = attrString(node, "file") ?? "";
@@ -650,6 +662,13 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     });
   }
 
+  /* Two facet spreads keep the serialized key order of the old literal, so a
+     rebuilt export stays byte-stable. */
+  const collapsedFacet: CodeFacets = {};
+  if (collapsed) collapsedFacet.collapsed = collapsed;
+  const evidenceFacets: CodeFacets = {};
+  if (mark.length > 0) evidenceFacets.mark = mark;
+  if (expect !== undefined) evidenceFacets.expect = expect;
   const block: CodeBlock = {
     b: "code",
     file,
@@ -657,11 +676,10 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     to,
     lang: env.fileEntry(file)?.lang ?? langOf(file),
     view: view === "plain" || view === "diff" ? view : "change",
-    ...(collapsed ? { collapsed } : {}),
+    ...collapsedFacet,
     lines: [...lines],
     changed,
-    ...(mark.length > 0 ? { mark } : {}),
-    ...(expect !== undefined ? { expect } : {}),
+    ...evidenceFacets,
   };
   return [block];
 }

@@ -7,17 +7,17 @@ import { Octicon } from "./octicon";
 import { useReview } from "./review-context";
 import { useStrings } from "./strings";
 
-const STATE_TONE: Record<Payload["pr"]["state"], string> = {
+const STATE_TONE = {
   open: "bg-open text-primary-foreground border-open",
   merged: "bg-done/20 text-done border-done/40",
   closed: "bg-destructive/15 text-destructive border-destructive/40",
-};
+} satisfies Record<Payload["pr"]["state"], string>;
 
-const STATE_ICON: Record<Payload["pr"]["state"], string> = {
+const STATE_ICON = {
   open: "git-pull-request",
   merged: "git-merge",
   closed: "x",
-};
+} satisfies Record<Payload["pr"]["state"], string>;
 
 export function Header({ payload }: { payload: Payload }) {
   const strings = useStrings();

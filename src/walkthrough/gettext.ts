@@ -4,6 +4,7 @@
  * would otherwise inflate every number.
  */
 
+import { Predicate } from "effect";
 import { fileName } from "../contract/paths.js";
 
 export interface EntryCounts {
@@ -64,7 +65,7 @@ function unquote(value: string): string {
   if (!trimmed.startsWith('"')) return trimmed;
   try {
     const decoded: unknown = JSON.parse(trimmed);
-    if (typeof decoded === "string") return decoded;
+    if (Predicate.isString(decoded)) return decoded;
   } catch {
     /* Preserve the parser's permissive fallback for malformed catalog lines. */
   }

@@ -5,9 +5,14 @@
 
 import { Effect, FileSystem, Match, Path, Schema } from "effect";
 import type { Lang, CheckDiagnostic, Payload, RangeEcho } from "../contract/types.js";
-import { ContextResolver, type CommandFailed, type ResolveError } from "../contract/context.js";
+import {
+  ContextResolver,
+  type CommandFailed,
+  type ResolveError,
+  type ResolveOptions,
+} from "../contract/context.js";
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
-import { compileDocument, referencedFiles } from "./compiler.js";
+import { compileDocument, referencedFiles, type CompileInput } from "./compiler.js";
 import { parseDocument, type ValidDocument } from "./document.js";
 
 export interface LoadOptions {
@@ -69,26 +74,24 @@ export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: 
   /* Ref mode: the walkthrough's directory may not exist on disk, so git runs
      from `cwd` — the repository root the server resolved. */
   const resolver = yield* ContextResolver;
-  const resolved = yield* resolver.resolve({
+  const request: ResolveOptions = {
     cwd: options.source === undefined ? path.dirname(absolute) : options.cwd,
     pr: frontmatter.pr,
     commit: frontmatter.commit,
     file: givenPath,
     references: referencedFiles(valid),
-    ...(options.at !== undefined ? { at: options.at } : {}),
-    ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-  });
+  };
+  if (options.at !== undefined) request.at = options.at;
+  if (options.useGh !== undefined) request.useGh = options.useGh;
+  const resolved = yield* resolver.resolve(request);
   const diagnostics = [...doc.diagnostics, ...resolved.diagnostics];
   const sourcePath =
     options.source === undefined
       ? (yield* repoRelative(resolved.ctx.repoRoot, absolute)) || givenPath
       : givenPath;
-  const compiled = compileDocument({
-    doc: valid,
-    ctx: resolved.ctx,
-    sourcePath,
-    ...(options.lang !== undefined ? { lang: options.lang } : {}),
-  });
+  const compileInput: CompileInput = { doc: valid, ctx: resolved.ctx, sourcePath };
+  if (options.lang !== undefined) compileInput.lang = options.lang;
+  const compiled = compileDocument(compileInput);
 
   return {
     sourcePath,

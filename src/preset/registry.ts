@@ -20,10 +20,13 @@ export function presetOfTag(tag: string): Preset | undefined {
 }
 
 /** Every preset tag known to this build, so the schema validates them all. */
-export function allPresetSchemas(): Record<string, PresetTag["schema"]> {
-  const out: Record<string, PresetTag["schema"]> = {};
-  for (const preset of PRESETS) {
-    for (const [name, tag] of Object.entries(preset.tags)) out[name] = tag.schema;
-  }
-  return out;
+export function allPresetSchemas() {
+  return Object.fromEntries(
+    PRESETS.flatMap((preset) =>
+      Object.entries(preset.tags).map(([name, tag]): [string, PresetTag["schema"]] => [
+        name,
+        tag.schema,
+      ]),
+    ),
+  );
 }

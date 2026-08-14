@@ -24,7 +24,7 @@ import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
 import { ReviewStateStore } from "../state.js";
 import { createApi, type Api } from "./api.js";
 import { PayloadCache } from "./cache.js";
-import { ServerRepo, type ServerRepoError } from "./repo.js";
+import { ServerRepo, type RepoOptions, type ServerRepoError } from "./repo.js";
 
 /**
  * Where the served set comes from: the command line, discovery, the working
@@ -152,12 +152,11 @@ export const prepareSession = Effect.fn("prepareSession")(function* (options: Se
   const { root, paths } = selected.selection;
   const at = selected.selection.kind === "pullHead" ? selected.selection.at : undefined;
 
-  const repoLayer = ServerRepo.layer({
-    root,
-    ...(at === undefined ? {} : { at }),
-    ...(options.lang !== undefined ? { lang: options.lang } : {}),
-    ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-  });
+  const repoOptions: RepoOptions = { root };
+  if (at !== undefined) repoOptions.at = at;
+  if (options.lang !== undefined) repoOptions.lang = options.lang;
+  if (options.useGh !== undefined) repoOptions.useGh = options.useGh;
+  const repoLayer = ServerRepo.layer(repoOptions);
   const payloadLayer = PayloadCache.layer.pipe(Layer.provideMerge(repoLayer));
   /* Exclusion is advisory: a failed resolution degrades to the plain-clone
      layout, whose failed exclude write the store already logs as a warning

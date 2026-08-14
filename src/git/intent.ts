@@ -127,6 +127,7 @@ const readLinkedIssueClaim = Effect.fn("readLinkedIssueClaim")((
         }),
       onSuccess: (stdout) =>
         Effect.try({
+          /* SAFETY: JSON.parse returns `any`; the assertion only forgets it down to `unknown`. */
           try: () => JSON.parse(stdout) as unknown,
           catch: () => linkedIssueNotice(reference.url, "its answer was not JSON"),
         }).pipe(

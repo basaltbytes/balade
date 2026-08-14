@@ -8,9 +8,9 @@
 
 import { Context, Effect, Layer, Option } from "effect";
 import type { LoadError, LoadResult } from "../walkthrough/pipeline.js";
-import { ServerRepo, type ServerRepoError, type ServerRepoShape } from "./repo.js";
+import { ServerRepo, type ServerRepoError, type ServerRepoPort } from "./repo.js";
 
-export interface PayloadCacheShape {
+export interface PayloadCachePort {
   readonly get: (sourcePath: string) => Effect.Effect<LoadResult, PayloadCacheError>;
   /** Drops what the watcher saw change, so the next request compiles again. */
   readonly invalidate: (sourcePath: string) => Effect.Effect<void>;
@@ -18,7 +18,7 @@ export interface PayloadCacheShape {
 
 export type PayloadCacheError = LoadError | ServerRepoError;
 
-export class PayloadCache extends Context.Service<PayloadCache, PayloadCacheShape>()(
+export class PayloadCache extends Context.Service<PayloadCache, PayloadCachePort>()(
   "@balade/PayloadCache",
 ) {
   static readonly layer = Layer.effect(
@@ -29,7 +29,7 @@ export class PayloadCache extends Context.Service<PayloadCache, PayloadCacheShap
   );
 }
 
-function makePayloadCache(source: ServerRepoShape): PayloadCacheShape {
+function makePayloadCache(source: ServerRepoPort): PayloadCachePort {
   const slots = new Map<string, { key: string; result: LoadResult }>();
 
   const keyOf = Effect.fn("payloadCache.keyOf")(function* (sourcePath: string) {

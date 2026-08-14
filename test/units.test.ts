@@ -1,10 +1,12 @@
+import Markdoc from "@markdoc/markdoc";
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import { getPreset } from "../src/preset/registry.js";
 import { compileBlocks, parseMark, type CompileEnv } from "../src/walkthrough/blocks.js";
 import { diagramNodes, MAX_DIAGRAM_GRID_SIZE } from "../src/contract/diagram.js";
 import { inlineOf, mdNodesOf, plainText } from "../src/walkthrough/inline.js";
 import { parseDocument } from "../src/walkthrough/document.js";
-import type { Block, CheckDiagnostic } from "../src/contract/types.js";
+import type { CheckDiagnostic } from "../src/contract/types.js";
 import type { ResolveContext } from "../src/contract/context.js";
 import { matchesGlob } from "../src/walkthrough/glob.js";
 import { sha256 } from "../src/contract/hash.js";
@@ -33,6 +35,11 @@ describe("small pure helpers", () => {
     expect(langOf("security/ir.model.access.csv")).toBe("csv");
     expect(langOf("Makefile")).toBe("makefile");
     expect(langOf("LICENSE")).toBe("text");
+    /* Paths named after Object.prototype members must fall to text, never to
+       an inherited table member. */
+    expect(langOf("constructor")).toBe("text");
+    expect(langOf("x.constructor")).toBe("text");
+    expect(langOf("__proto__")).toBe("text");
   });
 
   it("hashes with a stable prefix", () => {
@@ -83,10 +90,7 @@ describe("blocks without a repository", () => {
     blob: () => Option.none(),
   };
 
-  function compile(
-    body: string,
-    ctx: ResolveContext = stubContext,
-  ): { blocks: Block[]; diagnostics: CheckDiagnostic[] } {
+  function compile(body: string, ctx: ResolveContext = stubContext) {
     const doc = parseDocument(
       `---\nwalkthrough: 1\ntitle: T\npr: 1\ncommit: abc1234\n---\n\n${body}\n`,
       "w.md",
@@ -108,6 +112,26 @@ describe("blocks without a repository", () => {
     };
     return { blocks: compileBlocks(section.children, env, "s"), diagnostics };
   }
+
+  it("keeps only map rows in an o-security matrix", () => {
+    const source =
+      '{% o-security model="m" rows=[[true, false], {label: "base.group_user", cells: [true, false, false, false]}] /%}';
+    const node = Markdoc.parse(source).children[0];
+    if (node === undefined) throw new Error("no tag parsed");
+    const tag = getPreset("odoo")?.tags["o-security"];
+    if (tag?.slot !== "block") throw new Error("o-security is not a block macro");
+    const [block] = tag.expand(node, {
+      ctx: stubContext,
+      inline: () => [],
+      paragraphs: () => [],
+      report: () => {},
+    });
+    expect(block).toEqual({
+      b: "matrix",
+      head: ["ACL · group", "read", "write", "create", "unlink"],
+      rows: [{ label: "base.group_user", cells: [true, false, false, false] }],
+    });
+  });
 
   it("reads Markdoc's own table syntax as well as pipe tables", () => {
     const { blocks } = compile(

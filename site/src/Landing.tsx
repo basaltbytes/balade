@@ -86,6 +86,7 @@ const makeBadge = (rng: () => number, id: number, cell: number): Badge | null =>
     id,
     cell,
     ...spot,
+    /* SAFETY: `rng()` is in [0, 1), so the floor of `rng() * 3` is 0, 1 or 2. */
     tier: Math.floor(rng() * 3) as 0 | 1 | 2,
     additions,
     deletions,

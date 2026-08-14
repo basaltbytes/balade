@@ -354,6 +354,7 @@ commit: ${repo.pin}
     expect(text).toContain("expect-mismatch");
     expect(text).toContain("expected  class PlanningPoolItem");
     expect(text).toContain("code ranges (2)");
+    /* SAFETY: `formatJson` serialized this exact report envelope one line above. */
     const parsed = JSON.parse(formatJson(outcome)) as { ok: boolean; reports: CheckReport[] };
     expect(parsed).not.toHaveProperty("_tag");
     expect(parsed.ok).toBe(false);

@@ -47,15 +47,17 @@ function layerOf(module: string): string {
 const ROOT_UTILS = ["shell.ts", "state.ts", "terminal.ts", "failure.ts"];
 
 /** Which layers each layer may import from. Orchestrators may import anything but commands/. */
-const CONCEPT_EDGES: Record<string, readonly string[]> = {
-  contract: ["contract"],
-  preset: ["preset", "contract"],
-  authoring: ["authoring"],
-  git: ["git", "contract", ...ROOT_UTILS],
-  walkthrough: ["walkthrough", "preset", "contract", ...ROOT_UTILS],
-  pi: ["pi", "authoring", "git", "contract", ...ROOT_UTILS],
-  ...Object.fromEntries(ROOT_UTILS.map((util) => [util, [util, "contract"]])),
-};
+const CONCEPT_EDGES = new Map<string, readonly string[]>(
+  Object.entries({
+    contract: ["contract"],
+    preset: ["preset", "contract"],
+    authoring: ["authoring"],
+    git: ["git", "contract", ...ROOT_UTILS],
+    walkthrough: ["walkthrough", "preset", "contract", ...ROOT_UTILS],
+    pi: ["pi", "authoring", "git", "contract", ...ROOT_UTILS],
+    ...Object.fromEntries(ROOT_UTILS.map((util) => [util, [util, "contract"]])),
+  }),
+);
 
 describe("the src/ dependency law", () => {
   const files = sourceFiles();
@@ -75,7 +77,7 @@ describe("the src/ dependency law", () => {
 
   it("keeps concepts and root utils on their allowed imports", () => {
     const violations = edges.filter(({ file, target }) => {
-      const allowed = CONCEPT_EDGES[layerOf(file)];
+      const allowed = CONCEPT_EDGES.get(layerOf(file));
       if (allowed === undefined) return false; // cli.ts, commands/, server/ compose freely
       return !allowed.includes(layerOf(target));
     });

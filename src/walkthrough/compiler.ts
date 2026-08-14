@@ -8,7 +8,7 @@
  */
 
 import type { Node } from "@markdoc/markdoc";
-import { Option } from "effect";
+import { Option, Predicate } from "effect";
 import type {
   Lang,
   Block,
@@ -28,6 +28,15 @@ import { frontmatterLine } from "./frontmatter.js";
 import { SECTION_ID } from "./tags.js";
 import { attrStrings, compileBlocks, lineOf, short, type CompileEnv } from "./blocks.js";
 import type { ValidDocument } from "./document.js";
+
+type SectionFacets = {
+  icon?: string;
+  badge?: NonNullable<Section["badge"]>;
+  file?: string;
+  related?: readonly string[];
+};
+type NavFacets = { icon?: string };
+type PayloadFacets = { preset?: string };
 
 export interface CompileInput {
   doc: ValidDocument;
@@ -51,7 +60,7 @@ export function referencedFiles(doc: ValidDocument): string[] {
     for (const node of nodes) {
       if (node.type === "tag" && (node.tag === "section" || node.tag === "code")) {
         const path = node.attributes["file"];
-        if (typeof path === "string" && path !== "") paths.add(path);
+        if (Predicate.isString(path) && path !== "") paths.add(path);
       }
       walk(node.children);
     }
@@ -171,23 +180,27 @@ export function compileDocument(input: CompileInput): CompileResult {
 
     if (duplicate) return null;
 
+    const facets: SectionFacets = {};
+    if (icon !== undefined) facets.icon = icon;
+    if (badge !== undefined) {
+      facets.badge = { label: badge, tone: toneOf(badgeTone, status, filePath !== undefined) };
+    }
+    if (filePath !== undefined) facets.file = filePath;
+    if (related.length > 0) facets.related = related;
     sections.push({
       id,
       title,
       hash: sha256(sourceLines.slice(start, end + 1).join("\n")),
       blocks,
-      ...(icon !== undefined ? { icon } : {}),
-      ...(badge !== undefined
-        ? { badge: { label: badge, tone: toneOf(badgeTone, status, filePath !== undefined) } }
-        : {}),
-      ...(filePath !== undefined ? { file: filePath } : {}),
-      ...(related.length > 0 ? { related } : {}),
+      ...facets,
     });
 
     const label =
       optionalString(node, "nav") ?? (filePath !== undefined ? fileName(filePath) : title);
     if (filePath !== undefined) return { kind: "file", label, ref: id, status };
-    return { kind: "section", label, ref: id, ...(icon !== undefined ? { icon } : {}) };
+    const navFacets: NavFacets = {};
+    if (icon !== undefined) navFacets.icon = icon;
+    return { kind: "section", label, ref: id, ...navFacets };
   };
 
   const walk = (nodes: readonly Node[]): NavNode[] => {
@@ -291,6 +304,8 @@ export function compileDocument(input: CompileInput): CompileResult {
   }
 
   const lang = input.lang ?? langOfMeta(frontmatter.meta["lang"]);
+  const payloadFacets: PayloadFacets = {};
+  if (doc.preset !== undefined) payloadFacets.preset = doc.preset.name;
   const payload: Payload = {
     walkthrough: 1,
     title: frontmatter.title,
@@ -305,7 +320,7 @@ export function compileDocument(input: CompileInput): CompileResult {
     errors,
     sourcePath,
     storageKey: `balade:${ctx.repoSlug}#${frontmatter.pr}:${sourcePath}`,
-    ...(doc.preset !== undefined ? { preset: doc.preset.name } : {}),
+    ...payloadFacets,
   };
 
   return { payload, diagnostics, ranges };
@@ -313,7 +328,7 @@ export function compileDocument(input: CompileInput): CompileResult {
 
 function optionalString(node: Node, name: string): string | undefined {
   const value = node.attributes[name];
-  return typeof value === "string" && value !== "" ? value : undefined;
+  return Predicate.isString(value) && value !== "" ? value : undefined;
 }
 
 function toneOf(

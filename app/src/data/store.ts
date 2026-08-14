@@ -29,12 +29,12 @@ interface HttpReviewStoreClient {
   ) => Effect.Effect<SaveOutcome>;
 }
 
-export interface ReviewStoreShape {
+export interface ReviewStorePort {
   readonly load: (target: ReviewStoreTarget) => Effect.Effect<Option.Option<ReviewState>>;
   readonly save: (target: ReviewStoreTarget, state: ReviewState) => Effect.Effect<SaveOutcome>;
 }
 
-export class ReviewStore extends Context.Service<ReviewStore, ReviewStoreShape>()(
+export class ReviewStore extends Context.Service<ReviewStore, ReviewStorePort>()(
   "@balade/app/ReviewStore",
 ) {}
 

@@ -134,7 +134,11 @@ export function Code({ block }: { block: CodeBlock }) {
              their text; the payload never carries HTML (contract rule). */
           <div
             className={view === "change" ? "view-change" : "view-plain"}
-            style={{ "--ln-start": block.from - 1 } as React.CSSProperties}
+            style={
+              /* SAFETY: React.CSSProperties declares no custom-property keys;
+                 the cast admits the `--ln-start` counter variable only. */
+              { "--ln-start": block.from - 1 } as React.CSSProperties
+            }
             dangerouslySetInnerHTML={{ __html: html }}
           />
         )}

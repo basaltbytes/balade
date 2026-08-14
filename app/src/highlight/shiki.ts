@@ -29,64 +29,68 @@ export function hasOverlongHighlightLine(code: string): boolean {
 
 type LangLoader = () => Promise<{ default: LanguageRegistration[] }>;
 
-const LANGS: Record<string, LangLoader> = {
-  c: () => import("@shikijs/langs/c"),
-  cpp: () => import("@shikijs/langs/cpp"),
-  csharp: () => import("@shikijs/langs/csharp"),
-  css: () => import("@shikijs/langs/css"),
-  csv: () => import("@shikijs/langs/csv"),
-  diff: () => import("@shikijs/langs/diff"),
-  docker: () => import("@shikijs/langs/docker"),
-  go: () => import("@shikijs/langs/go"),
-  html: () => import("@shikijs/langs/html"),
-  ini: () => import("@shikijs/langs/ini"),
-  java: () => import("@shikijs/langs/java"),
-  javascript: () => import("@shikijs/langs/javascript"),
-  json: () => import("@shikijs/langs/json"),
-  jsx: () => import("@shikijs/langs/jsx"),
-  kotlin: () => import("@shikijs/langs/kotlin"),
-  make: () => import("@shikijs/langs/make"),
-  markdown: () => import("@shikijs/langs/markdown"),
-  php: () => import("@shikijs/langs/php"),
-  po: () => import("@shikijs/langs/po"),
-  python: () => import("@shikijs/langs/python"),
-  ruby: () => import("@shikijs/langs/ruby"),
-  rust: () => import("@shikijs/langs/rust"),
-  scss: () => import("@shikijs/langs/scss"),
-  shellscript: () => import("@shikijs/langs/shellscript"),
-  sql: () => import("@shikijs/langs/sql"),
-  swift: () => import("@shikijs/langs/swift"),
-  toml: () => import("@shikijs/langs/toml"),
-  tsx: () => import("@shikijs/langs/tsx"),
-  typescript: () => import("@shikijs/langs/typescript"),
-  xml: () => import("@shikijs/langs/xml"),
-  yaml: () => import("@shikijs/langs/yaml"),
-};
+const LANGS = new Map<string, LangLoader>(
+  Object.entries({
+    c: () => import("@shikijs/langs/c"),
+    cpp: () => import("@shikijs/langs/cpp"),
+    csharp: () => import("@shikijs/langs/csharp"),
+    css: () => import("@shikijs/langs/css"),
+    csv: () => import("@shikijs/langs/csv"),
+    diff: () => import("@shikijs/langs/diff"),
+    docker: () => import("@shikijs/langs/docker"),
+    go: () => import("@shikijs/langs/go"),
+    html: () => import("@shikijs/langs/html"),
+    ini: () => import("@shikijs/langs/ini"),
+    java: () => import("@shikijs/langs/java"),
+    javascript: () => import("@shikijs/langs/javascript"),
+    json: () => import("@shikijs/langs/json"),
+    jsx: () => import("@shikijs/langs/jsx"),
+    kotlin: () => import("@shikijs/langs/kotlin"),
+    make: () => import("@shikijs/langs/make"),
+    markdown: () => import("@shikijs/langs/markdown"),
+    php: () => import("@shikijs/langs/php"),
+    po: () => import("@shikijs/langs/po"),
+    python: () => import("@shikijs/langs/python"),
+    ruby: () => import("@shikijs/langs/ruby"),
+    rust: () => import("@shikijs/langs/rust"),
+    scss: () => import("@shikijs/langs/scss"),
+    shellscript: () => import("@shikijs/langs/shellscript"),
+    sql: () => import("@shikijs/langs/sql"),
+    swift: () => import("@shikijs/langs/swift"),
+    toml: () => import("@shikijs/langs/toml"),
+    tsx: () => import("@shikijs/langs/tsx"),
+    typescript: () => import("@shikijs/langs/typescript"),
+    xml: () => import("@shikijs/langs/xml"),
+    yaml: () => import("@shikijs/langs/yaml"),
+  }),
+);
 
-const ALIASES: Record<string, string> = {
-  bash: "shellscript",
-  "c++": "cpp",
-  "c#": "csharp",
-  htm: "html",
-  js: "javascript",
-  kt: "kotlin",
-  md: "markdown",
-  mdoc: "markdown",
-  pot: "po",
-  py: "python",
-  rb: "ruby",
-  rs: "rust",
-  sh: "shellscript",
-  shell: "shellscript",
-  ts: "typescript",
-  yml: "yaml",
-  zsh: "shellscript",
-};
+const ALIASES = new Map(
+  Object.entries({
+    bash: "shellscript",
+    "c++": "cpp",
+    "c#": "csharp",
+    htm: "html",
+    js: "javascript",
+    kt: "kotlin",
+    md: "markdown",
+    mdoc: "markdown",
+    pot: "po",
+    py: "python",
+    rb: "ruby",
+    rs: "rust",
+    sh: "shellscript",
+    shell: "shellscript",
+    ts: "typescript",
+    yml: "yaml",
+    zsh: "shellscript",
+  }),
+);
 
 /** Unknown ids fall back to plain text rather than failing the block. */
 export const resolveLang = (lang: string): string => {
-  const id = ALIASES[lang] ?? lang;
-  return id in LANGS ? id : "text";
+  const id = ALIASES.get(lang) ?? lang;
+  return LANGS.has(id) ? id : "text";
 };
 
 /** Oversized lines stay on Shiki's linear plaintext path in diff views. */
@@ -123,13 +127,13 @@ export type HighlightFailure =
   | HighlightRenderFailed
   | HighlightLanguageCheckFailed;
 
-interface SyntaxHighlighterShape {
+interface SyntaxHighlighterPort {
   readonly ensureLanguages: (
     languages: ReadonlyArray<string>,
   ) => Effect.Effect<HighlighterCore, HighlightLoadFailed>;
 }
 
-export class SyntaxHighlighter extends Context.Service<SyntaxHighlighter, SyntaxHighlighterShape>()(
+export class SyntaxHighlighter extends Context.Service<SyntaxHighlighter, SyntaxHighlighterPort>()(
   "@balade/app/SyntaxHighlighter",
 ) {}
 
@@ -151,7 +155,7 @@ export const syntaxHighlighterLayer = (create: HighlighterFactory) =>
               const loaded = new Set(highlighter.getLoadedLanguages());
               const missing = resolved.filter((id) => id !== "text" && !loaded.has(id));
               const loaders = missing.flatMap((id) => {
-                const loader = LANGS[id];
+                const loader = LANGS.get(id);
                 return loader === undefined ? [] : [loader];
               });
               if (loaders.length > 0) await highlighter.loadLanguage(...loaders);

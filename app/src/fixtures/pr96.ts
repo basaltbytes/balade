@@ -47,6 +47,9 @@ interface Draft {
 
 const strip = (line: string): string => line.slice(1);
 
+type RenameFacet = { oldPath?: string };
+type NoteFacets = { ref?: string; why?: Inline };
+
 function build(draft: Draft): FileEntry {
   const head = draft.head ?? [];
   const tail = draft.tail ?? [];
@@ -83,14 +86,18 @@ function build(draft: Draft): FileEntry {
     newContent: newLines === null ? null : newLines.join("\n"),
   };
 
+  const renameFacet: RenameFacet = {};
+  if (draft.oldPath !== undefined) renameFacet.oldPath = draft.oldPath;
+  const noteFacets: NoteFacets = {};
+  if (draft.ref !== undefined) noteFacets.ref = draft.ref;
+  if (draft.why !== undefined) noteFacets.why = draft.why;
   return {
     path: draft.path,
-    ...(draft.oldPath !== undefined ? { oldPath: draft.oldPath } : {}),
+    ...renameFacet,
     status: draft.status,
     additions,
     deletions,
-    ...(draft.ref !== undefined ? { ref: draft.ref } : {}),
-    ...(draft.why !== undefined ? { why: draft.why } : {}),
+    ...noteFacets,
     hash: draft.hash,
     lang: draft.lang,
     diff,

@@ -266,7 +266,7 @@ export interface AuthoringSession {
   readonly repair: (feedback: string) => Effect.Effect<AuthorTurn, AuthorTurnError>;
 }
 
-export interface WalkthroughAuthorShape {
+export interface WalkthroughAuthorPort {
   readonly availableModels: Effect.Effect<readonly AuthorModel[], AuthorDiscoveryFailed>;
   readonly modelPreference: Effect.Effect<
     Option.Option<AuthorModelPreference>,
@@ -283,6 +283,6 @@ export interface WalkthroughAuthorShape {
   ) => Effect.Effect<AuthoringSession, AuthorStartupError | AuthorTurnError, Scope.Scope>;
 }
 
-export class WalkthroughAuthor extends Context.Service<WalkthroughAuthor, WalkthroughAuthorShape>()(
+export class WalkthroughAuthor extends Context.Service<WalkthroughAuthor, WalkthroughAuthorPort>()(
   "@balade/WalkthroughAuthor",
 ) {}

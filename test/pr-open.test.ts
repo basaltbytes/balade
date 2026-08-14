@@ -225,20 +225,24 @@ describe("a served PR without a checkout", () => {
       expect(session.paths).toEqual(["walkthroughs/valid.md"]);
       expect(session.reports).toHaveLength(1);
 
+      /* SAFETY: one file is served, so the bare endpoint answers the payload side. */
       const payload = (yield* session.api.walkthrough(null)) as Payload;
       expect(payload.walkthrough).toBe(1);
       expect(payload.pr.number).toBe(42);
       expect(payload.sourcePath).toBe("walkthroughs/valid.md");
 
       /* Review state lands in the clone's `.balade/`, keyed by walkthrough path. */
-      const written = yield* session.api.writeState("walkthroughs/valid.md", {
-        version: 1,
-        walkthrough: "walkthroughs/valid.md",
-        pr: 42,
-        stamp: payload.commit,
-        sections: {},
-        files: {},
-      });
+      const written = yield* session.api.writeState(
+        "walkthroughs/valid.md",
+        JSON.stringify({
+          version: 1,
+          walkthrough: "walkthroughs/valid.md",
+          pr: 42,
+          stamp: payload.commit,
+          sections: {},
+          files: {},
+        }),
+      );
       expect(written.walkthrough).toBe("walkthroughs/valid.md");
     }),
   );

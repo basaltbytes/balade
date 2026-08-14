@@ -390,6 +390,7 @@ export const readPullRequest = Effect.fn("readPullRequest")((root: string, numbe
         }),
       onSuccess: (stdout) =>
         Effect.try({
+          /* SAFETY: JSON.parse returns `any`; the assertion only forgets it down to `unknown`. */
           try: () => JSON.parse(stdout) as unknown,
           catch: () => ghNotice("its answer was not JSON"),
         }).pipe(
@@ -569,16 +570,20 @@ const readFileSummaries = Effect.fn("readFileSummaries")(function* (
   const numStat = parseNumStat(yield* gitOut(["diff", "-M", "--numstat", "-z", base, pin], root));
   return nameStatus.map((record): PullFile => {
     const stat = numStat.get(record.path) ?? { additions: 0, deletions: 0, binary: false };
+    const facets: OldPathFacet = {};
+    if (record.oldPath !== undefined) facets.oldPath = record.oldPath;
     return {
       path: record.path,
       status: record.status,
       additions: stat.additions,
       deletions: stat.deletions,
       binary: stat.binary,
-      ...(record.oldPath === undefined ? {} : { oldPath: record.oldPath }),
+      ...facets,
     };
   });
 });
+
+type OldPathFacet = { oldPath?: string };
 
 const hydrateFiles = Effect.fn("hydrateFiles")(function* (snapshot: ResolvedPull) {
   const { root, base, pin } = snapshot;
@@ -606,6 +611,8 @@ const hydrateFiles = Effect.fn("hydrateFiles")(function* (snapshot: ResolvedPull
     const binary = record.binary || diff?.binary === true;
     const oldContent = record.status === "A" ? null : yield* content(base, oldPath ?? record.path);
     const newContent = record.status === "D" ? null : yield* content(pin, record.path);
+    const renameFacet: OldPathFacet = {};
+    if (oldPath !== undefined && record.status === "R") renameFacet.oldPath = oldPath;
     entries.push({
       path: record.path,
       status: record.status,
@@ -620,7 +627,7 @@ const hydrateFiles = Effect.fn("hydrateFiles")(function* (snapshot: ResolvedPull
             oldContent,
             newContent,
           },
-      ...(oldPath !== undefined && record.status === "R" ? { oldPath } : {}),
+      ...renameFacet,
     });
   }
   return entries;

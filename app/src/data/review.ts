@@ -161,7 +161,7 @@ export function nextUnreviewed(
   return null;
 }
 
-const withoutKey = <T>(record: Record<string, T>, key: string): Record<string, T> => {
+const withoutKey = <T>(record: Record<string, T>, key: string) => {
   const next = { ...record };
   delete next[key];
   return next;

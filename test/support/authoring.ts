@@ -2,12 +2,12 @@ import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Predicate } from "effect";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { WalkthroughAuthor } from "../../src/pi/author.js";
+import { WalkthroughAuthor, type AuthorDraft } from "../../src/pi/author.js";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLayer } from "../../src/pi/client.js";
 import { shellLayer } from "./effect.js";
@@ -109,15 +109,18 @@ export function createAuthoringFixtureRepo(fixture: AuthoringEvalCase): Authorin
   };
 }
 
+type SubmitPresetFacet = { preset?: string };
+
+function submittedDraft(draft: AuthorDraft) {
+  const presetFacet: SubmitPresetFacet = {};
+  if (draft.preset !== undefined) presetFacet.preset = draft.preset;
+  return { title: draft.title, meta: draft.meta, body: draft.body, ...presetFacet };
+}
+
 function fauxResponse(step: AuthoringTranscriptStep) {
   if (step._tag === "Submit") {
     return ai.fauxAssistantMessage(
-      ai.fauxToolCall("submit_walkthrough", {
-        title: step.draft.title,
-        meta: step.draft.meta,
-        body: step.draft.body,
-        ...(step.draft.preset === undefined ? {} : { preset: step.draft.preset }),
-      }),
+      ai.fauxToolCall("submit_walkthrough", submittedDraft(step.draft)),
       { stopReason: "toolUse" },
     );
   }
@@ -179,14 +182,14 @@ export const selectAuthorModel = Effect.fn("test.selectAuthorModel")(function* (
     : model;
 });
 
-interface DraftShape {
+interface DraftProfile {
   readonly groups: readonly string[];
   readonly sections: number;
   readonly codeRanges: number;
   readonly codeFiles: ReadonlySet<string>;
 }
 
-function draftShape(body: string): DraftShape {
+function draftProfile(body: string): DraftProfile {
   const groups: string[] = [];
   const codeFiles = new Set<string>();
   let sections = 0;
@@ -195,13 +198,13 @@ function draftShape(body: string): DraftShape {
     for (const node of nodes) {
       if (node.type === "tag" && node.tag === "group") {
         const label = node.attributes["label"];
-        if (typeof label === "string") groups.push(label);
+        if (Predicate.isString(label)) groups.push(label);
       }
       if (node.type === "tag" && node.tag === "section") sections++;
       if (node.type === "tag" && node.tag === "code") {
         codeRanges++;
         const file = node.attributes["file"];
-        if (typeof file === "string") codeFiles.add(file);
+        if (Predicate.isString(file)) codeFiles.add(file);
       }
       visit(node.children);
     }
@@ -215,32 +218,35 @@ export function authoringDecisionFailures(
   expected: AuthoringDecisionExpectation,
   options: { readonly checkPhrases?: boolean } = {},
 ): readonly string[] {
-  const shape = draftShape(body);
+  const profile = draftProfile(body);
   const failures: string[] = [];
   for (const group of expected.groups) {
-    if (!shape.groups.includes(group)) failures.push(`missing group ${group}`);
+    if (!profile.groups.includes(group)) failures.push(`missing group ${group}`);
   }
   for (const group of expected.omittedGroups) {
-    if (shape.groups.includes(group)) failures.push(`unexpected group ${group}`);
+    if (profile.groups.includes(group)) failures.push(`unexpected group ${group}`);
   }
-  if (shape.sections < expected.sections.minimum || shape.sections > expected.sections.maximum) {
+  if (
+    profile.sections < expected.sections.minimum ||
+    profile.sections > expected.sections.maximum
+  ) {
     failures.push(
-      `section count ${shape.sections} is outside ${expected.sections.minimum}-${expected.sections.maximum}`,
+      `section count ${profile.sections} is outside ${expected.sections.minimum}-${expected.sections.maximum}`,
     );
   }
   if (
-    shape.codeRanges < expected.codeRanges.minimum ||
-    shape.codeRanges > expected.codeRanges.maximum
+    profile.codeRanges < expected.codeRanges.minimum ||
+    profile.codeRanges > expected.codeRanges.maximum
   ) {
     failures.push(
-      `code range count ${shape.codeRanges} is outside ${expected.codeRanges.minimum}-${expected.codeRanges.maximum}`,
+      `code range count ${profile.codeRanges} is outside ${expected.codeRanges.minimum}-${expected.codeRanges.maximum}`,
     );
   }
   for (const file of expected.referencedFiles) {
-    if (!shape.codeFiles.has(file)) failures.push(`missing code evidence ${file}`);
+    if (!profile.codeFiles.has(file)) failures.push(`missing code evidence ${file}`);
   }
   for (const file of expected.unreferencedFiles) {
-    if (shape.codeFiles.has(file)) failures.push(`unwanted code evidence ${file}`);
+    if (profile.codeFiles.has(file)) failures.push(`unwanted code evidence ${file}`);
   }
   if (options.checkPhrases !== false) {
     for (const phrase of expected.phrases) {

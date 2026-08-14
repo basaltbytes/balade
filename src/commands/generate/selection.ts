@@ -24,14 +24,13 @@ export function modelSelectionFromFlags(
   if (Option.isNone(provider) && Option.isNone(model)) return { _tag: "UsePreference" };
   const providerId = normalizedFlag(provider);
   const modelId = normalizedFlag(model);
-  return {
-    _tag: "Choose",
-    filter: {
-      ...(providerId === undefined ? {} : { providerId }),
-      ...(modelId === undefined ? {} : { modelId }),
-    },
-  };
+  const filter: ModelFilterDraft = {};
+  if (providerId !== undefined) filter.providerId = providerId;
+  if (modelId !== undefined) filter.modelId = modelId;
+  return { _tag: "Choose", filter };
 }
+
+type ModelFilterDraft = { providerId?: string; modelId?: string };
 
 export function matchingModels(
   models: readonly AuthorModel[],
@@ -44,10 +43,12 @@ export function matchingModels(
   );
 }
 
-export function modelsForPicker(
-  models: readonly AuthorModel[],
-  filter: ModelFilter,
-): { readonly models: readonly AuthorModel[]; readonly usedFallback: boolean } {
+export interface PickerModels {
+  readonly models: readonly AuthorModel[];
+  readonly usedFallback: boolean;
+}
+
+export function modelsForPicker(models: readonly AuthorModel[], filter: ModelFilter): PickerModels {
   const exact = matchingModels(models, filter);
   if (exact.length > 0) return { models: exact, usedFallback: false };
 

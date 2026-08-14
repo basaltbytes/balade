@@ -38,12 +38,12 @@ export const browserCommand = (platform: NodeJS.Platform, url: string): BrowserC
    Linux handlers stay in the foreground) and counts as launched. */
 const EXIT_VERDICT_WINDOW_MILLIS = 2000;
 
-export interface BrowserLauncherShape {
+export interface BrowserLauncherPort {
   readonly launch: (url: string) => Effect.Effect<void, BrowserLaunchFailed>;
 }
 
 /** The one process port for reaching the default browser. */
-export class BrowserLauncher extends Context.Service<BrowserLauncher, BrowserLauncherShape>()(
+export class BrowserLauncher extends Context.Service<BrowserLauncher, BrowserLauncherPort>()(
   "@balade/BrowserLauncher",
 ) {
   /** Tests inject the opener command and shorten the verdict window. */

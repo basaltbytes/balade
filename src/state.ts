@@ -39,13 +39,13 @@ const STATE_DIR = ".balade";
 /** The exclude line, with the trailing slash git wants for a directory. */
 const EXCLUDE_LINE = `${STATE_DIR}/`;
 
-export interface ReviewStateStoreShape {
+export interface ReviewStateStorePort {
   /** The stored state, or `None` when there is none this walkthrough can use. */
   readonly read: (sourcePath: string) => Effect.Effect<Option.Option<ReviewState>, StateReadError>;
   readonly write: (sourcePath: string, state: ReviewState) => Effect.Effect<void, StateWriteFailed>;
 }
 
-export class ReviewStateStore extends Context.Service<ReviewStateStore, ReviewStateStoreShape>()(
+export class ReviewStateStore extends Context.Service<ReviewStateStore, ReviewStateStorePort>()(
   "@balade/ReviewStateStore",
 ) {
   static layer(options: FileStoreOptions) {
@@ -104,7 +104,7 @@ function makeReviewStateStore(
   options: FileStoreOptions,
   fs: FileSystem.FileSystem,
   path: Path.Path,
-): ReviewStateStoreShape {
+): ReviewStateStorePort {
   const dir = path.join(options.repoRoot, STATE_DIR);
   const fileFor = (sourcePath: string): string => path.join(dir, stateFileName(sourcePath));
 

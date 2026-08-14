@@ -5,6 +5,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { parseOpenTarget } from "../../git/pr.js";
 import { locateErrorMessage, PrLocator } from "./locator.js";
 import { runReviewSession } from "../../server/review.js";
+import type { SessionOptions } from "../../server/session.js";
 import { stopMessage } from "../../terminal.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
@@ -43,12 +44,10 @@ export const openCommand = Command.make(
         target.kind === "pr"
           ? yield* PrLocator.use((locator) => locator.locate(process.cwd(), target.pr))
           : target;
+      const session: SessionOptions = { cwd: process.cwd(), selection };
+      if (Option.isSome(config.lang)) session.lang = config.lang.value;
       return yield* runReviewSession({
-        session: {
-          cwd: process.cwd(),
-          selection,
-          ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-        },
+        session,
         port: config.port,
         browserMode: config.noBrowser ? "headless" : "launch",
       });

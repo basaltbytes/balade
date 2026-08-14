@@ -248,6 +248,6 @@ const fr: Strings = {
   devToggleStale: "dev : bannière « obsolète »",
 };
 
-export const dictionaries: Record<Lang, Strings> = { en, fr };
+export const dictionaries = { en, fr } satisfies Record<Lang, Strings>;
 
 export const stringsFor = (lang: Lang): Strings => dictionaries[lang];

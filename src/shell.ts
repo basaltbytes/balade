@@ -20,7 +20,7 @@ const ENV = {
   LC_ALL: "C",
 };
 
-export interface CommandExecutorShape {
+export interface CommandExecutorPort {
   readonly exec: (
     file: string,
     args: readonly string[],
@@ -29,7 +29,7 @@ export interface CommandExecutorShape {
 }
 
 /** The one process port used by resolution. Swapping this layer changes how commands run. */
-export class CommandExecutor extends Context.Service<CommandExecutor, CommandExecutorShape>()(
+export class CommandExecutor extends Context.Service<CommandExecutor, CommandExecutorPort>()(
   "@balade/CommandExecutor",
 ) {
   static readonly layer = Layer.sync(CommandExecutor, () => {

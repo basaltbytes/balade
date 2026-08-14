@@ -192,7 +192,8 @@ describe("the served API", () => {
         throw new Error(`open refused to start: ${french._tag}`);
       }
       const answer = yield* french.session.api.walkthrough(null);
-      /* The fixture frontmatter says `lang: en`; the flag wins. */
+      /* The fixture frontmatter says `lang: en`; the flag wins.
+         SAFETY: one file is served, so the answer is the payload side. */
       expect((answer as Payload).lang).toBe("fr");
     }),
   );
@@ -225,7 +226,9 @@ describe("the served API", () => {
 
   it.effect("keeps review-state validation details in the typed error cause", () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(session.api.writeState(path, { version: 2 }));
+      const error = yield* Effect.flip(
+        session.api.writeState(path, JSON.stringify({ version: 2 })),
+      );
       expect(error).toMatchObject({
         _tag: "ApiReviewStateInvalid",
         cause: { _tag: "ReviewStateInvalid" },
@@ -338,6 +341,7 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
   /* One walkthrough served: the bare endpoint is that walkthrough. */
   const answer = await send("/api/walkthrough");
   expect(answer.status).toBe(200);
+  /* SAFETY: one file is served, so the endpoint answered the payload side. */
   const payload = (await answer.json()) as Payload;
   expect(payload.walkthrough).toBe(1);
   expect(payload.sourcePath).toBe(path);
@@ -391,8 +395,18 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
     expect(refused.status).toBe(400);
   }
 
+  /* Authority precedes the body: an unserved path answers 404 even when the
+     body is not JSON. */
+  const unservedPut = await send("/api/state?path=walkthroughs/nope.md", {
+    method: "PUT",
+    headers: json,
+    body: "{ not json",
+  });
+  expect(unservedPut.status).toBe(404);
+
   const staleness = await send(`/api/staleness${query}`);
   expect(staleness.status).toBe(200);
+  /* SAFETY: the assertion names the envelope the matcher below verifies. */
   expect((await staleness.json()) as { headDistance: unknown }).toEqual({
     headDistance: expect.any(Number),
   });
@@ -483,6 +497,7 @@ describe("the index", () => {
 
   it.effect("answers the index on the bare endpoint when several are served", () =>
     Effect.gen(function* () {
+      /* SAFETY: several files are served, so the bare endpoint answers the index. */
       const index = (yield* session.api.walkthrough(null)) as IndexPayload;
       expect(index.kind).toBe("index");
       expect(index.entries.map((entry) => entry.path)).toEqual([
@@ -502,16 +517,20 @@ describe("the index", () => {
   it.effect("counts progress from the state file it finds", () =>
     Effect.gen(function* () {
       const path = "walkthroughs/valid.md";
-      const written = yield* session.api.writeState(path, {
-        version: 1,
-        walkthrough: path,
-        pr: 42,
-        stamp: "0000000",
-        sections: { overview: { hash: "sha256:aa", at: "2026-08-01T10:12:00.000Z" } },
-        files: {},
-      });
+      const written = yield* session.api.writeState(
+        path,
+        JSON.stringify({
+          version: 1,
+          walkthrough: path,
+          pr: 42,
+          stamp: "0000000",
+          sections: { overview: { hash: "sha256:aa", at: "2026-08-01T10:12:00.000Z" } },
+          files: {},
+        }),
+      );
       expect(written.walkthrough).toBe(path);
 
+      /* SAFETY: several files are served, so the bare endpoint answers the index. */
       const answer = (yield* session.api.walkthrough(null)) as IndexPayload;
       const entry = answer.entries.find((row) => row.path === path);
       expect(entry?.progress).toEqual({ done: 1, total: 8 });

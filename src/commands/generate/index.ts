@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { Context, Effect, Option, Schema, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
+import type { Lang } from "../../contract/types.js";
 import { parsePrTarget } from "../../git/pr.js";
 import { getPreset, presetNames } from "../../preset/registry.js";
 import { resolvePullHead } from "../../git/pr.js";
@@ -25,6 +26,7 @@ import {
   LoginCancelled,
   LoginFailed,
   WalkthroughAuthor,
+  type AuthoringPreset,
   type AuthorLoginMethod,
   type AuthorModel,
   type AuthorProgress,
@@ -46,6 +48,9 @@ import {
   type ModelFilter,
   type ModelSelection,
 } from "./selection.js";
+
+type GenerationFacets = { preset?: AuthoringPreset; lang?: Lang; guidance?: string };
+type ChoiceDescriptionFacet = { description?: string };
 
 const target = Argument.string("pr").pipe(
   Argument.withDescription("Bare pull request number, URL, or quoted '#number'"),
@@ -177,14 +182,16 @@ export const generateCommand = Command.make(
       const selected = yield* selectAuthorModel(selection);
       const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
       const progress = makeGenerationProgress(writeStdout, progressMode, stdoutTheme);
+      const generationFacets: GenerationFacets = {};
+      if (chosen !== undefined) {
+        generationFacets.preset = { name: chosen.name, authoring: chosen.authoring };
+      }
+      if (Option.isSome(config.lang)) generationFacets.lang = config.lang.value;
+      if (Option.isSome(config.guidance)) generationFacets.guidance = config.guidance.value;
       const result = yield* runGeneration({
         source,
         model: selected,
-        ...(chosen === undefined
-          ? {}
-          : { preset: { name: chosen.name, authoring: chosen.authoring } }),
-        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-        ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
+        ...generationFacets,
         budget: config.budget,
         directory: config.directory,
         collisionPolicy: config.force ? "replace" : "exclusive",
@@ -366,11 +373,11 @@ function loginPrompt(prompt: LoginPrompt) {
     return Prompt.run(
       Prompt.select({
         message: prompt.message,
-        choices: prompt.options.map((option) => ({
-          title: option.label,
-          value: option.id,
-          ...(option.description === undefined ? {} : { description: option.description }),
-        })),
+        choices: prompt.options.map((option) => {
+          const facets: ChoiceDescriptionFacet = {};
+          if (option.description !== undefined) facets.description = option.description;
+          return { title: option.label, value: option.id, ...facets };
+        }),
       }),
     );
   }

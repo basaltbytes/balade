@@ -106,7 +106,7 @@ const fetchPayload = Effect.fn("fetchPayload")(function* (url: string) {
   }
 
   const body: unknown = yield* Effect.tryPromise({
-    try: async (): Promise<unknown> => await response.json(),
+    try: () => response.json(),
     catch: (cause) => new PayloadUnreadable({ source: "served", cause }),
   });
   return yield* decodePayloadEffect(body).pipe(
@@ -117,7 +117,7 @@ const fetchPayload = Effect.fn("fetchPayload")(function* (url: string) {
 /** Load and deeply decode the baked payload or the served JSON response. */
 export const loadPayload = Effect.fn("loadPayload")(function* (
   loc: RouteLocation,
-  bakedPayload: unknown,
+  bakedPayload: Window["__BALADE__"],
 ) {
   const raw = bakedPayload;
   if (raw !== undefined && raw !== null) {
@@ -136,7 +136,7 @@ export const loadPayload = Effect.fn("loadPayload")(function* (
 /** The app's development policy: missing served data opens the representative fixture. */
 export const loadAppPayload = (
   loc: RouteLocation,
-  bakedPayload: unknown,
+  bakedPayload: Window["__BALADE__"],
 ): Effect.Effect<Loaded, PayloadLoadError, BrowserFetch> => {
   const load = loadPayload(loc, bakedPayload);
   if (!import.meta.env.DEV) return load;
@@ -168,8 +168,9 @@ export const fetchHeadDistance = Effect.fn("fetchHeadDistance")(function* (path:
   ).pipe(Effect.option);
   if (Option.isNone(response) || !response.value.ok) return Option.none();
 
-  const decoded = yield* Effect.tryPromise(
-    async (): Promise<unknown> => await response.value.json(),
-  ).pipe(Effect.flatMap(decodeHeadDistance), Effect.option);
+  const decoded = yield* Effect.tryPromise(() => response.value.json()).pipe(
+    Effect.flatMap(decodeHeadDistance),
+    Effect.option,
+  );
   return Option.map(decoded, ({ headDistance }) => headDistance);
 });

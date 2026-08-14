@@ -112,7 +112,7 @@ describe("the browser review lifecycle", () => {
   let root: Root;
 
   beforeEach(() => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     window.localStorage.clear();
     container = document.createElement("div");
     document.body.append(container);
@@ -122,7 +122,7 @@ describe("the browser review lifecycle", () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     container.remove();
-    delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    globalThis.IS_REACT_ACT_ENVIRONMENT = undefined;
   });
 
   it.effect("keeps review controls read-only until stored state arrives", () =>
@@ -131,6 +131,7 @@ describe("the browser review lifecycle", () => {
       const putBodies: ReviewState[] = [];
       const fetch: FetchLike = (_url, init) => {
         if (init?.method === "PUT") {
+          /* SAFETY: the app serialized a ReviewState into this PUT body. */
           putBodies.push(JSON.parse(String(init.body)) as ReviewState);
           return Promise.resolve(new Response("", { status: 200 }));
         }
@@ -166,6 +167,7 @@ describe("the browser review lifecycle", () => {
       const putBodies: ReviewState[] = [];
       const fetch: FetchLike = (_url, init) => {
         if (init?.method !== "PUT") return Promise.resolve(new Response("", { status: 404 }));
+        /* SAFETY: the app serialized a ReviewState into this PUT body. */
         putBodies.push(JSON.parse(String(init.body)) as ReviewState);
         return putBodies.length === 1
           ? firstWrite.promise
