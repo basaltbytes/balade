@@ -869,6 +869,7 @@ describe("generation", () => {
         submitted(invalidBody, "Needs manual repair"),
         submitted(invalidBody, "Needs manual repair"),
       ]);
+      const phases: string[] = [];
       const result = yield* Effect.gen(function* () {
         const model = yield* fauxModel();
         return yield* runGeneration({
@@ -880,11 +881,19 @@ describe("generation", () => {
           headInstructionPolicy: "omit-changed",
           progressMode: "compact",
           progress: () => {},
+          onPhase: (label) => phases.push(label),
         });
       }).pipe(Effect.provide(harness.layer));
 
       expect(result._tag).toBe("GeneratedWithDiagnostics");
       expect(result.repairs).toBe(2);
+      expect(phases).toEqual([
+        "Checking the draft against the pinned source…",
+        "Repairing the draft (turn 1 of 2)…",
+        "Checking the draft against the pinned source…",
+        "Repairing the draft (turn 2 of 2)…",
+        "Checking the draft against the pinned source…",
+      ]);
       expect(existsSync(result.file)).toBe(true);
       expect(result.report.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(
         true,

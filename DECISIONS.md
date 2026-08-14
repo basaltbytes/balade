@@ -1242,6 +1242,11 @@ worst borrow a palette color. `balade generate` adds a stderr activity spinner
 (`makeSpinner`), animated only on an interactive terminal and fed by the
 progress events' activity labels; printed lines interleave through
 `spinner.print`, and `Effect.ensuring` clears the frame on every exit path.
+The pipeline reports its own phase transitions (`onPhase`: draft check, repair
+turns) as history lines that also retitle the spinner, because the check phase
+runs sequential `spawnSync` git calls that block the event loop: the frame
+freezes there by construction, so the label under it must be truthful rather
+than the last authoring activity.
 What would move this: a renderer needing richer styling than six slots, which
 would argue for widening the palette allowlist in the same motion as the
 theme, never for trusting formatter output wholesale.

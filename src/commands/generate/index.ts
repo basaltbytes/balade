@@ -182,6 +182,13 @@ export const generateCommand = Command.make(
         theme: stdoutTheme,
         onActivity: spinner.update,
       });
+      /* Phases print as history and retitle the spinner: blocking check work
+         would otherwise freeze the frame under a stale authoring activity.
+         Retitle first — `print` redraws with the label it has. */
+      const onPhase = (label: string) => {
+        spinner.update(label);
+        printLine(`${label}\n`);
+      };
       spinner.start("Authoring the walkthrough…");
       const result = yield* runGeneration({
         source,
@@ -202,6 +209,7 @@ export const generateCommand = Command.make(
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
+        onPhase,
       }).pipe(Effect.ensuring(Effect.sync(() => spinner.stop())));
       if (result.siblings.length > 0) {
         writeStdout(generationSiblingText(source.pull.number, result.siblings, stdoutTheme));

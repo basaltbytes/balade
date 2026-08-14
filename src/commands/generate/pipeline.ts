@@ -68,6 +68,12 @@ export interface RunGenerationOptions {
   readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progress: (event: AuthorProgress) => void;
   readonly progressMode: AuthorProgressMode;
+  /**
+   * The pipeline's own phase transitions (draft check, repair turns). The
+   * model's tool events go quiet here, so the progress display would
+   * otherwise keep showing the last authoring activity over blocking work.
+   */
+  readonly onPhase?: (label: string) => void;
 }
 
 interface GenerationSummary {
@@ -141,9 +147,11 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
 
     let turn = initial;
     let repairs = 0;
+    options.onPhase?.("Checking the draft against the pinned source…");
     let report = yield* checkGeneratedDraft(options.source.root, file);
     while (!report.ok && repairs < MAX_REPAIR_ATTEMPTS) {
       repairs++;
+      options.onPhase?.(`Repairing the draft (turn ${repairs} of ${MAX_REPAIR_ATTEMPTS})…`);
       turn = yield* session
         .repair(formatText({ reports: [report] }))
         .pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
@@ -151,6 +159,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
         file,
         renderDraft(options.source, turn.draft, options.preset, options.lang),
       ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
+      options.onPhase?.("Checking the draft against the pinned source…");
       report = yield* checkGeneratedDraft(options.source.root, file);
     }
 
