@@ -1249,3 +1249,19 @@ real fix (owned status model, async process port, faux-provider TTY harness).
 What would move this: a renderer needing richer styling than six slots, which
 would argue for widening the palette allowlist in the same motion as the
 theme, never for trusting formatter output wholesale.
+
+## Anti-slop lint rules are vendored, not depended on
+
+The fifteen `anti-slop/*` rules — [dmmulroy/anti-slop](https://github.com/dmmulroy/anti-slop)
+— live at `tools/oxlint/anti-slop/` and register through `jsPlugins` in
+`.oxlintrc.json`, every rule at `error`. Vendoring is upstream's own contract:
+the copy is team-owned, so weakening or deleting a rule is an edit here, never
+a version negotiation. `oxlint` and `@oxlint/plugins` move in lockstep (1.78.0)
+because the JS-plugin API is alpha and outside semver. The plugin sits outside
+all three tsconfig projects; its consumer is oxlint's loader, which
+type-strips it on Node ≥ 22.18 and exercises it on every lint run, and
+`oxlint .` holds the vendored source to its own rules. `no-module-mocking`
+turns the "tests go through real seams" rule from prose into a diagnostic.
+What would move this: an upstream rule worth re-importing, which is a manual
+diff against the vendored copy — or the plugin API stabilizing, which would
+relax the version lockstep, never the vendoring.
