@@ -285,7 +285,12 @@ they describe.
 - **No shell strings anywhere.** Every git, gh and browser invocation goes
   through `spawnSync(file, [...args])` with no `shell: true`
   (`src/shell.ts:41-46`, `src/server/browser.ts:73`). Terminal output is
-  control-stripped at the edge (`src/terminal.ts:13-28`).
+  control-stripped in two layers (`src/terminal.ts`): untrusted values pass
+  `sanitizeTerminalText` (full strip) where they are interpolated into a
+  formatted line, and the stdout/stderr writers admit only the theme's own
+  single-parameter SGR color sequences (`sanitizeStyledTerminalText`), so a
+  value that skipped the first layer can at worst borrow a palette color —
+  conceal, cursor movement and OSC hyperlinks never reach the terminal.
 - Attacker-controlled paths reaching git are `--`-guarded with `:(literal)`
   pathspec magic (`src/git/git.ts:135-145`, `src/pi/session.ts:195-206`,
   `src/server/repo.ts:158`). SHA-prefixed composites cannot begin with `-`: the
