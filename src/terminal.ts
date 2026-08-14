@@ -44,14 +44,20 @@ export function sanitizeStyledTerminalText(value: string): string {
   let start = 0;
   let index = value.indexOf(SGR_OPEN);
   while (index !== -1) {
-    const close = value.indexOf("m", index + SGR_OPEN.length);
-    if (close !== -1 && THEME_SGR_PARAMS.has(value.slice(index + SGR_OPEN.length, close))) {
+    /* Palette parameters are one or two digits, so the closing `m` is looked
+       for in a three-character window: a hostile stream of bare openers
+       cannot turn this scan quadratic. */
+    const paramsStart = index + SGR_OPEN.length;
+    const window = value.slice(paramsStart, paramsStart + 3);
+    const close = window.indexOf("m");
+    if (close !== -1 && THEME_SGR_PARAMS.has(window.slice(0, close))) {
+      const end = paramsStart + close + 1;
       safe += sanitizeTerminalText(value.slice(start, index));
-      safe += value.slice(index, close + 1);
-      start = close + 1;
-      index = value.indexOf(SGR_OPEN, close + 1);
+      safe += value.slice(index, end);
+      start = end;
+      index = value.indexOf(SGR_OPEN, end);
     } else {
-      index = value.indexOf(SGR_OPEN, index + SGR_OPEN.length);
+      index = value.indexOf(SGR_OPEN, paramsStart);
     }
   }
   return safe + sanitizeTerminalText(value.slice(start));

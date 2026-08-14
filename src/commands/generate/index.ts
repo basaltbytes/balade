@@ -186,27 +186,31 @@ export const generateCommand = Command.make(
         theme: stdoutTheme,
         onActivity: spinner.update,
       });
-      spinner.start("Authoring the walkthrough…");
-      const result = yield* runGeneration({
-        source,
-        model: selected,
-        ...(chosen === undefined
-          ? {}
-          : { preset: { name: chosen.name, authoring: chosen.authoring } }),
-        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-        ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
-        budget: config.budget,
-        directory: config.directory,
-        collisionPolicy: config.force ? "replace" : "exclusive",
-        onExistingWalkthroughs: (files) => {
-          if (!config.force) {
-            printLine(generationPreflightText(source.pull.number, files, stdoutTheme));
-          }
-        },
-        headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
-        progressMode,
-        progress,
-      }).pipe(Effect.ensuring(Effect.sync(() => spinner.stop())));
+      const result = yield* Effect.acquireUseRelease(
+        Effect.sync(() => spinner.start("Authoring the walkthrough…")),
+        () =>
+          runGeneration({
+            source,
+            model: selected,
+            ...(chosen === undefined
+              ? {}
+              : { preset: { name: chosen.name, authoring: chosen.authoring } }),
+            ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+            ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
+            budget: config.budget,
+            directory: config.directory,
+            collisionPolicy: config.force ? "replace" : "exclusive",
+            onExistingWalkthroughs: (files) => {
+              if (!config.force) {
+                printLine(generationPreflightText(source.pull.number, files, stdoutTheme));
+              }
+            },
+            headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
+            progressMode,
+            progress,
+          }),
+        () => Effect.sync(() => spinner.stop()),
+      );
       if (result.siblings.length > 0) {
         writeStdout(generationSiblingText(source.pull.number, result.siblings, stdoutTheme));
       }
