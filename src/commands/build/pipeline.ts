@@ -5,7 +5,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { Effect, FileSystem, Match, Path, Schema } from "effect";
+import { Effect, FileSystem, Match, Path, Predicate, Schema } from "effect";
 import {
   discoverWalkthroughs,
   NO_WALKTHROUGH,
@@ -13,7 +13,7 @@ import {
   type DiscoveryError,
 } from "../../walkthrough/discovery.js";
 import { softReport } from "../../walkthrough/checker.js";
-import { loadWalkthrough, type LoadError } from "../../walkthrough/pipeline.js";
+import { loadWalkthrough, type LoadError, type LoadOptions } from "../../walkthrough/pipeline.js";
 import { describeFailure } from "../../failure.js";
 import type { Lang, CheckReport } from "../../contract/types.js";
 import { exportHtml, type ExportAssets } from "./html.js";
@@ -93,16 +93,14 @@ export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) 
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const target = yield* pick(options);
-  if (typeof target !== "string") return target;
+  if (!Predicate.isString(target)) return target;
 
   const assets = yield* readExportBundle(options.bundleDir);
 
-  const loaded = yield* loadWalkthrough({
-    cwd: options.cwd,
-    path: target,
-    ...(options.lang !== undefined ? { lang: options.lang } : {}),
-    ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-  });
+  const loadOptions: LoadOptions = { cwd: options.cwd, path: target };
+  if (options.lang !== undefined) loadOptions.lang = options.lang;
+  if (options.useGh !== undefined) loadOptions.useGh = options.useGh;
+  const loaded = yield* loadWalkthrough(loadOptions);
   const report = softReport(loaded);
   if (loaded.payload === null) {
     return { _tag: "BuildFailed", reports: [report] } satisfies BuildFailed;

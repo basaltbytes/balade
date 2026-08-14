@@ -225,7 +225,9 @@ describe("the served API", () => {
 
   it.effect("keeps review-state validation details in the typed error cause", () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(session.api.writeState(path, { version: 2 }));
+      const error = yield* Effect.flip(
+        session.api.writeState(path, JSON.stringify({ version: 2 })),
+      );
       expect(error).toMatchObject({
         _tag: "ApiReviewStateInvalid",
         cause: { _tag: "ReviewStateInvalid" },
@@ -502,14 +504,17 @@ describe("the index", () => {
   it.effect("counts progress from the state file it finds", () =>
     Effect.gen(function* () {
       const path = "walkthroughs/valid.md";
-      const written = yield* session.api.writeState(path, {
-        version: 1,
-        walkthrough: path,
-        pr: 42,
-        stamp: "0000000",
-        sections: { overview: { hash: "sha256:aa", at: "2026-08-01T10:12:00.000Z" } },
-        files: {},
-      });
+      const written = yield* session.api.writeState(
+        path,
+        JSON.stringify({
+          version: 1,
+          walkthrough: path,
+          pr: 42,
+          stamp: "0000000",
+          sections: { overview: { hash: "sha256:aa", at: "2026-08-01T10:12:00.000Z" } },
+          files: {},
+        }),
+      );
       expect(written.walkthrough).toBe(path);
 
       const answer = (yield* session.api.walkthrough(null)) as IndexPayload;

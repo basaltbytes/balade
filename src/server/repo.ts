@@ -12,7 +12,12 @@
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { loadWalkthrough, type LoadError, type LoadResult } from "../walkthrough/pipeline.js";
+import {
+  loadWalkthrough,
+  type LoadError,
+  type LoadOptions,
+  type LoadResult,
+} from "../walkthrough/pipeline.js";
 import { ContextResolver, type CommandFailed } from "../contract/context.js";
 import { CommandExecutor, gitOut } from "../shell.js";
 import { repoSlug, resolveCommit } from "../git/git.js";
@@ -172,16 +177,12 @@ const makeServerRepo = Effect.fn("makeServerRepo")(function* (
     load: Effect.fn("ServerRepo.load")((sourcePath) =>
       Effect.gen(function* () {
         const source = at === undefined ? undefined : yield* readSource(sourcePath);
-        return yield* run(
-          loadWalkthrough({
-            cwd: root,
-            path: absolute(sourcePath),
-            ...(source !== undefined ? { source } : {}),
-            ...(at !== undefined ? { at } : {}),
-            ...(options.lang !== undefined ? { lang: options.lang } : {}),
-            ...(options.useGh !== undefined ? { useGh: options.useGh } : {}),
-          }),
-        );
+        const loadOptions: LoadOptions = { cwd: root, path: absolute(sourcePath) };
+        if (source !== undefined) loadOptions.source = source;
+        if (at !== undefined) loadOptions.at = at;
+        if (options.lang !== undefined) loadOptions.lang = options.lang;
+        if (options.useGh !== undefined) loadOptions.useGh = options.useGh;
+        return yield* run(loadWalkthrough(loadOptions));
       }),
     ),
   } satisfies ServerRepoPort;

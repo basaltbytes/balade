@@ -138,7 +138,7 @@ const putState = (api: Api) =>
     Effect.gen(function* () {
       const path = yield* queryPath;
       const request = yield* HttpServerRequest.HttpServerRequest;
-      const body = yield* request.json.pipe(
+      const body = yield* request.text.pipe(
         Effect.provideService(HttpServerRequest.MaxBodySize, REVIEW_STATE_BODY_LIMIT),
         Effect.mapError((cause) => new ApiReviewStateInvalid({ cause })),
       );
@@ -160,7 +160,7 @@ const respond = <A, R>(effect: Effect.Effect<A, ApiError, R>) =>
  * payload the CLI just built out of strings, numbers and plain objects, so a
  * value JSON cannot take would be a defect, not a request failure.
  */
-const respondJson = (body: unknown): HttpServerResponse.HttpServerResponse =>
+const respondJson = <A>(body: A): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.jsonUnsafe(body);
 
 const respondError = Effect.fn("Http.respondError")(function* (error: ApiError) {

@@ -231,14 +231,17 @@ describe("a served PR without a checkout", () => {
       expect(payload.sourcePath).toBe("walkthroughs/valid.md");
 
       /* Review state lands in the clone's `.balade/`, keyed by walkthrough path. */
-      const written = yield* session.api.writeState("walkthroughs/valid.md", {
-        version: 1,
-        walkthrough: "walkthroughs/valid.md",
-        pr: 42,
-        stamp: payload.commit,
-        sections: {},
-        files: {},
-      });
+      const written = yield* session.api.writeState(
+        "walkthroughs/valid.md",
+        JSON.stringify({
+          version: 1,
+          walkthrough: "walkthroughs/valid.md",
+          pr: 42,
+          stamp: payload.commit,
+          sections: {},
+          files: {},
+        }),
+      );
       expect(written.walkthrough).toBe("walkthroughs/valid.md");
     }),
   );

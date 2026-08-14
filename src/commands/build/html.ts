@@ -45,7 +45,7 @@ export function exportHtml(payload: Payload, assets: ExportAssets): string {
  * holds. The two line separators are legal in JSON and were not legal in a
  * JavaScript string before ES2019.
  */
-function bake(value: unknown): string {
+function bake(value: Payload): string {
   return JSON.stringify(value)
     .replaceAll("<", "\\u003c")
     .replaceAll("\u2028", "\\u2028")

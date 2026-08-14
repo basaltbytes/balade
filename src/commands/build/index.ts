@@ -10,7 +10,7 @@ import {
   stopReports,
   writeStdout,
 } from "../../terminal.js";
-import { buildErrorMessage, exportContentsMessage, runBuild } from "./pipeline.js";
+import { buildErrorMessage, exportContentsMessage, runBuild, type BuildOptions } from "./pipeline.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
   Flag.withDescription("Chrome language; overrides meta.lang"),
@@ -33,12 +33,10 @@ export const buildCommand = Command.make(
   { files: buildFile, lang: langFlag, out: outFlag },
   (config) =>
     Effect.gen(function* () {
-      const result = yield* runBuild({
-        cwd: process.cwd(),
-        paths: config.files,
-        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-        ...(Option.isSome(config.out) ? { out: config.out.value } : {}),
-      });
+      const buildOptions: BuildOptions = { cwd: process.cwd(), paths: config.files };
+      if (Option.isSome(config.lang)) buildOptions.lang = config.lang.value;
+      if (Option.isSome(config.out)) buildOptions.out = config.out.value;
+      const result = yield* runBuild(buildOptions);
       return yield* Match.valueTags(result, {
         Built: ({ reports, file, bytes, changedFileCount }) =>
           Effect.sync(() => {

@@ -6,7 +6,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import type { CommandFailed, NotARepository } from "../../contract/context.js";
 import { stdoutTheme, stopMessage, writeStdout } from "../../terminal.js";
-import { runSkillsInstall } from "./install.js";
+import { runSkillsInstall, type SkillsInstallOptions } from "./install.js";
 
 const out = Flag.string("out").pipe(
   Flag.withDescription(
@@ -17,10 +17,9 @@ const out = Flag.string("out").pipe(
 
 const installCommand = Command.make("install", { out }, (config) =>
   Effect.gen(function* () {
-    const written = yield* runSkillsInstall({
-      cwd: process.cwd(),
-      ...(Option.isSome(config.out) ? { out: config.out.value } : {}),
-    });
+    const installOptions: SkillsInstallOptions = { cwd: process.cwd() };
+    if (Option.isSome(config.out)) installOptions.out = config.out.value;
+    const written = yield* runSkillsInstall(installOptions);
     for (const file of written) writeStdout(`wrote ${stdoutTheme.emphasis(file)}\n`);
     writeStdout(
       `Installed the balade-authoring skill (authoring package ${AUTHORING_PACKAGE_VERSION}). Re-run after upgrading balade to refresh it.\n`,

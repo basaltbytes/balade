@@ -9,7 +9,7 @@
  */
 
 import { Effect, Match, Option, Schema } from "effect";
-import { parseReviewState } from "../contract/review-parser.js";
+import { parseReviewJson } from "../contract/review-parser.js";
 import type {
   CheckDiagnostic,
   IndexEntry,
@@ -98,8 +98,8 @@ export interface Api {
   walkthrough(path: string | null): Effect.Effect<Payload | IndexPayload, ApiError>;
   /** `GET /api/state` — the marks on disk, 404 when the CLI holds none. */
   readState(path: string | null): Effect.Effect<ReviewState, ApiError>;
-  /** `PUT /api/state` — the body is unknown until it parses. */
-  writeState(path: string | null, body: unknown): Effect.Effect<ReviewState, ApiError>;
+  /** `PUT /api/state` — the body text is untrusted until it parses. */
+  writeState(path: string | null, body: string): Effect.Effect<ReviewState, ApiError>;
   /** `GET /api/staleness` — how far the head moved past the stamp. */
   staleness(path: string | null): Effect.Effect<{ headDistance: number }, ApiError>;
 }
@@ -167,7 +167,7 @@ function makeApi(ports: ApiPorts): Api {
     writeState: Effect.fn("Api.writeState")(function* (path, body) {
       const target = yield* oneOf(path);
 
-      const state = yield* parseReviewState(body).pipe(
+      const state = yield* parseReviewJson(body).pipe(
         Effect.mapError((cause) => new ApiReviewStateInvalid({ cause })),
       );
       if (state.walkthrough !== target) {
@@ -218,23 +218,29 @@ const buildIndex = Effect.fn("Api.buildIndex")(function* (ports: ApiPorts) {
       onSome: (state) =>
         Option.some(Math.min(Object.keys(state.sections).length, row.value.sections)),
     });
+    const progressFacet: ProgressFacet = {};
+    if (Option.isSome(done)) {
+      progressFacet.progress = { done: done.value, total: row.value.sections };
+    }
     entries.push({
       path,
       title: row.value.title,
       pr: row.value.pr,
       meta: row.value.meta,
       updatedAt: row.value.updatedAt,
-      ...(Option.isNone(done) ? {} : { progress: { done: done.value, total: row.value.sections } }),
+      ...progressFacet,
     });
   }
   return { kind: "index", repo: ports.repo.slug, entries } satisfies IndexPayload;
 });
 
-const walkthroughUnavailable = (path: string) => (error: unknown) =>
-  new ApiWalkthroughUnavailable({ path, cause: error });
+type ProgressFacet = { progress?: NonNullable<IndexEntry["progress"]> };
 
-const reviewStateUnavailable = (path: string) => (error: unknown) =>
-  new ApiReviewStateUnavailable({ path, cause: error });
+const walkthroughUnavailable = (path: string) => (cause: unknown) =>
+  new ApiWalkthroughUnavailable({ path, cause });
+
+const reviewStateUnavailable = (path: string) => (cause: unknown) =>
+  new ApiReviewStateUnavailable({ path, cause });
 
 function firstFailure(diagnostics: readonly CheckDiagnostic[]): string {
   const failure = diagnostics.find((diagnostic) => diagnostic.level === "error");
