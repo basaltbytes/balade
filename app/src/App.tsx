@@ -14,7 +14,7 @@ type State =
   | { status: "ready"; loaded: Loaded };
 
 const browserLang = (): Lang =>
-  typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("fr")
+  globalThis.navigator !== undefined && globalThis.navigator.language.toLowerCase().startsWith("fr")
     ? "fr"
     : "en";
 

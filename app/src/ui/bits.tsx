@@ -32,14 +32,17 @@ export function ProgressBar({
   );
 }
 
-const TONES: Record<string, string> = {
-  neutral: "text-secondary-foreground bg-secondary border-border",
-  new: "text-added bg-added/12 border-added/32",
-  mod: "text-modified bg-modified/12 border-modified/32",
-  del: "text-removed bg-removed/12 border-removed/32",
-  key: "text-primary bg-primary/12 border-primary/32",
-  done: "text-done bg-done/12 border-done/32",
-};
+const NEUTRAL_TONE = "text-secondary-foreground bg-secondary border-border";
+const TONES = new Map(
+  Object.entries({
+    neutral: NEUTRAL_TONE,
+    new: "text-added bg-added/12 border-added/32",
+    mod: "text-modified bg-modified/12 border-modified/32",
+    del: "text-removed bg-removed/12 border-removed/32",
+    key: "text-primary bg-primary/12 border-primary/32",
+    done: "text-done bg-done/12 border-done/32",
+  }),
+);
 
 export function Chip({
   tone = "neutral",
@@ -52,7 +55,7 @@ export function Chip({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[11px] border rounded-md px-[7px] py-[2px] whitespace-nowrap ${TONES[tone] ?? TONES.neutral}`}
+      className={`inline-flex items-center gap-1.5 text-[11px] border rounded-md px-[7px] py-[2px] whitespace-nowrap ${TONES.get(tone) ?? NEUTRAL_TONE}`}
     >
       {icon && <Octicon name={icon} size={12} />}
       {children}

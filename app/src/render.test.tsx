@@ -9,6 +9,8 @@ import { pr96 } from "./fixtures/pr96";
 import { WalkthroughRoute } from "./routes/walkthrough";
 import { StringsProvider } from "./ui/strings";
 
+type CollapsedFacet = { collapsed?: boolean };
+
 const render = (payload: Payload, lang: "en" | "fr" = "en"): string =>
   renderToString(
     <StringsProvider lang={lang}>
@@ -92,29 +94,33 @@ describe("the walkthrough route", () => {
   });
 
   it("opens a code block unless the payload asks for it collapsed", () => {
-    const codeSection = (collapsed: boolean): Payload => ({
-      ...pr96,
-      sections: [
-        {
-          id: "collapsed",
-          title: "Collapsed",
-          hash: "sha256:collapsed",
-          blocks: [
-            {
-              b: "code",
-              file: "models/planning_pool_item.py",
-              from: 1,
-              to: 1,
-              lang: "python",
-              view: "plain",
-              ...(collapsed ? { collapsed: true } : {}),
-              lines: ["from odoo import api"],
-              changed: [1],
-            },
-          ],
-        },
-      ],
-    });
+    const codeSection = (collapsed: boolean): Payload => {
+      const collapsedFacet: CollapsedFacet = {};
+      if (collapsed) collapsedFacet.collapsed = true;
+      return {
+        ...pr96,
+        sections: [
+          {
+            id: "collapsed",
+            title: "Collapsed",
+            hash: "sha256:collapsed",
+            blocks: [
+              {
+                b: "code",
+                file: "models/planning_pool_item.py",
+                from: 1,
+                to: 1,
+                lang: "python",
+                view: "plain",
+                ...collapsedFacet,
+                lines: ["from odoo import api"],
+                changed: [1],
+              },
+            ],
+          },
+        ],
+      };
+    };
 
     const closed = render(codeSection(true));
     expect(closed).toContain("bg-background collapsed");

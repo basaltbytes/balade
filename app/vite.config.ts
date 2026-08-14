@@ -1,6 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type BuildEnvironmentOptions } from "vite";
 
 /**
  * Two builds of the same app.
@@ -12,6 +12,26 @@ import { defineConfig } from "vite";
  */
 export default defineConfig(({ mode }) => {
   const single = mode === "export";
+  const singleFileFacets: Pick<
+    BuildEnvironmentOptions,
+    "cssCodeSplit" | "assetsInlineLimit" | "rollupOptions"
+  > = {};
+  if (single) {
+    singleFileFacets.cssCodeSplit = false;
+    /* Anything an import pulls in becomes a `data:` URI: the export names no
+       file but itself. */
+    singleFileFacets.assetsInlineLimit = Number.MAX_SAFE_INTEGER;
+    singleFileFacets.rollupOptions = {
+      output: {
+        /* The bundler's name for `inlineDynamicImports`, which it deprecated:
+           one chunk, every grammar in it. */
+        codeSplitting: false,
+        /* `build` reads these two by name. */
+        entryFileNames: "app.js",
+        assetFileNames: "app[extname]",
+      },
+    };
+  }
   return {
     /* `base: "./"` keeps the asset URLs relative so the same bundle works served
        from `/` and inlined into the single-file static export. */
@@ -26,24 +46,7 @@ export default defineConfig(({ mode }) => {
       /* The entry chunk carries react, the octicon set and `@git-diff-view`'s
          eager lowlight/highlight.js import (~870 kB, upstream issue #58). */
       chunkSizeWarningLimit: single ? 5000 : 1700,
-      ...(single
-        ? {
-            cssCodeSplit: false,
-            /* Anything an import pulls in becomes a `data:` URI: the export
-               names no file but itself. */
-            assetsInlineLimit: Number.MAX_SAFE_INTEGER,
-            rollupOptions: {
-              output: {
-                /* The bundler's name for `inlineDynamicImports`, which it
-                   deprecated: one chunk, every grammar in it. */
-                codeSplitting: false,
-                /* `build` reads these two by name. */
-                entryFileNames: "app.js",
-                assetFileNames: "app[extname]",
-              },
-            },
-          }
-        : {}),
+      ...singleFileFacets,
     },
   };
 });

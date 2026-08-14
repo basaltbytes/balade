@@ -199,7 +199,9 @@ function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
       const facets: MethodFacets = {};
       if (decorator !== undefined) facets.decorator = decorator;
       if (chips !== undefined && chips.length > 0) facets.chips = chips;
-      return [{ b: "method", sig: attrString(node, "sig") ?? "", body: bodyInline(node), ...facets }];
+      return [
+        { b: "method", sig: attrString(node, "sig") ?? "", body: bodyInline(node), ...facets },
+      ];
     }
     case "tests":
       return [{ b: "tests", items: childTags(node, "tests", env).map(testItem) }];

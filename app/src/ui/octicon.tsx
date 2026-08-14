@@ -56,55 +56,57 @@ import type { FileStatus } from "../contract";
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>;
 
-const ICONS: Record<string, IconComponent> = {
-  alert: AlertIcon,
-  "arrow-right": ArrowRightIcon,
-  beaker: BeakerIcon,
-  book: BookIcon,
-  check: CheckIcon,
-  "check-circle-fill": CheckCircleFillIcon,
-  "chevron-down": ChevronDownIcon,
-  "chevron-right": ChevronRightIcon,
-  circle: CircleIcon,
-  "code-square": CodeSquareIcon,
-  columns: ColumnsIcon,
-  dash: DashIcon,
-  database: DatabaseIcon,
-  "diff-added": DiffAddedIcon,
-  "diff-modified": DiffModifiedIcon,
-  "diff-removed": DiffRemovedIcon,
-  "diff-renamed": DiffRenamedIcon,
-  "dot-fill": DotFillIcon,
-  eye: EyeIcon,
-  file: FileIcon,
-  "file-added": FileAddedIcon,
-  "file-binary": FileBinaryIcon,
-  "file-code": FileCodeIcon,
-  "file-diff": FileDiffIcon,
-  gear: GearIcon,
-  "git-branch": GitBranchIcon,
-  "git-commit": GitCommitIcon,
-  "git-compare": GitCompareIcon,
-  "git-merge": GitMergeIcon,
-  "git-pull-request": GitPullRequestIcon,
-  globe: GlobeIcon,
-  graph: GraphIcon,
-  info: InfoIcon,
-  law: LawIcon,
-  "light-bulb": LightBulbIcon,
-  link: LinkIcon,
-  "link-external": LinkExternalIcon,
-  "list-unordered": ListUnorderedIcon,
-  package: PackageIcon,
-  person: PersonIcon,
-  question: QuestionIcon,
-  repo: RepoIcon,
-  rows: RowsIcon,
-  "shield-lock": ShieldLockIcon,
-  table: TableIcon,
-  unfold: UnfoldIcon,
-  x: XIcon,
-};
+const ICONS = new Map<string, IconComponent>(
+  Object.entries({
+    alert: AlertIcon,
+    "arrow-right": ArrowRightIcon,
+    beaker: BeakerIcon,
+    book: BookIcon,
+    check: CheckIcon,
+    "check-circle-fill": CheckCircleFillIcon,
+    "chevron-down": ChevronDownIcon,
+    "chevron-right": ChevronRightIcon,
+    circle: CircleIcon,
+    "code-square": CodeSquareIcon,
+    columns: ColumnsIcon,
+    dash: DashIcon,
+    database: DatabaseIcon,
+    "diff-added": DiffAddedIcon,
+    "diff-modified": DiffModifiedIcon,
+    "diff-removed": DiffRemovedIcon,
+    "diff-renamed": DiffRenamedIcon,
+    "dot-fill": DotFillIcon,
+    eye: EyeIcon,
+    file: FileIcon,
+    "file-added": FileAddedIcon,
+    "file-binary": FileBinaryIcon,
+    "file-code": FileCodeIcon,
+    "file-diff": FileDiffIcon,
+    gear: GearIcon,
+    "git-branch": GitBranchIcon,
+    "git-commit": GitCommitIcon,
+    "git-compare": GitCompareIcon,
+    "git-merge": GitMergeIcon,
+    "git-pull-request": GitPullRequestIcon,
+    globe: GlobeIcon,
+    graph: GraphIcon,
+    info: InfoIcon,
+    law: LawIcon,
+    "light-bulb": LightBulbIcon,
+    link: LinkIcon,
+    "link-external": LinkExternalIcon,
+    "list-unordered": ListUnorderedIcon,
+    package: PackageIcon,
+    person: PersonIcon,
+    question: QuestionIcon,
+    repo: RepoIcon,
+    rows: RowsIcon,
+    "shield-lock": ShieldLockIcon,
+    table: TableIcon,
+    unfold: UnfoldIcon,
+    x: XIcon,
+  }),
+);
 
 export function Octicon({
   name,
@@ -115,23 +117,23 @@ export function Octicon({
   size?: number;
   className?: string;
 }) {
-  const Icon = (name === undefined ? undefined : ICONS[name]) ?? DotFillIcon;
+  const Icon = (name === undefined ? undefined : ICONS.get(name)) ?? DotFillIcon;
   return <Icon size={size} className={className} />;
 }
 
-export const statusColor: Record<FileStatus, string> = {
+export const statusColor = {
   A: "text-added",
   M: "text-modified",
   D: "text-removed",
   R: "text-accent-muted",
-};
+} satisfies Record<FileStatus, string>;
 
-const STATUS_ICON: Record<FileStatus, string> = {
+const STATUS_ICON = {
   A: "diff-added",
   M: "diff-modified",
   D: "diff-removed",
   R: "diff-renamed",
-};
+} satisfies Record<FileStatus, string>;
 
 export function FileStatusIcon({
   status,

@@ -48,10 +48,7 @@ export interface PickerModels {
   readonly usedFallback: boolean;
 }
 
-export function modelsForPicker(
-  models: readonly AuthorModel[],
-  filter: ModelFilter,
-): PickerModels {
+export function modelsForPicker(models: readonly AuthorModel[], filter: ModelFilter): PickerModels {
   const exact = matchingModels(models, filter);
   if (exact.length > 0) return { models: exact, usedFallback: false };
 

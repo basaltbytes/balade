@@ -29,18 +29,18 @@ export interface ParsedDocument extends Omit<ValidDocument, "frontmatter"> {
 
 const HINTS = new Map(
   Object.entries({
-  "tag-undefined": `The core catalog is: ${CORE_TAG_NAMES.filter((name) => name !== "table").join(", ")}. Check the spelling.`,
-  "tag-selfclosing-has-children": "Close the tag with `/%}` and move the prose out of it.",
-  "tag-placement-invalid": "Put the tag on its own line, between blank lines.",
-  "attribute-undefined": "Remove the attribute — each tag takes a fixed set.",
-  "attribute-missing-required": "Add the attribute; the tag cannot resolve without it.",
-  "attribute-type-invalid": "Numbers take no quotes; arrays use `[…]`; maps use `{…}`.",
-  "attribute-value-invalid": "Use one of the listed values.",
-  "code-range-invalid": "Count the lines again at the stamped commit: 1 <= from <= to.",
-  "odoo-comodel-missing": 'Add comodel="…" — a relational field names the model it points at.',
-  "child-invalid": "Move the tag under the parent its family expects.",
-  "variable-undefined": "The format holds no variables; write the value in place.",
-  "function-undefined": "The format holds no functions; write the value in place.",
+    "tag-undefined": `The core catalog is: ${CORE_TAG_NAMES.filter((name) => name !== "table").join(", ")}. Check the spelling.`,
+    "tag-selfclosing-has-children": "Close the tag with `/%}` and move the prose out of it.",
+    "tag-placement-invalid": "Put the tag on its own line, between blank lines.",
+    "attribute-undefined": "Remove the attribute — each tag takes a fixed set.",
+    "attribute-missing-required": "Add the attribute; the tag cannot resolve without it.",
+    "attribute-type-invalid": "Numbers take no quotes; arrays use `[…]`; maps use `{…}`.",
+    "attribute-value-invalid": "Use one of the listed values.",
+    "code-range-invalid": "Count the lines again at the stamped commit: 1 <= from <= to.",
+    "odoo-comodel-missing": 'Add comodel="…" — a relational field names the model it points at.',
+    "child-invalid": "Move the tag under the parent its family expects.",
+    "variable-undefined": "The format holds no variables; write the value in place.",
+    "function-undefined": "The format holds no functions; write the value in place.",
   }),
 );
 

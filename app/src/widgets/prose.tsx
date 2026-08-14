@@ -6,10 +6,10 @@ import { useStrings } from "../ui/strings";
 type CalloutProps = Omit<Extract<Block, { readonly b: "callout" }>, "b">;
 type CalloutTone = NonNullable<CalloutProps["tone"]>;
 
-const CALLOUT_ICON: Record<CalloutTone, string> = {
+const CALLOUT_ICON = {
   key: "light-bulb",
   warn: "alert",
-};
+} satisfies Record<CalloutTone, string>;
 
 export function Md({ nodes }: { nodes: ReadonlyArray<MdNode> }) {
   return (

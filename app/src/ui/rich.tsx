@@ -1,11 +1,12 @@
 /* The six inline kinds of the contract. Arrays flatten into fragments. */
 
+import { Predicate } from "effect";
 import type { ReactNode } from "react";
 import type { Inline } from "../contract";
 
 export function Rich({ v }: { v: Inline | undefined }): ReactNode {
   if (v === undefined || v === null) return null;
-  if (typeof v === "string") return v;
+  if (Predicate.isString(v)) return v;
   if (Array.isArray(v)) return v.map((x, k) => <Rich key={k} v={x} />);
   if ("c" in v)
     return (

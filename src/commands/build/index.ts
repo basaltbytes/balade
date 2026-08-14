@@ -10,7 +10,12 @@ import {
   stopReports,
   writeStdout,
 } from "../../terminal.js";
-import { buildErrorMessage, exportContentsMessage, runBuild, type BuildOptions } from "./pipeline.js";
+import {
+  buildErrorMessage,
+  exportContentsMessage,
+  runBuild,
+  type BuildOptions,
+} from "./pipeline.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
   Flag.withDescription("Chrome language; overrides meta.lang"),

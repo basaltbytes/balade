@@ -5,7 +5,12 @@
  */
 
 import { Effect, Path, Result } from "effect";
-import { loadErrorDiagnostic, loadWalkthrough, type LoadOptions, type LoadResult } from "./pipeline.js";
+import {
+  loadErrorDiagnostic,
+  loadWalkthrough,
+  type LoadOptions,
+  type LoadResult,
+} from "./pipeline.js";
 import type { CheckReport } from "../contract/types.js";
 import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discovery.js";
 

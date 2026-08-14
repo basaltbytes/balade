@@ -223,7 +223,10 @@ export function authoringDecisionFailures(
   for (const group of expected.omittedGroups) {
     if (profile.groups.includes(group)) failures.push(`unexpected group ${group}`);
   }
-  if (profile.sections < expected.sections.minimum || profile.sections > expected.sections.maximum) {
+  if (
+    profile.sections < expected.sections.minimum ||
+    profile.sections > expected.sections.maximum
+  ) {
     failures.push(
       `section count ${profile.sections} is outside ${expected.sections.minimum}-${expected.sections.maximum}`,
     );

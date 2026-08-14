@@ -37,6 +37,9 @@ export const createDiffHighlighter = (
   let registryAvailable = true;
   const ignoreSyntaxHighlightList: (string | RegExp)[] = [];
 
+  /* SAFETY: the literal implements the DiffFileHighlighter plugin surface;
+     the cast bridges the structurally identical `hast` Root copies that shiki
+     and @git-diff-view/react each declare (see DECISIONS.md). */
   return {
     name: "shiki",
     type: "style",
@@ -60,6 +63,9 @@ export const createDiffHighlighter = (
         reportFailure(rendered.failure);
         return plaintextAst(raw);
       }
+      /* SAFETY: shiki and @git-diff-view/react carry structurally identical
+         `hast` Root declarations; the cast bridges the two copies, no
+         unchecked runtime value passes through (see DECISIONS.md). */
       return rendered.success as DiffAST;
     },
     processAST: (ast: DiffAST) => processAST(ast),
