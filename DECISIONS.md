@@ -1265,3 +1265,23 @@ turns the "tests go through real seams" rule from prose into a diagnostic.
 What would move this: an upstream rule worth re-importing, which is a manual
 diff against the vendored copy — or the plugin API stabilizing, which would
 relax the version lockstep, never the vendoring.
+
+## Anti-slop compliance has four idioms, not one
+
+Clearing the vendored rules settled how this codebase writes four shapes.
+Optional properties build through a named facet draft — a local
+`type XFacets = { … }` alias, filled in statements, spread once into the
+readonly contract literal — never through `...(x ? { x } : {})`; where key
+order feeds a serializer (the YAML frontmatter, the prompt claims JSON) the
+facet spreads at the position the conditional held. Lookup tables keyed by an
+arbitrary string are `Map`s; tables with a closed key union stay object
+literals under `satisfies`, which keeps typed indexing. Runtime narrowing goes
+through `effect`'s `Predicate` guards or the owning library's named types
+(Markdoc `Scalar`, the SDK's event fields) instead of `typeof`; `unknown`
+survives only as a `cause`. Each remaining `as` states its invariant in a
+`SAFETY:` comment placed before the assertion's statement. One boundary moved
+in the sweep: the review-state PUT body crosses the `Api` port as text and
+`writeState` runs the whole JSON-plus-schema parse itself, so the gate owns
+its parse instead of splitting it with the transport. What would move this: a
+facet type outgrowing its file, which would argue for a shared helper —
+weakening a rule to avoid the idiom is not on the table.
