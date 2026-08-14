@@ -179,14 +179,14 @@ export const selectAuthorModel = Effect.fn("test.selectAuthorModel")(function* (
     : model;
 });
 
-interface DraftShape {
+interface DraftProfile {
   readonly groups: readonly string[];
   readonly sections: number;
   readonly codeRanges: number;
   readonly codeFiles: ReadonlySet<string>;
 }
 
-function draftShape(body: string): DraftShape {
+function draftProfile(body: string): DraftProfile {
   const groups: string[] = [];
   const codeFiles = new Set<string>();
   let sections = 0;
@@ -215,32 +215,32 @@ export function authoringDecisionFailures(
   expected: AuthoringDecisionExpectation,
   options: { readonly checkPhrases?: boolean } = {},
 ): readonly string[] {
-  const shape = draftShape(body);
+  const profile = draftProfile(body);
   const failures: string[] = [];
   for (const group of expected.groups) {
-    if (!shape.groups.includes(group)) failures.push(`missing group ${group}`);
+    if (!profile.groups.includes(group)) failures.push(`missing group ${group}`);
   }
   for (const group of expected.omittedGroups) {
-    if (shape.groups.includes(group)) failures.push(`unexpected group ${group}`);
+    if (profile.groups.includes(group)) failures.push(`unexpected group ${group}`);
   }
-  if (shape.sections < expected.sections.minimum || shape.sections > expected.sections.maximum) {
+  if (profile.sections < expected.sections.minimum || profile.sections > expected.sections.maximum) {
     failures.push(
-      `section count ${shape.sections} is outside ${expected.sections.minimum}-${expected.sections.maximum}`,
+      `section count ${profile.sections} is outside ${expected.sections.minimum}-${expected.sections.maximum}`,
     );
   }
   if (
-    shape.codeRanges < expected.codeRanges.minimum ||
-    shape.codeRanges > expected.codeRanges.maximum
+    profile.codeRanges < expected.codeRanges.minimum ||
+    profile.codeRanges > expected.codeRanges.maximum
   ) {
     failures.push(
-      `code range count ${shape.codeRanges} is outside ${expected.codeRanges.minimum}-${expected.codeRanges.maximum}`,
+      `code range count ${profile.codeRanges} is outside ${expected.codeRanges.minimum}-${expected.codeRanges.maximum}`,
     );
   }
   for (const file of expected.referencedFiles) {
-    if (!shape.codeFiles.has(file)) failures.push(`missing code evidence ${file}`);
+    if (!profile.codeFiles.has(file)) failures.push(`missing code evidence ${file}`);
   }
   for (const file of expected.unreferencedFiles) {
-    if (shape.codeFiles.has(file)) failures.push(`unwanted code evidence ${file}`);
+    if (profile.codeFiles.has(file)) failures.push(`unwanted code evidence ${file}`);
   }
   if (options.checkPhrases !== false) {
     for (const phrase of expected.phrases) {

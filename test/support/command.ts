@@ -2,7 +2,7 @@
 
 import { Effect, Layer } from "effect";
 import { CommandFailed } from "../../src/contract/context.js";
-import { CommandExecutor, type CommandExecutorShape } from "../../src/shell.js";
+import { CommandExecutor, type CommandExecutorPort } from "../../src/shell.js";
 
 type GhExecutor = (args: readonly string[], cwd: string) => Effect.Effect<string, CommandFailed>;
 
@@ -20,7 +20,7 @@ export function commandLayerWithGh(executeGh: GhExecutor) {
           if (file === "gh") return yield* executeGh(args, cwd);
           return yield* live.exec(file, args, cwd);
         }),
-      } satisfies CommandExecutorShape;
+      } satisfies CommandExecutorPort;
     }),
   ).pipe(Layer.provide(CommandExecutor.layer));
 }

@@ -34,7 +34,7 @@ export interface IndexRow {
   sections: number;
 }
 
-export interface ServerRepoShape {
+export interface ServerRepoPort {
   readonly root: string;
   /** `owner/name` when the remote is known, else the repository directory name. */
   readonly slug: string;
@@ -70,7 +70,7 @@ export interface RepoOptions {
 
 type RepoDependencies = FileSystem.FileSystem | Path.Path | CommandExecutor | ContextResolver;
 
-export class ServerRepo extends Context.Service<ServerRepo, ServerRepoShape>()(
+export class ServerRepo extends Context.Service<ServerRepo, ServerRepoPort>()(
   "@balade/ServerRepo",
 ) {
   static layer(options: RepoOptions) {
@@ -184,7 +184,7 @@ const makeServerRepo = Effect.fn("makeServerRepo")(function* (
         );
       }),
     ),
-  } satisfies ServerRepoShape;
+  } satisfies ServerRepoPort;
 });
 
 const read = (fs: FileSystem.FileSystem, path: string) =>

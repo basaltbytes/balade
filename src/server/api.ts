@@ -17,9 +17,9 @@ import type {
   Payload,
   ReviewState,
 } from "../contract/types.js";
-import { ReviewStateStore, type ReviewStateStoreShape } from "../state.js";
-import { PayloadCache, type PayloadCacheShape } from "./cache.js";
-import { ServerRepo, type ServerRepoShape } from "./repo.js";
+import { ReviewStateStore, type ReviewStateStorePort } from "../state.js";
+import { PayloadCache, type PayloadCachePort } from "./cache.js";
+import { ServerRepo, type ServerRepoPort } from "./repo.js";
 
 export class ApiPathRequired extends Schema.TaggedErrorClass<ApiPathRequired>()(
   "ApiPathRequired",
@@ -80,16 +80,16 @@ export type ApiError =
 /** The slice of the repository adapter the answers read. */
 export interface ApiRepo {
   readonly slug: string;
-  readonly pin: ServerRepoShape["pin"];
-  readonly distance: ServerRepoShape["distance"];
-  readonly row: ServerRepoShape["row"];
+  readonly pin: ServerRepoPort["pin"];
+  readonly distance: ServerRepoPort["distance"];
+  readonly row: ServerRepoPort["row"];
 }
 
 interface ApiPorts {
   /** Served walkthroughs, repo-relative. More than one puts the index on the bare endpoint. */
   paths: readonly string[];
-  payloads: PayloadCacheShape;
-  state: ReviewStateStoreShape;
+  payloads: PayloadCachePort;
+  state: ReviewStateStorePort;
   repo: ApiRepo;
 }
 

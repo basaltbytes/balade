@@ -80,11 +80,11 @@ export interface ResolveResult {
 
 export type ResolveError = NotARepository | CommandFailed | CommitUnresolvable;
 
-export interface ContextResolverShape {
+export interface ContextResolverPort {
   readonly resolve: (options: ResolveOptions) => Effect.Effect<ResolveResult, ResolveError>;
 }
 
 /** The one resolution port the compiler pipeline reads a repository through. */
-export class ContextResolver extends Context.Service<ContextResolver, ContextResolverShape>()(
+export class ContextResolver extends Context.Service<ContextResolver, ContextResolverPort>()(
   "@balade/ContextResolver",
 ) {}

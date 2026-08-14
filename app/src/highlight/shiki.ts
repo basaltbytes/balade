@@ -123,13 +123,13 @@ export type HighlightFailure =
   | HighlightRenderFailed
   | HighlightLanguageCheckFailed;
 
-interface SyntaxHighlighterShape {
+interface SyntaxHighlighterPort {
   readonly ensureLanguages: (
     languages: ReadonlyArray<string>,
   ) => Effect.Effect<HighlighterCore, HighlightLoadFailed>;
 }
 
-export class SyntaxHighlighter extends Context.Service<SyntaxHighlighter, SyntaxHighlighterShape>()(
+export class SyntaxHighlighter extends Context.Service<SyntaxHighlighter, SyntaxHighlighterPort>()(
   "@balade/app/SyntaxHighlighter",
 ) {}
 

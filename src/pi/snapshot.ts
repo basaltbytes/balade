@@ -2,7 +2,7 @@
 
 import { Effect, FileSystem, Option, Path, Result, Schema } from "effect";
 import { sha256 } from "../contract/hash.js";
-import { CommandExecutor, type CommandExecutorShape } from "../shell.js";
+import { CommandExecutor, type CommandExecutorPort } from "../shell.js";
 import { escapesRoot, gitPath } from "../contract/paths.js";
 
 const TREE_DIRECTORY = "tree";
@@ -246,7 +246,7 @@ const rejectEscapingSymlinkSegments = Effect.fn("rejectEscapingSymlinkSegments")
 function materializeEntry(
   fs: FileSystem.FileSystem,
   path: Path.Path,
-  commands: CommandExecutorShape,
+  commands: CommandExecutorPort,
   repositoryRoot: string,
   pin: string,
   cacheRoot: string,
