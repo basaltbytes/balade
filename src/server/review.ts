@@ -5,12 +5,16 @@
 
 import { Effect, Match, Schema } from "effect";
 import {
+  plainTheme,
   printSoft,
   served,
+  stdoutTheme,
+  stderrTheme,
   stopMessage,
   stopReports,
   writeStderr,
   writeStdout,
+  type Theme,
 } from "../terminal.js";
 import { launchBrowser, type BrowserMode } from "./browser.js";
 import { findAppBundle, serve, type AppBundleMissing, type AppBundleReadFailed } from "./http.js";
@@ -87,6 +91,7 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
                 options.session.selection,
                 started.session.paths,
                 started.url,
+                stdoutTheme,
               ),
             );
           });
@@ -95,8 +100,8 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
             Effect.catchTag("BrowserLaunchFailed", (error) =>
               Effect.sync(() => {
                 writeStderr(
-                  `warning your browser did not open (${error.reason})\n` +
-                    `  fix Open ${error.url} yourself, or pass --no-browser.\n`,
+                  `${stderrTheme.warning("warning")} your browser did not open (${error.reason})\n` +
+                    `  ${stderrTheme.muted("fix")} Open ${error.url} yourself, or pass --no-browser.\n`,
                 );
               }),
             ),
@@ -111,7 +116,11 @@ export const runReviewSession = Effect.fn("runReviewSession")((options: RunRevie
   ),
 );
 
-const reviewSelectionNotice = (selection: Selection, paths: readonly string[]): string => {
+const reviewSelectionNotice = (
+  selection: Selection,
+  paths: readonly string[],
+  theme: Theme,
+): string => {
   switch (selection.kind) {
     case "discovered":
       return (
@@ -119,9 +128,9 @@ const reviewSelectionNotice = (selection: Selection, paths: readonly string[]): 
         `walkthrough${paths.length === 1 ? "" : "s"}.\n`
       );
     case "pullHead":
-      return (
+      return theme.warning(
         `Rendering walkthrough content from PR #${selection.number}'s head commit ` +
-        `${selection.at.slice(0, 7)} — content you have not reviewed.\n`
+          `${selection.at.slice(0, 7)} — content you have not reviewed.\n`,
       );
     case "files":
     case "workingTree":
@@ -133,8 +142,12 @@ export const reviewSessionStartedText = (
   selection: Selection,
   paths: readonly string[],
   url: string,
+  theme: Theme = plainTheme,
 ): string => {
-  return reviewSelectionNotice(selection, paths) + `balade is serving ${served(paths)} at ${url}\n`;
+  return (
+    reviewSelectionNotice(selection, paths, theme) +
+    `balade is serving ${served(paths)} at ${theme.url(url)}\n`
+  );
 };
 
 const reviewSessionErrorMessage = (error: ReviewSessionError): string =>

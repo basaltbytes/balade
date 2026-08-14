@@ -2,7 +2,14 @@
 
 import { Effect, Match, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { printSoft, size, stopMessage, stopReports, writeStdout } from "../../terminal.js";
+import {
+  printSoft,
+  size,
+  stdoutTheme,
+  stopMessage,
+  stopReports,
+  writeStdout,
+} from "../../terminal.js";
 import { buildErrorMessage, exportContentsMessage, runBuild } from "./pipeline.js";
 
 const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
@@ -37,7 +44,7 @@ export const buildCommand = Command.make(
           Effect.sync(() => {
             printSoft(reports);
             writeStdout(
-              `balade wrote ${file} (${size(bytes)})\n` +
+              `balade wrote ${stdoutTheme.emphasis(file)} (${size(bytes)})\n` +
                 `${exportContentsMessage(changedFileCount)}\n`,
             );
           }),

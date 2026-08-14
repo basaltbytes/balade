@@ -1225,4 +1225,23 @@ nobody asked to save. The suggestion placeholders left `guidance.md` with the
 sizing sentence reduced to "size the walkthrough to the change". What would
 move this: real spend complaints, which would argue for a cheaper default
 tier, never for quality caps.
-||||||| 85281c9
+
+## Color is a theme the formatter opts into; the write edge admits only its palette
+
+Terminal color rides `node:util.styleText`, no dependency: a `Theme` of six
+semantic slots (`error`, `warning`, `ok`, `emphasis`, `muted`, `url`) built
+per stream, so piped output, `NO_COLOR` and `FORCE_COLOR` resolve without a
+flag of our own. `plainTheme` is the formatter default — `formatText` also
+serves the model repair prompt and tests, which must stay byte-plain — and
+each command passes `stdoutTheme`/`stderrTheme` explicitly at its boundary.
+The terminal-injection invariant moved from "the writers strip everything" to
+two layers: untrusted values are control-stripped where they are interpolated,
+and the writers keep only the theme's own single-parameter SGR sequences
+(no conceal, no cursor control, no OSC), so a missed interpolation site can at
+worst borrow a palette color. `balade generate` adds a stderr activity spinner
+(`makeSpinner`), animated only on an interactive terminal and fed by the
+progress events' activity labels; printed lines interleave through
+`spinner.print`, and `Effect.ensuring` clears the frame on every exit path.
+What would move this: a renderer needing richer styling than six slots, which
+would argue for widening the palette allowlist in the same motion as the
+theme, never for trusting formatter output wholesale.

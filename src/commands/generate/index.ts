@@ -8,7 +8,18 @@ import { parsePrTarget } from "../../git/pr.js";
 import { getPreset, presetNames } from "../../preset/registry.js";
 import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
-import { formatText, stopMessage, writeStderr, writeStdout } from "../../terminal.js";
+import {
+  formatText,
+  makeSpinner,
+  plainTheme,
+  sanitizeTerminalText,
+  stdoutTheme,
+  stopMessage,
+  warningText,
+  writeStderr,
+  writeStdout,
+  type Theme,
+} from "../../terminal.js";
 import {
   AuthorDiscoveryFailed,
   LoginCancelled,
@@ -137,7 +148,11 @@ export const generateCommand = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
-      writeStdout(`balade ${packageVersion} (authoring package ${AUTHORING_PACKAGE_VERSION})\n`);
+      writeStdout(
+        stdoutTheme.muted(
+          `balade ${packageVersion} (authoring package ${AUTHORING_PACKAGE_VERSION})\n`,
+        ),
+      );
       const pull = parsePrTarget(config.pr);
       if (pull === null) {
         stopMessage(
@@ -156,12 +171,18 @@ export const generateCommand = Command.make(
       const selection = modelSelectionFromFlags(config.provider, config.model);
       const source = yield* resolvePullHead({ cwd: process.cwd(), target: pull });
       for (const notice of source.notices) {
-        writeStdout(`warning ${notice.code}\n  ${notice.message}\n  fix ${notice.hint}\n`);
+        writeStdout(warningText(notice, stdoutTheme));
       }
 
       const selected = yield* selectAuthorModel(selection);
       const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
-      const progress = makeGenerationProgress(writeStdout, progressMode);
+      const spinner = makeSpinner();
+      const printLine = (value: string) => spinner.print(() => writeStdout(value));
+      const progress = makeGenerationProgress(printLine, progressMode, {
+        theme: stdoutTheme,
+        onActivity: spinner.update,
+      });
+      spinner.start("Authoring the walkthrough…");
       const result = yield* runGeneration({
         source,
         model: selected,
@@ -174,27 +195,31 @@ export const generateCommand = Command.make(
         directory: config.directory,
         collisionPolicy: config.force ? "replace" : "exclusive",
         onExistingWalkthroughs: (files) => {
-          if (!config.force) writeStdout(generationPreflightText(source.pull.number, files));
+          if (!config.force) {
+            printLine(generationPreflightText(source.pull.number, files, stdoutTheme));
+          }
         },
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
-      });
+      }).pipe(Effect.ensuring(Effect.sync(() => spinner.stop())));
       if (result.siblings.length > 0) {
-        writeStdout(generationSiblingText(source.pull.number, result.siblings));
+        writeStdout(generationSiblingText(source.pull.number, result.siblings, stdoutTheme));
       }
       if (result._tag === "Generated") {
-        if (progressMode === "verbose") writeStdout(formatText({ reports: [result.report] }));
+        if (progressMode === "verbose") {
+          writeStdout(formatText({ reports: [result.report] }, stdoutTheme));
+        }
         const summary = {
           file: result.report.file,
           ranges: result.report.ranges.length,
           repairs: result.repairs,
         };
         if (config.noOpen) {
-          writeStdout(generationSuccessText(summary));
+          writeStdout(generationSuccessText(summary, stdoutTheme));
           return;
         }
-        writeStdout(generationSummaryText(summary));
+        writeStdout(generationSummaryText(summary, stdoutTheme));
         return yield* runReviewSession({
           session: {
             cwd: source.root,
@@ -204,18 +229,17 @@ export const generateCommand = Command.make(
           browserMode: config.noBrowser ? "headless" : "launch",
         });
       } else {
-        writeStdout(formatText({ reports: [result.report] }));
-        writeStderr(
-          `balade kept ${result.file} after check still found diagnostics${repairSummary(result.repairs)}. Edit it and run balade check ${result.file}.\n`,
+        writeStdout(formatText({ reports: [result.report] }, stdoutTheme));
+        stopMessage(
+          `balade kept ${result.file} after check still found diagnostics${repairSummary(result.repairs)}. Edit it and run balade check ${result.file}.`,
         );
-        process.exitCode = 1;
       }
     }).pipe(
       Effect.scoped,
       Effect.catch((error) =>
         Effect.sync(() => {
           if (error._tag === "RepairFailed") {
-            writeStdout(formatText({ reports: [error.report] }));
+            writeStdout(formatText({ reports: [error.report] }, stdoutTheme));
           }
           stopMessage(generationCliErrorMessage(error));
         }),
@@ -389,31 +413,43 @@ function printLoginNotification(event: LoginNotification): void {
 export function makeGenerationProgress(
   write: (value: string) => void,
   mode: AuthorProgressMode = "compact",
+  display: {
+    readonly theme?: Theme;
+    /** The spinner label follows the author's current activity. */
+    readonly onActivity?: (label: string) => void;
+  } = {},
 ): (event: AuthorProgress) => void {
+  const theme = display.theme ?? plainTheme;
   let turn = 0;
   const announced = new Set<string>();
   return (event) => {
     switch (event._tag) {
       case "AuthorNotice":
-        write(`warning ${event.code}\n  ${event.message}\n  fix ${event.hint}\n`);
+        write(warningText(event, theme));
         break;
       case "AuthorUsageUpdated": {
         turn++;
         const usage = event.usage;
         write(
-          `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
-            `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
-            `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
-            `cost $${usage.cost.toFixed(4)}\n`,
+          theme.muted(
+            `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
+              `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
+              `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
+              `cost $${usage.cost.toFixed(4)}`,
+          ) + "\n",
         );
         break;
       }
       case "AuthorAssistantText":
-        if (mode === "verbose") write(`[assistant]\n${withTrailingNewline(event.text)}`);
+        if (mode === "verbose") {
+          write(`[assistant]\n${withTrailingNewline(sanitizeTerminalText(event.text))}`);
+        }
         break;
       case "AuthorToolStarted":
+        display.onActivity?.(progressMessage(event.name));
         if (mode === "verbose") {
-          write(`[${event.name}]${event.input === "" ? "" : ` ${event.input}`}\n`);
+          const input = sanitizeTerminalText(event.input);
+          write(`[${sanitizeTerminalText(event.name)}]${input === "" ? "" : ` ${input}`}\n`);
         } else {
           const message = progressMessage(event.name);
           if (!announced.has(message)) {
@@ -424,8 +460,8 @@ export function makeGenerationProgress(
         break;
       case "AuthorToolFinished":
         if (mode === "verbose") {
-          if (event.output !== "") write(withTrailingNewline(event.output));
-          write(`[/${event.name}${event.failed ? " error" : ""}]\n`);
+          if (event.output !== "") write(withTrailingNewline(sanitizeTerminalText(event.output)));
+          write(`[/${sanitizeTerminalText(event.name)}${event.failed ? " error" : ""}]\n`);
         }
         break;
     }
@@ -457,7 +493,7 @@ function progressMessage(tool: string): string {
 
 function announceModel(model: AuthorModel, source?: string): void {
   writeStdout(
-    `Provider/model: ${model.providerName} — ${model.modelName} (${model.providerId}/${model.modelId})${source === undefined ? "" : ` — ${source}`}\n`,
+    `Provider/model: ${stdoutTheme.emphasis(`${model.providerName} — ${model.modelName}`)} (${model.providerId}/${model.modelId})${source === undefined ? "" : ` — ${source}`}\n`,
   );
   if (model.providerId === "anthropic") writeStdout(`${anthropicBillingCaveat()}\n`);
 }
@@ -477,39 +513,62 @@ function repairSummary(repairs: number): string {
   return repairs === 0 ? "" : ` after ${repairs} repair ${repairs === 1 ? "turn" : "turns"}`;
 }
 
-export function generationSuccessText(result: {
-  readonly file: string;
-  readonly ranges: number;
-  readonly repairs: number;
-}): string {
-  return generationSummaryText(result) + `Review it with:\n  balade open ${result.file}\n`;
+export function generationSuccessText(
+  result: {
+    readonly file: string;
+    readonly ranges: number;
+    readonly repairs: number;
+  },
+  theme: Theme = plainTheme,
+): string {
+  return (
+    generationSummaryText(result, theme) +
+    `Review it with:\n  ${theme.emphasis(`balade open ${result.file}`)}\n`
+  );
 }
 
-export function generationSummaryText(result: {
-  readonly file: string;
-  readonly ranges: number;
-  readonly repairs: number;
-}): string {
+export function generationSummaryText(
+  result: {
+    readonly file: string;
+    readonly ranges: number;
+    readonly repairs: number;
+  },
+  theme: Theme = plainTheme,
+): string {
   const ranges = `${result.ranges} code ${result.ranges === 1 ? "range" : "ranges"}`;
   return (
-    `Check passed${repairSummary(result.repairs)}: ${ranges} verified.\n` +
-    `Generated ${result.file}.\n`
+    `${theme.ok("Check passed")}${repairSummary(result.repairs)}: ${ranges} verified.\n` +
+    `Generated ${theme.emphasis(result.file)}.\n`
   );
 }
 
-export function generationPreflightText(pullNumber: number, files: readonly string[]): string {
-  return (
-    `warning walkthrough-exists\n` +
-    `  PR ${pullNumber} already has ${listFiles(files)}; this run may choose the same filename.\n` +
-    `  fix Pass --force to replace a matching filename, or --dir to redirect the output.\n`
+export function generationPreflightText(
+  pullNumber: number,
+  files: readonly string[],
+  theme: Theme = plainTheme,
+): string {
+  return warningText(
+    {
+      code: "walkthrough-exists",
+      message: `PR ${pullNumber} already has ${listFiles(files)}; this run may choose the same filename.`,
+      hint: "Pass --force to replace a matching filename, or --dir to redirect the output.",
+    },
+    theme,
   );
 }
 
-export function generationSiblingText(pullNumber: number, files: readonly string[]): string {
-  return (
-    `warning walkthrough-siblings\n` +
-    `  Other walkthroughs for PR ${pullNumber}: ${files.join(", ")}.\n` +
-    `  fix Remove any sibling that no longer describes a walkthrough you want to keep.\n`
+export function generationSiblingText(
+  pullNumber: number,
+  files: readonly string[],
+  theme: Theme = plainTheme,
+): string {
+  return warningText(
+    {
+      code: "walkthrough-siblings",
+      message: `Other walkthroughs for PR ${pullNumber}: ${files.join(", ")}.`,
+      hint: "Remove any sibling that no longer describes a walkthrough you want to keep.",
+    },
+    theme,
   );
 }
 

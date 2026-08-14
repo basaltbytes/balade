@@ -5,7 +5,7 @@ import type { PlatformError } from "effect/PlatformError";
 import { Command, Flag } from "effect/unstable/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import type { CommandFailed, NotARepository } from "../../contract/context.js";
-import { stopMessage, writeStdout } from "../../terminal.js";
+import { stdoutTheme, stopMessage, writeStdout } from "../../terminal.js";
 import { runSkillsInstall } from "./install.js";
 
 const out = Flag.string("out").pipe(
@@ -21,7 +21,7 @@ const installCommand = Command.make("install", { out }, (config) =>
       cwd: process.cwd(),
       ...(Option.isSome(config.out) ? { out: config.out.value } : {}),
     });
-    for (const file of written) writeStdout(`wrote ${file}\n`);
+    for (const file of written) writeStdout(`wrote ${stdoutTheme.emphasis(file)}\n`);
     writeStdout(
       `Installed the balade-authoring skill (authoring package ${AUTHORING_PACKAGE_VERSION}). Re-run after upgrading balade to refresh it.\n`,
     );
