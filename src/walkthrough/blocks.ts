@@ -662,10 +662,13 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     });
   }
 
-  const facets: CodeFacets = {};
-  if (collapsed) facets.collapsed = collapsed;
-  if (mark.length > 0) facets.mark = mark;
-  if (expect !== undefined) facets.expect = expect;
+  /* Two facet spreads keep the serialized key order of the old literal, so a
+     rebuilt export stays byte-stable. */
+  const collapsedFacet: CodeFacets = {};
+  if (collapsed) collapsedFacet.collapsed = collapsed;
+  const evidenceFacets: CodeFacets = {};
+  if (mark.length > 0) evidenceFacets.mark = mark;
+  if (expect !== undefined) evidenceFacets.expect = expect;
   const block: CodeBlock = {
     b: "code",
     file,
@@ -673,9 +676,10 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
     to,
     lang: env.fileEntry(file)?.lang ?? langOf(file),
     view: view === "plain" || view === "diff" ? view : "change",
+    ...collapsedFacet,
     lines: [...lines],
     changed,
-    ...facets,
+    ...evidenceFacets,
   };
   return [block];
 }

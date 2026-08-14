@@ -131,6 +131,23 @@ describe("the walkthrough route", () => {
     expect(open).toContain("octicon-chevron-down");
   });
 
+  it("falls back to the dot icon for an icon named after an Object.prototype member", () => {
+    const payload: Payload = {
+      ...pr96,
+      sections: [
+        {
+          id: "hostile-icon",
+          title: "Hostile icon",
+          hash: "sha256:hostile-icon",
+          icon: "constructor",
+          blocks: [],
+        },
+      ],
+    };
+    const rendered = render(payload);
+    expect(rendered).toContain("octicon-dot-fill");
+  });
+
   it("caps a payload-provided diagram at a 64 by 64 grid", () => {
     const payload: Payload = {
       ...pr96,

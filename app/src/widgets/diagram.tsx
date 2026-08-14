@@ -251,7 +251,7 @@ export function Diagram({
                     <span className="font-mono text-[12px] text-foreground">{node.model}</span>
                     {node.badge !== undefined ? (
                       <span
-                        className={`text-[10.5px] border rounded-md px-[5px] py-[1px] ${BADGE.get(node.badge ?? "new") ?? NEW_BADGE}`}
+                        className={`text-[10.5px] border rounded-md px-[5px] py-[1px] ${BADGE.get(node.badge) ?? NEW_BADGE}`}
                       >
                         {node.badge}
                       </span>

@@ -395,6 +395,15 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
     expect(refused.status).toBe(400);
   }
 
+  /* Authority precedes the body: an unserved path answers 404 even when the
+     body is not JSON. */
+  const unservedPut = await send("/api/state?path=walkthroughs/nope.md", {
+    method: "PUT",
+    headers: json,
+    body: "{ not json",
+  });
+  expect(unservedPut.status).toBe(404);
+
   const staleness = await send(`/api/staleness${query}`);
   expect(staleness.status).toBe(200);
   /* SAFETY: the assertion names the envelope the matcher below verifies. */

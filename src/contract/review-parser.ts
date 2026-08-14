@@ -6,7 +6,7 @@
  * may import it: no node, no CLI runtime.
  */
 
-import { Effect, flow, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { ReviewState as ReviewStateSchema } from "./schema.js";
 
 const decodeReviewState = Schema.decodeUnknownEffect(ReviewStateSchema, {
@@ -35,7 +35,7 @@ export const parseReviewJson = Effect.fn("parseReviewJson")(function* (raw: stri
   return yield* parseReviewState(value);
 });
 
-export const parseReviewState = flow(
-  decodeReviewState,
-  Effect.mapError((cause) => new ReviewStateInvalid({ cause })),
-);
+/* Single-argument on purpose: the decoder accepts per-call options that could
+   override the strict `onExcessProperty` gate; this wrapper never forwards them. */
+export const parseReviewState = (value: Parameters<typeof decodeReviewState>[0]) =>
+  decodeReviewState(value).pipe(Effect.mapError((cause) => new ReviewStateInvalid({ cause })));
