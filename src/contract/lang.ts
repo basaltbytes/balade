@@ -5,7 +5,8 @@
 
 import { fileName } from "./paths.js";
 
-const BY_EXTENSION: Record<string, string> = {
+const BY_EXTENSION = new Map(
+  Object.entries({
   bash: "bash",
   c: "c",
   cfg: "ini",
@@ -55,20 +56,23 @@ const BY_EXTENSION: Record<string, string> = {
   yaml: "yaml",
   yml: "yaml",
   zsh: "bash",
-};
+  }),
+);
 
-const BY_FILENAME: Record<string, string> = {
+const BY_FILENAME = new Map(
+  Object.entries({
   ".gitignore": "text",
   dockerfile: "dockerfile",
   makefile: "makefile",
   "requirements.txt": "text",
-};
+  }),
+);
 
 export function langOf(path: string): string {
   const name = fileName(path).toLowerCase();
-  const byName = BY_FILENAME[name];
+  const byName = BY_FILENAME.get(name);
   if (byName !== undefined) return byName;
   const dot = name.lastIndexOf(".");
   if (dot <= 0) return "text";
-  return BY_EXTENSION[name.slice(dot + 1)] ?? "text";
+  return BY_EXTENSION.get(name.slice(dot + 1)) ?? "text";
 }
