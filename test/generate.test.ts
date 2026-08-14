@@ -880,8 +880,9 @@ describe("generation", () => {
           onExistingWalkthroughs: () => {},
           headInstructionPolicy: "omit-changed",
           progressMode: "compact",
-          progress: () => {},
-          onPhase: (label) => phases.push(label),
+          progress: (event) => {
+            if (event._tag === "GenerationPhase") phases.push(event.label);
+          },
         });
       }).pipe(Effect.provide(harness.layer));
 

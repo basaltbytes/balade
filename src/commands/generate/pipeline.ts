@@ -66,15 +66,24 @@ export interface RunGenerationOptions {
   /** Named by `--budget`; sizes the inspection budget. */
   readonly budget?: InspectionTier;
   readonly headInstructionPolicy: HeadInstructionPolicy;
-  readonly progress: (event: AuthorProgress) => void;
+  readonly progress: (event: GenerationProgress) => void;
   readonly progressMode: AuthorProgressMode;
-  /**
-   * The pipeline's own phase transitions (draft check, repair turns). The
-   * model's tool events go quiet here, so the progress display would
-   * otherwise keep showing the last authoring activity over blocking work.
-   */
-  readonly onPhase?: (label: string) => void;
 }
+
+/**
+ * The pipeline's own phase transitions (draft check, repair turns) ride the
+ * same progress channel as the author's events: the model's tools go quiet
+ * during these phases, so a display that only followed tool events would keep
+ * showing the last authoring activity over blocking work.
+ */
+export interface GenerationPhase {
+  readonly _tag: "GenerationPhase";
+  readonly label: string;
+}
+
+export type GenerationProgress = AuthorProgress | GenerationPhase;
+
+const CHECKING_PHASE = "Checking the draft against the pinned source…";
 
 interface GenerationSummary {
   readonly file: string;
@@ -145,13 +154,14 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
     });
     const file = output.file;
 
+    const phase = (label: string) => options.progress({ _tag: "GenerationPhase", label });
     let turn = initial;
     let repairs = 0;
-    options.onPhase?.("Checking the draft against the pinned source…");
+    phase(CHECKING_PHASE);
     let report = yield* checkGeneratedDraft(options.source.root, file);
     while (!report.ok && repairs < MAX_REPAIR_ATTEMPTS) {
       repairs++;
-      options.onPhase?.(`Repairing the draft (turn ${repairs} of ${MAX_REPAIR_ATTEMPTS})…`);
+      phase(`Repairing the draft (turn ${repairs} of ${MAX_REPAIR_ATTEMPTS})…`);
       turn = yield* session
         .repair(formatText({ reports: [report] }))
         .pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
@@ -159,7 +169,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
         file,
         renderDraft(options.source, turn.draft, options.preset, options.lang),
       ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
-      options.onPhase?.("Checking the draft against the pinned source…");
+      phase(CHECKING_PHASE);
       report = yield* checkGeneratedDraft(options.source.root, file);
     }
 

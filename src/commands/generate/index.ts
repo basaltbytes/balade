@@ -27,14 +27,18 @@ import {
   WalkthroughAuthor,
   type AuthorLoginMethod,
   type AuthorModel,
-  type AuthorProgress,
   type AuthorProgressMode,
   type LoginInteraction,
   type LoginNotification,
   type LoginPrompt,
   type LoginSecretPrompt,
 } from "../../pi/author.js";
-import { generateErrorMessage, runGeneration, type GenerateError } from "./pipeline.js";
+import {
+  generateErrorMessage,
+  runGeneration,
+  type GenerateError,
+  type GenerationProgress,
+} from "./pipeline.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -182,13 +186,6 @@ export const generateCommand = Command.make(
         theme: stdoutTheme,
         onActivity: spinner.update,
       });
-      /* Phases print as history and retitle the spinner: blocking check work
-         would otherwise freeze the frame under a stale authoring activity.
-         Retitle first — `print` redraws with the label it has. */
-      const onPhase = (label: string) => {
-        spinner.update(label);
-        printLine(`${label}\n`);
-      };
       spinner.start("Authoring the walkthrough…");
       const result = yield* runGeneration({
         source,
@@ -209,7 +206,6 @@ export const generateCommand = Command.make(
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
-        onPhase,
       }).pipe(Effect.ensuring(Effect.sync(() => spinner.stop())));
       if (result.siblings.length > 0) {
         writeStdout(generationSiblingText(source.pull.number, result.siblings, stdoutTheme));
@@ -423,15 +419,21 @@ export function makeGenerationProgress(
   mode: AuthorProgressMode = "compact",
   display: {
     readonly theme?: Theme;
-    /** The spinner label follows the author's current activity. */
+    /** The spinner label follows the author's — or the pipeline's — current activity. */
     readonly onActivity?: (label: string) => void;
   } = {},
-): (event: AuthorProgress) => void {
+): (event: GenerationProgress) => void {
   const theme = display.theme ?? plainTheme;
   let turn = 0;
   const announced = new Set<string>();
   return (event) => {
     switch (event._tag) {
+      /* Retitle before writing: an interleaved print redraws the spinner
+         with the label it has. */
+      case "GenerationPhase":
+        display.onActivity?.(event.label);
+        write(`${event.label}\n`);
+        break;
       case "AuthorNotice":
         write(warningText(event, theme));
         break;
