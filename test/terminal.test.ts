@@ -1,12 +1,10 @@
-/** Terminal styling: the SGR allowlist at the write edge, themed formatting, and the spinner. */
+/** Terminal styling: the SGR allowlist at the write edge and themed formatting. */
 
 import { describe, expect, it, vi } from "@effect/vitest";
-import { Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
 import type { CheckReport } from "../src/contract/types.js";
 import {
   formatText,
-  makeSpinner,
   sanitizeStyledTerminalText,
   stdoutTheme,
   warningText,
@@ -142,75 +140,5 @@ describe("warning shape", () => {
     );
     expect(text).toContain("<warning>warning</warning> walkthrough-exists");
     expect(text).toContain("<muted>fix</muted> Pass --force.");
-  });
-});
-
-interface FakeStream {
-  readonly chunks: string[];
-  readonly stream: NodeJS.WriteStream;
-}
-
-/** A real Writable, because `styleText` validates the stream instance. */
-const fakeStream = (isTTY: boolean): FakeStream => {
-  const chunks: string[] = [];
-  const writable = new Writable({
-    write(chunk: Buffer | string, _encoding, callback) {
-      chunks.push(String(chunk));
-      callback();
-    },
-  });
-  Object.assign(writable, { isTTY });
-  return { chunks, stream: writable as unknown as NodeJS.WriteStream };
-};
-
-describe("spinner", () => {
-  it("animates frames on an interactive terminal", () => {
-    vi.useFakeTimers();
-    try {
-      const tty = fakeStream(true);
-      const spinner = makeSpinner(tty.stream);
-      spinner.start("Authoring…");
-      expect(tty.chunks.join("")).toContain("Authoring…");
-      const before = tty.chunks.length;
-      vi.advanceTimersByTime(200);
-      expect(tty.chunks.length).toBeGreaterThan(before);
-      spinner.update("Reading diffs…");
-      vi.advanceTimersByTime(100);
-      expect(tty.chunks.at(-1)).toContain("Reading diffs…");
-      vi.advanceTimersByTime(61_000);
-      expect(tty.chunks.at(-1)).toContain("1m01s");
-      spinner.stop();
-      const trailing = tty.chunks.at(-1) ?? "";
-      expect(trailing).toContain("\r\u001b[2K");
-      vi.advanceTimersByTime(500);
-      expect(tty.chunks.at(-1)).toBe(trailing);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("clears the frame around an interleaved line and strips label controls", () => {
-    const tty = fakeStream(true);
-    const spinner = makeSpinner(tty.stream);
-    spinner.start("safe\u001b[2Jlabel");
-    expect(tty.chunks.join("")).not.toContain("\u001b[2J");
-    tty.chunks.length = 0;
-    const order: string[] = [];
-    spinner.print(() => order.push("line"));
-    expect(order).toEqual(["line"]);
-    expect(tty.chunks[0]).toBe("\r\u001b[2K");
-    expect(tty.chunks.at(-1)).toContain("safe");
-    spinner.stop();
-  });
-
-  it("stays silent when the stream is not a terminal", () => {
-    const piped = fakeStream(false);
-    const spinner = makeSpinner(piped.stream);
-    spinner.start("Authoring…");
-    const order: string[] = [];
-    spinner.print(() => order.push("line"));
-    spinner.stop();
-    expect(order).toEqual(["line"]);
-    expect(piped.chunks).toEqual([]);
   });
 });

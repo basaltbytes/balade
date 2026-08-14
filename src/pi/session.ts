@@ -366,13 +366,11 @@ export async function createPiSession(
         name: event.toolName,
         input: request.progressMode === "verbose" ? verboseValue(event.args) : "",
       });
-    } else if (event.type === "tool_execution_end") {
-      /* Emitted in both modes — the display needs the boundary to know the
-         model is generating again; only the payload is verbose. */
+    } else if (request.progressMode === "verbose" && event.type === "tool_execution_end") {
       request.progress({
         _tag: "AuthorToolFinished",
         name: event.toolName,
-        output: request.progressMode === "verbose" ? verboseToolOutput(event.result) : "",
+        output: verboseToolOutput(event.result),
         failed: event.isError,
       });
     }

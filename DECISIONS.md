@@ -1238,18 +1238,14 @@ The terminal-injection invariant moved from "the writers strip everything" to
 two layers: untrusted values are control-stripped where they are interpolated,
 and the writers keep only the theme's own single-parameter SGR sequences
 (no conceal, no cursor control, no OSC), so a missed interpolation site can at
-worst borrow a palette color. `balade generate` adds a stderr activity spinner
-(`makeSpinner`), animated only on an interactive terminal and fed by the
-progress events' activity labels; printed lines interleave through
-`spinner.print`, and an `Effect.acquireUseRelease` bracket owns the lifecycle,
-so the frame clears on every exit path.
-The pipeline reports its own phase transitions (draft check, repair turns) as
-`GenerationPhase` events on the same progress channel as the author's events —
-one channel, one handler, so the display policy (retitle the spinner, then
-print the history line) has a single enforcement point. The phases exist
-because the check phase runs sequential `spawnSync` git calls that block the
-event loop: the frame freezes there by construction, so the label under it
-must be truthful rather than the last authoring activity.
+worst borrow a palette color.
+A live progress display for `generate` (activity spinner, phase lines,
+elapsed clock) was built on top of these colors and backed out: the author's
+event stream has no state semantics — tools are millisecond reads while the
+minutes are eventless generation gaps — and the synchronous `CommandExecutor`
+blocks the event loop through the whole check phase, so every animated
+display ended up lying. Issue #122 carries the post-mortem and the shape of a
+real fix (owned status model, async process port, faux-provider TTY harness).
 What would move this: a renderer needing richer styling than six slots, which
 would argue for widening the palette allowlist in the same motion as the
 theme, never for trusting formatter output wholesale.

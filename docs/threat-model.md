@@ -290,9 +290,7 @@ they describe.
   formatted line, and the stdout/stderr writers admit only the theme's own
   single-parameter SGR color sequences (`sanitizeStyledTerminalText`), so a
   value that skipped the first layer can at worst borrow a palette color —
-  conceal, cursor movement and OSC hyperlinks never reach the terminal. The
-  spinner writes trusted constant frames directly and control-strips its
-  label.
+  conceal, cursor movement and OSC hyperlinks never reach the terminal.
 - Attacker-controlled paths reaching git are `--`-guarded with `:(literal)`
   pathspec magic (`src/git/git.ts:135-145`, `src/pi/session.ts:195-206`,
   `src/server/repo.ts:158`). SHA-prefixed composites cannot begin with `-`: the

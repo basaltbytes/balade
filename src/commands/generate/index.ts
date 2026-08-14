@@ -10,7 +10,6 @@ import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
 import {
   formatText,
-  makeSpinner,
   plainTheme,
   sanitizeTerminalText,
   stdoutTheme,
@@ -28,18 +27,14 @@ import {
   WalkthroughAuthor,
   type AuthorLoginMethod,
   type AuthorModel,
+  type AuthorProgress,
   type AuthorProgressMode,
   type LoginInteraction,
   type LoginNotification,
   type LoginPrompt,
   type LoginSecretPrompt,
 } from "../../pi/author.js";
-import {
-  generateErrorMessage,
-  runGeneration,
-  type GenerateError,
-  type GenerationProgress,
-} from "./pipeline.js";
+import { generateErrorMessage, runGeneration, type GenerateError } from "./pipeline.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -129,9 +124,6 @@ const port = Flag.integer("port").pipe(
   Flag.withDefault(0),
 );
 
-/** The spinner's resting label: between events the model is generating. */
-const AUTHORING_ACTIVITY = "Authoring the walkthrough…";
-
 const PackageManifest = Schema.Struct({ version: Schema.String });
 const packageManifest: unknown = createRequire(import.meta.url)("../../../package.json");
 const packageVersion = Schema.decodeUnknownSync(PackageManifest)(packageManifest).version;
@@ -184,37 +176,27 @@ export const generateCommand = Command.make(
 
       const selected = yield* selectAuthorModel(selection);
       const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
-      const spinner = makeSpinner();
-      const printLine = (value: string) => spinner.print(() => writeStdout(value));
-      const progress = makeGenerationProgress(printLine, progressMode, {
-        theme: stdoutTheme,
-        onActivity: spinner.update,
+      const progress = makeGenerationProgress(writeStdout, progressMode, stdoutTheme);
+      const result = yield* runGeneration({
+        source,
+        model: selected,
+        ...(chosen === undefined
+          ? {}
+          : { preset: { name: chosen.name, authoring: chosen.authoring } }),
+        ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
+        ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
+        budget: config.budget,
+        directory: config.directory,
+        collisionPolicy: config.force ? "replace" : "exclusive",
+        onExistingWalkthroughs: (files) => {
+          if (!config.force) {
+            writeStdout(generationPreflightText(source.pull.number, files, stdoutTheme));
+          }
+        },
+        headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
+        progressMode,
+        progress,
       });
-      const result = yield* Effect.acquireUseRelease(
-        Effect.sync(() => spinner.start(AUTHORING_ACTIVITY)),
-        () =>
-          runGeneration({
-            source,
-            model: selected,
-            ...(chosen === undefined
-              ? {}
-              : { preset: { name: chosen.name, authoring: chosen.authoring } }),
-            ...(Option.isSome(config.lang) ? { lang: config.lang.value } : {}),
-            ...(Option.isSome(config.guidance) ? { guidance: config.guidance.value } : {}),
-            budget: config.budget,
-            directory: config.directory,
-            collisionPolicy: config.force ? "replace" : "exclusive",
-            onExistingWalkthroughs: (files) => {
-              if (!config.force) {
-                printLine(generationPreflightText(source.pull.number, files, stdoutTheme));
-              }
-            },
-            headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
-            progressMode,
-            progress,
-          }),
-        () => Effect.sync(() => spinner.stop()),
-      );
       if (result.siblings.length > 0) {
         writeStdout(generationSiblingText(source.pull.number, result.siblings, stdoutTheme));
       }
@@ -427,23 +409,12 @@ function printLoginNotification(event: LoginNotification): void {
 export function makeGenerationProgress(
   write: (value: string) => void,
   mode: AuthorProgressMode = "compact",
-  display: {
-    readonly theme?: Theme;
-    /** The spinner label follows the author's — or the pipeline's — current activity. */
-    readonly onActivity?: (label: string) => void;
-  } = {},
-): (event: GenerationProgress) => void {
-  const theme = display.theme ?? plainTheme;
+  theme: Theme = plainTheme,
+): (event: AuthorProgress) => void {
   let turn = 0;
   const announced = new Set<string>();
   return (event) => {
     switch (event._tag) {
-      /* Retitle before writing: an interleaved print redraws the spinner
-         with the label it has. */
-      case "GenerationPhase":
-        display.onActivity?.(event.label);
-        write(`${event.label}\n`);
-        break;
       case "AuthorNotice":
         write(warningText(event, theme));
         break;
@@ -466,7 +437,6 @@ export function makeGenerationProgress(
         }
         break;
       case "AuthorToolStarted":
-        display.onActivity?.(progressMessage(event.name));
         if (mode === "verbose") {
           const input = sanitizeTerminalText(event.input);
           write(`[${sanitizeTerminalText(event.name)}]${input === "" ? "" : ` ${input}`}\n`);
@@ -479,10 +449,6 @@ export function makeGenerationProgress(
         }
         break;
       case "AuthorToolFinished":
-        /* A tool label is true only while the tool runs — milliseconds of
-           local snapshot work. The minutes live in the gaps between events,
-           where the model is generating, so the label returns to authoring. */
-        display.onActivity?.(AUTHORING_ACTIVITY);
         if (mode === "verbose") {
           if (event.output !== "") write(withTrailingNewline(sanitizeTerminalText(event.output)));
           write(`[/${sanitizeTerminalText(event.name)}${event.failed ? " error" : ""}]\n`);

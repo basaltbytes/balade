@@ -570,14 +570,7 @@ describe("the Pi adapter", () => {
 
       expect(finalRequest).toContain("Diff inspection budget reached after 16 reads");
       expect(progress.some((event) => event._tag === "AuthorAssistantText")).toBe(false);
-      /* Compact still gets the finish boundary — the display flips its label
-         there — but the payloads stay verbose-only. */
-      expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(true);
-      expect(
-        progress
-          .filter((event) => event._tag === "AuthorToolFinished")
-          .every((event) => event.output === ""),
-      ).toBe(true);
+      expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(false);
       expect(
         progress
           .filter((event) => event._tag === "AuthorToolStarted")
@@ -876,7 +869,6 @@ describe("generation", () => {
         submitted(invalidBody, "Needs manual repair"),
         submitted(invalidBody, "Needs manual repair"),
       ]);
-      const phases: string[] = [];
       const result = yield* Effect.gen(function* () {
         const model = yield* fauxModel();
         return yield* runGeneration({
@@ -887,21 +879,12 @@ describe("generation", () => {
           onExistingWalkthroughs: () => {},
           headInstructionPolicy: "omit-changed",
           progressMode: "compact",
-          progress: (event) => {
-            if (event._tag === "GenerationPhase") phases.push(event.label);
-          },
+          progress: () => {},
         });
       }).pipe(Effect.provide(harness.layer));
 
       expect(result._tag).toBe("GeneratedWithDiagnostics");
       expect(result.repairs).toBe(2);
-      expect(phases).toEqual([
-        "Checking the draft against the pinned source…",
-        "Repairing the draft (turn 1 of 2)…",
-        "Checking the draft against the pinned source…",
-        "Repairing the draft (turn 2 of 2)…",
-        "Checking the draft against the pinned source…",
-      ]);
       expect(existsSync(result.file)).toBe(true);
       expect(result.report.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(
         true,
