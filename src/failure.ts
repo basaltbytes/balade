@@ -1,9 +1,11 @@
+import { Predicate } from "effect";
+
 /** A safe, compact description for a typed failure or an external exception. */
-export function describeFailure(value: unknown): string {
-  if (value instanceof Error && value.message.trim() !== "") return value.message;
-  if (typeof value === "object" && value !== null && "_tag" in value) {
-    const tag = String(value._tag);
-    return "path" in value ? `${tag}: ${String(value.path)}` : tag;
+export function describeFailure(cause: unknown): string {
+  if (cause instanceof Error && cause.message.trim() !== "") return cause.message;
+  if (Predicate.isObject(cause) && "_tag" in cause) {
+    const tag = String(cause._tag);
+    return "path" in cause ? `${tag}: ${String(cause.path)}` : tag;
   }
-  return String(value);
+  return String(cause);
 }

@@ -3,7 +3,8 @@
  * `o-security` and `o-diagram` pass their attributes to core nodes as they are.
  */
 
-import type { Node, Schema, ValidationError } from "@markdoc/markdoc";
+import type { Node, Scalar, Schema, ValidationError } from "@markdoc/markdoc";
+import { Predicate } from "effect";
 import { diagramBlock } from "../contract/diagram.js";
 import type { Block, FieldRow, Inline } from "../contract/types.js";
 import type { MacroApi, Preset, PresetTag } from "./types.js";
@@ -11,13 +12,13 @@ import type { MacroApi, Preset, PresetTag } from "./types.js";
 /** Relational kinds carry a comodel; `check` fails when one is missing. */
 const RELATIONAL = ["Many2one", "One2many", "Many2many", "Many2oneReference"];
 
-const DECORATOR_CHIPS: Record<string, string> = {
-  "api.depends": "depends",
-  "api.constrains": "constrains",
-  "api.model": "model",
-  "api.model_create_multi": "model",
-  "api.onchange": "onchange",
-};
+const DECORATOR_CHIPS = new Map([
+  ["api.depends", "depends"],
+  ["api.constrains", "constrains"],
+  ["api.model", "model"],
+  ["api.model_create_multi", "model"],
+  ["api.onchange", "onchange"],
+]);
 
 function baseKind(kind: string): string {
   const head = kind.split("·")[0] ?? kind;
@@ -41,9 +42,9 @@ const fieldSchema: Schema = {
     const kind = node.attributes["kind"];
     const comodel = node.attributes["comodel"];
     if (
-      typeof kind === "string" &&
+      Predicate.isString(kind) &&
       RELATIONAL.includes(baseKind(kind)) &&
-      typeof comodel !== "string"
+      !Predicate.isString(comodel)
     ) {
       return [
         {
@@ -72,16 +73,13 @@ const oField: PresetTag = {
     if (node.attributes["store"] === true) badges.push("stored");
 
     const tags = toStrings(node.attributes["tags"]);
-    if (typeof comodel === "string") tags.unshift(`→ ${comodel}`);
+    if (Predicate.isString(comodel)) tags.unshift(`→ ${comodel}`);
 
     const note: Inline[] = api.inline(node);
-    const row: FieldRow = {
-      name,
-      kind,
-      note,
-      ...(badges.length > 0 ? { badges: dedupe(badges) } : {}),
-      ...(tags.length > 0 ? { tags } : {}),
-    };
+    const facets: FieldRowFacets = {};
+    if (badges.length > 0) facets.badges = dedupe(badges);
+    if (tags.length > 0) facets.tags = tags;
+    const row: FieldRow = { name, kind, note, ...facets };
     return [row];
   },
 };
@@ -95,20 +93,17 @@ const oSecurity: PresetTag = {
   },
   expand(node: Node): Block[] {
     const head = ["ACL · group", "read", "write", "create", "unlink"];
-    const rows = Array.isArray(node.attributes["rows"])
-      ? (node.attributes["rows"] as unknown[])
-      : [];
+    const rowsAttr: Scalar | undefined = node.attributes["rows"];
+    const rows = Array.isArray(rowsAttr) ? rowsAttr : [];
     return [
       {
         b: "matrix",
         head,
         rows: rows.flatMap((row) => {
-          if (row === null || typeof row !== "object") return [];
-          const record = row as Record<string, unknown>;
-          const cells = Array.isArray(record["cells"]) ? (record["cells"] as unknown[]) : [];
-          return [
-            { label: String(record["label"] ?? ""), cells: cells.map((cell) => cell === true) },
-          ];
+          if (!isScalarRecord(row)) return [];
+          const cellsValue = row["cells"];
+          const cells = Array.isArray(cellsValue) ? cellsValue : [];
+          return [{ label: String(row["label"] ?? ""), cells: cells.map((cell) => cell === true) }];
         }),
       },
     ];
@@ -135,7 +130,7 @@ const oDiagram: PresetTag = {
  * parse each one against the real Markdoc config — a wrong attribute here would
  * teach every generated draft invalid syntax and cost a repair turn per run.
  */
-export const ODOO_AUTHORING_EXAMPLES: Record<"field" | "security" | "diagram", string> = {
+export const ODOO_AUTHORING_EXAMPLES = {
   field: `{% fields %}
 {% o-field name="allocation_id" kind="Many2one" comodel="planning.allocation" readonly=true %}
 The source row this lens reflects.
@@ -143,7 +138,7 @@ The source row this lens reflects.
 {% /fields %}`,
   security: `{% o-security model="planning.pool.item" rows=[{label: "base.group_user", cells: [true, false, false, false]}] /%}`,
   diagram: `{% o-diagram intro="How the pool reaches a slot." nodes=[{id: "pool", model: "planning.pool.item", change: "new", col: 1, row: 1, compartments: [{label: "fields", rows: ["allocation_id", "slot_ids"]}]}, {id: "slot", model: "planning.slot", change: "ctx", col: 2, row: 1}] edges=[{from: "pool", to: "slot", kind: "new", label: "One2many"}] /%}`,
-};
+} satisfies Record<"field" | "security" | "diagram", string>;
 
 /* Written for a model that also has the core catalog in its prompt: syntax it
    cannot guess, plus when each tag earns its place. */
@@ -204,7 +199,12 @@ export const odooPreset: Preset = {
   },
 };
 
-function toStrings(value: unknown): string[] {
+type FieldRowFacets = { badges?: readonly string[]; tags?: readonly string[] };
+
+const isScalarRecord = (value: Scalar): value is { [key: string]: Scalar } =>
+  Predicate.isObject(value);
+
+function toStrings(value: Scalar | undefined): string[] {
   return Array.isArray(value) ? value.map((item) => String(item)) : [];
 }
 

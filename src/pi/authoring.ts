@@ -50,15 +50,21 @@ Preset: ${preset.name}
 ${preset.authoring}`;
 }
 
+type IssueBodyFacet = { body?: string };
+type GithubClaimFacets = {
+  pullRequest?: { title: string; body: string };
+  linkedIssues?: readonly { title: string; body?: string }[];
+};
+
 type InitialAuthoringRequest = Pick<
   AuthoringRequest,
   "pin" | "pull" | "claims" | "files" | "lang" | "guidance"
 >;
 
-const LANGUAGE_INSTRUCTION: Record<Lang, string> = {
+const LANGUAGE_INSTRUCTION = {
   en: "Walkthrough language: English. Write the title and all walkthrough prose in English.",
   fr: "Walkthrough language: French. Write the title and all walkthrough prose in French, following the French writing rules.",
-};
+} satisfies Record<Lang, string>;
 
 export function initialAuthoringPrompt(request: InitialAuthoringRequest): string {
   const changed = request.files
@@ -74,30 +80,26 @@ export function initialAuthoringPrompt(request: InitialAuthoringRequest): string
     github?.linkedIssues.flatMap((issue) => {
       if (issue.reference._tag !== "SameRepositoryLinkedIssue") return [];
       const body = Option.getOrUndefined(issue.body);
-      return [{ title: issue.title, ...(body === undefined ? {} : { body }) }];
+      const bodyFacet: IssueBodyFacet = {};
+      if (body !== undefined) bodyFacet.body = body;
+      return [{ title: issue.title, ...bodyFacet }];
     }) ?? [];
   const thirdPartyLinkedIssues =
     github?.linkedIssues.flatMap((issue) => {
       if (issue.reference._tag !== "ThirdPartyLinkedIssue") return [];
       const body = Option.getOrUndefined(issue.body);
-      return [
-        {
-          repository: issue.reference.repository,
-          title: issue.title,
-          ...(body === undefined ? {} : { body }),
-        },
-      ];
+      const bodyFacet: IssueBodyFacet = {};
+      if (body !== undefined) bodyFacet.body = body;
+      return [{ repository: issue.reference.repository, title: issue.title, ...bodyFacet }];
     }) ?? [];
+  /* The github facet spreads first so the serialized claim keys keep their order. */
+  const githubFacets: GithubClaimFacets = {};
+  if (github !== undefined) {
+    githubFacets.pullRequest = { title: github.title, body: github.body };
+    githubFacets.linkedIssues = sameRepositoryLinkedIssues;
+  }
   const authorClaims = JSON.stringify(
-    {
-      ...(github === undefined
-        ? {}
-        : {
-            pullRequest: { title: github.title, body: github.body },
-            linkedIssues: sameRepositoryLinkedIssues,
-          }),
-      commitSubjects: request.claims.commitSubjects,
-    },
+    { ...githubFacets, commitSubjects: request.claims.commitSubjects },
     null,
     2,
   );

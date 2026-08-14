@@ -5,11 +5,17 @@ import type {
   GrepToolDetails,
   ModelRuntime,
   ResourceLoader,
+  ToolExecutionEndEvent,
+  ToolExecutionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
-import { Effect, FileSystem, Option, Path, Result } from "effect";
+import { Effect, FileSystem, Option, Path, Predicate, Result } from "effect";
 import { CommandExecutor, gitOut } from "../shell.js";
-import { AuthorSearchConfigurationFailed, type AuthoringRequest } from "./author.js";
+import {
+  AuthorSearchConfigurationFailed,
+  type AuthorDraft,
+  type AuthoringRequest,
+} from "./author.js";
 import { inspectionBudget } from "../authoring/package.js";
 import { authoringSystemPrompt } from "./authoring.js";
 import {
@@ -83,7 +89,7 @@ export async function createPiSession(
   runSessionEffect: RunSessionEffect,
   preparation: PiSessionPreparation,
 ) {
-  let draft: unknown;
+  let draft: AuthorDraft | undefined;
   let diffReads = 0;
   let searches = 0;
   let sourceReads = 0;
@@ -303,12 +309,9 @@ export async function createPiSession(
       body: pi.ai.Type.String({ minLength: 1 }),
     }),
     execute: async (_id, params) => {
-      draft = {
-        title: params.title,
-        meta: params.meta,
-        body: params.body,
-        ...(params.preset === undefined ? {} : { preset: params.preset }),
-      };
+      const presetFacet: DraftPresetFacet = {};
+      if (params.preset !== undefined) presetFacet.preset = params.preset;
+      draft = { title: params.title, meta: params.meta, body: params.body, ...presetFacet };
       return {
         ...toolText("Walkthrough draft received."),
         terminate: true,
@@ -459,7 +462,11 @@ function splitLines(content: string): string[] {
   return lines;
 }
 
-function verboseValue(value: unknown): string {
+type DraftPresetFacet = { preset?: string };
+
+/* The SDK declares tool args and results as `any`; these render them for the
+   verbose progress log without trusting them further. */
+function verboseValue(value: ToolExecutionStartEvent["args"]): string {
   try {
     return JSON.stringify(value) ?? String(value);
   } catch {
@@ -467,20 +474,19 @@ function verboseValue(value: unknown): string {
   }
 }
 
-function verboseToolOutput(result: unknown): string {
-  if (typeof result !== "object" || result === null || !("content" in result)) {
+function verboseToolOutput(result: ToolExecutionEndEvent["result"]): string {
+  if (!Predicate.isObject(result) || !("content" in result)) {
     return verboseValue(result);
   }
   const content = result.content;
   if (!Array.isArray(content)) return verboseValue(result);
   return content
     .map((block) =>
-      typeof block === "object" &&
-      block !== null &&
+      Predicate.isObject(block) &&
       "type" in block &&
       block.type === "text" &&
       "text" in block &&
-      typeof block.text === "string"
+      Predicate.isString(block.text)
         ? block.text
         : verboseValue(block),
     )

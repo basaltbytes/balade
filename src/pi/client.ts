@@ -9,6 +9,7 @@ import {
   Layer,
   Option,
   Path,
+  Predicate,
   Redacted,
   Result,
   Schema,
@@ -380,26 +381,29 @@ function firstSettingsError(settingsManager: SettingsManager): Error | undefined
   return settingsManager.drainErrors()[0]?.error;
 }
 
+type DescriptionFacet = { description?: string };
+type PlaceholderFacet = { placeholder?: string };
+type LabelFacet = { label?: string };
+type InstructionsFacet = { instructions?: string };
+type DeviceCodeFacets = { intervalSeconds?: number; expiresInSeconds?: number };
+
 function mapLoginPrompt(prompt: AuthPrompt): LoginPrompt | LoginSecretPrompt {
   const signal = prompt.signal === undefined ? {} : { signal: prompt.signal };
   if (prompt.type === "select") {
     return {
       type: "select",
       message: prompt.message,
-      options: prompt.options.map((option) => ({
-        id: option.id,
-        label: option.label,
-        ...(option.description === undefined ? {} : { description: option.description }),
-      })),
+      options: prompt.options.map((option) => {
+        const facets: DescriptionFacet = {};
+        if (option.description !== undefined) facets.description = option.description;
+        return { id: option.id, label: option.label, ...facets };
+      }),
       ...signal,
     };
   }
-  return {
-    type: prompt.type,
-    message: prompt.message,
-    ...(prompt.placeholder === undefined ? {} : { placeholder: prompt.placeholder }),
-    ...signal,
-  };
+  const facets: PlaceholderFacet = {};
+  if (prompt.placeholder !== undefined) facets.placeholder = prompt.placeholder;
+  return { type: prompt.type, message: prompt.message, ...facets, ...signal };
 }
 
 function mapLoginNotification(event: AuthEvent): LoginNotification {
@@ -408,34 +412,35 @@ function mapLoginNotification(event: AuthEvent): LoginNotification {
       return {
         type: "info",
         message: event.message,
-        links: (event.links ?? []).map((link) => ({
-          url: link.url,
-          ...(link.label === undefined ? {} : { label: link.label }),
-        })),
+        links: (event.links ?? []).map((link) => {
+          const facets: LabelFacet = {};
+          if (link.label !== undefined) facets.label = link.label;
+          return { url: link.url, ...facets };
+        }),
       };
-    case "auth_url":
-      return {
-        type: "auth_url",
-        url: event.url,
-        ...(event.instructions === undefined ? {} : { instructions: event.instructions }),
-      };
-    case "device_code":
+    case "auth_url": {
+      const facets: InstructionsFacet = {};
+      if (event.instructions !== undefined) facets.instructions = event.instructions;
+      return { type: "auth_url", url: event.url, ...facets };
+    }
+    case "device_code": {
+      const facets: DeviceCodeFacets = {};
+      if (event.intervalSeconds !== undefined) facets.intervalSeconds = event.intervalSeconds;
+      if (event.expiresInSeconds !== undefined) facets.expiresInSeconds = event.expiresInSeconds;
       return {
         type: "device_code",
         userCode: event.userCode,
         verificationUri: event.verificationUri,
-        ...(event.intervalSeconds === undefined ? {} : { intervalSeconds: event.intervalSeconds }),
-        ...(event.expiresInSeconds === undefined
-          ? {}
-          : { expiresInSeconds: event.expiresInSeconds }),
+        ...facets,
       };
+    }
     case "progress":
       return { type: "progress", message: event.message };
   }
 }
 
 function modelsErrorCode(cause: unknown): "oauth" | "auth" | "provider" | "unknown" {
-  if (typeof cause !== "object" || cause === null || !("code" in cause)) return "unknown";
+  if (!Predicate.isObject(cause) || !("code" in cause)) return "unknown";
   const code = cause.code;
   return code === "oauth" || code === "auth" || code === "provider" ? code : "unknown";
 }
