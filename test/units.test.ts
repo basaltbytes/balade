@@ -4,7 +4,7 @@ import { compileBlocks, parseMark, type CompileEnv } from "../src/walkthrough/bl
 import { diagramNodes, MAX_DIAGRAM_GRID_SIZE } from "../src/contract/diagram.js";
 import { inlineOf, mdNodesOf, plainText } from "../src/walkthrough/inline.js";
 import { parseDocument } from "../src/walkthrough/document.js";
-import type { Block, CheckDiagnostic } from "../src/contract/types.js";
+import type { CheckDiagnostic } from "../src/contract/types.js";
 import type { ResolveContext } from "../src/contract/context.js";
 import { matchesGlob } from "../src/walkthrough/glob.js";
 import { sha256 } from "../src/contract/hash.js";
@@ -83,10 +83,7 @@ describe("blocks without a repository", () => {
     blob: () => Option.none(),
   };
 
-  function compile(
-    body: string,
-    ctx: ResolveContext = stubContext,
-  ): { blocks: Block[]; diagnostics: CheckDiagnostic[] } {
+  function compile(body: string, ctx: ResolveContext = stubContext) {
     const doc = parseDocument(
       `---\nwalkthrough: 1\ntitle: T\npr: 1\ncommit: abc1234\n---\n\n${body}\n`,
       "w.md",

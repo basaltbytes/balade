@@ -45,6 +45,7 @@ function bakedPayload(html: string): Payload {
   const start = html.indexOf(BAKE);
   expect(start).toBeGreaterThan(-1);
   const from = start + BAKE.length;
+  /* SAFETY: `build` baked exactly one Payload into this script tag. */
   return JSON.parse(html.slice(from, html.indexOf("</script>", from))) as Payload;
 }
 
@@ -70,14 +71,11 @@ describe("build", () => {
     rmSync(bundleDir, { recursive: true, force: true });
   });
 
-  const build = (paths: readonly string[], out?: string) =>
-    runBuild({
-      cwd: repo.dir,
-      paths,
-      useGh: false,
-      bundleDir,
-      ...(out !== undefined ? { out } : {}),
-    });
+  const build = (paths: readonly string[], out?: string) => {
+    const options: BuildOptions = { cwd: repo.dir, paths, useGh: false, bundleDir };
+    if (out !== undefined) options.out = out;
+    return runBuild(options);
+  };
 
   it.effect("writes one HTML file beside the walkthrough, with the payload baked in", () =>
     Effect.gen(function* () {

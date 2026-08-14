@@ -2,12 +2,12 @@ import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
 import Markdoc from "@markdoc/markdoc";
 import type { Node } from "@markdoc/markdoc";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Predicate } from "effect";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { WalkthroughAuthor } from "../../src/pi/author.js";
+import { WalkthroughAuthor, type AuthorDraft } from "../../src/pi/author.js";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLayer } from "../../src/pi/client.js";
 import { shellLayer } from "./effect.js";
@@ -109,15 +109,18 @@ export function createAuthoringFixtureRepo(fixture: AuthoringEvalCase): Authorin
   };
 }
 
+type SubmitPresetFacet = { preset?: string };
+
+function submittedDraft(draft: AuthorDraft) {
+  const presetFacet: SubmitPresetFacet = {};
+  if (draft.preset !== undefined) presetFacet.preset = draft.preset;
+  return { title: draft.title, meta: draft.meta, body: draft.body, ...presetFacet };
+}
+
 function fauxResponse(step: AuthoringTranscriptStep) {
   if (step._tag === "Submit") {
     return ai.fauxAssistantMessage(
-      ai.fauxToolCall("submit_walkthrough", {
-        title: step.draft.title,
-        meta: step.draft.meta,
-        body: step.draft.body,
-        ...(step.draft.preset === undefined ? {} : { preset: step.draft.preset }),
-      }),
+      ai.fauxToolCall("submit_walkthrough", submittedDraft(step.draft)),
       { stopReason: "toolUse" },
     );
   }
@@ -195,13 +198,13 @@ function draftProfile(body: string): DraftProfile {
     for (const node of nodes) {
       if (node.type === "tag" && node.tag === "group") {
         const label = node.attributes["label"];
-        if (typeof label === "string") groups.push(label);
+        if (Predicate.isString(label)) groups.push(label);
       }
       if (node.type === "tag" && node.tag === "section") sections++;
       if (node.type === "tag" && node.tag === "code") {
         codeRanges++;
         const file = node.attributes["file"];
-        if (typeof file === "string") codeFiles.add(file);
+        if (Predicate.isString(file)) codeFiles.add(file);
       }
       visit(node.children);
     }

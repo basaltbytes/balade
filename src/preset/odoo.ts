@@ -192,7 +192,7 @@ export const odooPreset: Preset = {
   methodChips(decorator: string | undefined): string[] | undefined {
     if (decorator === undefined) return undefined;
     const chips: string[] = [];
-    for (const [name, chip] of Object.entries(DECORATOR_CHIPS)) {
+    for (const [name, chip] of DECORATOR_CHIPS) {
       if (decorator.includes(`@${name}`)) chips.push(chip);
     }
     return chips.length > 0 ? chips : undefined;

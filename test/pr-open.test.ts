@@ -225,6 +225,7 @@ describe("a served PR without a checkout", () => {
       expect(session.paths).toEqual(["walkthroughs/valid.md"]);
       expect(session.reports).toHaveLength(1);
 
+      /* SAFETY: one file is served, so the bare endpoint answers the payload side. */
       const payload = (yield* session.api.walkthrough(null)) as Payload;
       expect(payload.walkthrough).toBe(1);
       expect(payload.pr.number).toBe(42);

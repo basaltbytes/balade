@@ -192,7 +192,8 @@ describe("the served API", () => {
         throw new Error(`open refused to start: ${french._tag}`);
       }
       const answer = yield* french.session.api.walkthrough(null);
-      /* The fixture frontmatter says `lang: en`; the flag wins. */
+      /* The fixture frontmatter says `lang: en`; the flag wins.
+         SAFETY: one file is served, so the answer is the payload side. */
       expect((answer as Payload).lang).toBe("fr");
     }),
   );
@@ -340,6 +341,7 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
   /* One walkthrough served: the bare endpoint is that walkthrough. */
   const answer = await send("/api/walkthrough");
   expect(answer.status).toBe(200);
+  /* SAFETY: one file is served, so the endpoint answered the payload side. */
   const payload = (await answer.json()) as Payload;
   expect(payload.walkthrough).toBe(1);
   expect(payload.sourcePath).toBe(path);
@@ -395,6 +397,7 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
 
   const staleness = await send(`/api/staleness${query}`);
   expect(staleness.status).toBe(200);
+  /* SAFETY: the assertion names the envelope the matcher below verifies. */
   expect((await staleness.json()) as { headDistance: unknown }).toEqual({
     headDistance: expect.any(Number),
   });
@@ -485,6 +488,7 @@ describe("the index", () => {
 
   it.effect("answers the index on the bare endpoint when several are served", () =>
     Effect.gen(function* () {
+      /* SAFETY: several files are served, so the bare endpoint answers the index. */
       const index = (yield* session.api.walkthrough(null)) as IndexPayload;
       expect(index.kind).toBe("index");
       expect(index.entries.map((entry) => entry.path)).toEqual([
@@ -517,6 +521,7 @@ describe("the index", () => {
       );
       expect(written.walkthrough).toBe(path);
 
+      /* SAFETY: several files are served, so the bare endpoint answers the index. */
       const answer = (yield* session.api.walkthrough(null)) as IndexPayload;
       const entry = answer.entries.find((row) => row.path === path);
       expect(entry?.progress).toEqual({ done: 1, total: 8 });
