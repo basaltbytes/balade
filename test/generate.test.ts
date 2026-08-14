@@ -570,7 +570,14 @@ describe("the Pi adapter", () => {
 
       expect(finalRequest).toContain("Diff inspection budget reached after 16 reads");
       expect(progress.some((event) => event._tag === "AuthorAssistantText")).toBe(false);
-      expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(false);
+      /* Compact still gets the finish boundary — the display flips its label
+         there — but the payloads stay verbose-only. */
+      expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(true);
+      expect(
+        progress
+          .filter((event) => event._tag === "AuthorToolFinished")
+          .every((event) => event.output === ""),
+      ).toBe(true);
       expect(
         progress
           .filter((event) => event._tag === "AuthorToolStarted")
