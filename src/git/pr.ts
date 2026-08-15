@@ -140,8 +140,8 @@ export const resolvePullHead = Effect.fn("resolvePullHead")(function* (
     root,
     number: options.target.number,
     pin,
-    at: pin,
     requested,
+    resolution: { _tag: "PullHead", head: pin },
   });
   const claims = yield* readPullIntentClaims({
     root: resolved.root,

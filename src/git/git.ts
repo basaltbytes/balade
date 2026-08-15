@@ -4,12 +4,13 @@
  * enriches the PR header when it is there and authenticated.
  */
 
-import { Context, Effect, Layer, Option, Result, Schema } from "effect";
+import { Context, Effect, Layer, Match, Option, Result, Schema } from "effect";
 import { basename, win32 } from "node:path";
 import {
   CommitUnresolvable,
   ContextResolver,
   type CommandFailed,
+  type PullResolution,
   type ResolveContext,
   type ResolveOptions,
 } from "../contract/context.js";
@@ -101,8 +102,8 @@ const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOp
     root,
     number: options.pr,
     pin,
-    at: options.at,
     requested,
+    resolution: options.resolution,
   });
   const diagnostics = snapshot.notices.map(
     (notice): CheckDiagnostic => ({
@@ -186,8 +187,8 @@ interface MakeResolvedPullOptions {
   readonly root: string;
   readonly number: number;
   readonly pin: string;
-  readonly at: string | undefined;
   readonly requested: PullRequestResult | undefined;
+  readonly resolution: PullResolution | undefined;
 }
 
 export const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
@@ -203,23 +204,26 @@ export const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
   );
   const pull =
     options.requested === undefined ? undefined : Option.getOrUndefined(options.requested.pull);
-  const headOption = yield* firstSha(options.root, [
-    options.at,
-    pull?.headRefOid,
-    pull?.headRefName,
-    "HEAD",
-  ]);
-  const head = Option.getOrElse(headOption, () => options.pin);
-  const directBase = yield* firstSha(options.root, [pull?.baseRefOid]);
-  const base = Option.isSome(directBase)
-    ? directBase.value
-    : yield* Effect.gen(function* () {
-        const branch = yield* defaultBranch;
-        const merged = yield* mergeBase(options.root, branch, options.pin);
-        if (Option.isSome(merged)) return merged.value;
-        const parent = yield* parentOf(options.root, options.pin);
-        return Option.getOrElse(parent, () => options.pin);
+  const deriveRange = Effect.fn("derivePullRange")(function* (headCandidate: string | undefined) {
+    const head = Option.getOrElse(
+      yield* firstSha(options.root, [headCandidate, pull?.headRefOid, pull?.headRefName, "HEAD"]),
+      () => options.pin,
+    );
+    const directBase = yield* firstSha(options.root, [pull?.baseRefOid]);
+    if (Option.isSome(directBase)) return { base: directBase.value, head };
+    const branch = yield* defaultBranch;
+    const merged = yield* mergeBase(options.root, branch, options.pin);
+    if (Option.isSome(merged)) return { base: merged.value, head };
+    const parent = yield* parentOf(options.root, options.pin);
+    return { base: Option.getOrElse(parent, () => options.pin), head };
+  });
+  const range = yield* options.resolution === undefined
+    ? deriveRange(undefined)
+    : Match.valueTags(options.resolution, {
+        PullHead: ({ head }) => deriveRange(head),
+        PullRange: (resolved) => Effect.succeed(resolved),
       });
+  const { base, head } = range;
   const files = yield* readFileSummaries(options.root, base, options.pin);
   const stats = files.reduce(
     (acc, entry) => ({

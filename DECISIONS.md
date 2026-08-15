@@ -652,10 +652,15 @@ Generation consumes the resolver's canonical lightweight `PullSnapshot`; it
 does not map that value into a second generation-only DTO. A remote pull head is
 resolved with `ls-remote`, then the advertised object id is fetched with
 `--no-write-fetch-head`; this pins the model and checker to one object without
-racing other Git activity through `FETCH_HEAD`. Repair checks rehydrate their
-context from that written pin with Git alone and never probe GitHub a second
-time. Changed-file summaries stay lightweight until compilation asks for blob
-content.
+racing other Git activity through `FETCH_HEAD`. Repair checks pass the
+snapshot's already-resolved base and head through the check pipeline, rehydrate
+their content from Git, and never derive a replacement range from the current
+checkout or probe GitHub a second time. This keeps a merged pull request tied to
+the range the author inspected instead of collapsing its base to the merged pin
+([#116](https://github.com/basaltbytes/balade/issues/116)). A discriminated
+`PullResolution` makes a fetched head and a prepared range mutually exclusive at
+the resolver boundary. Changed-file summaries stay lightweight until
+compilation asks for blob content.
 
 Generated walkthroughs default to `.agents/walkthroughs/` (revised 2026-08-05):
 a walkthrough is an agent-authored artifact, and grouping it with the other

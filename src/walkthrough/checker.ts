@@ -12,12 +12,15 @@ import {
   type LoadResult,
 } from "./pipeline.js";
 import type { CheckReport } from "../contract/types.js";
+import type { PullResolution } from "../contract/context.js";
 import { discoveryErrorMessage, discoverWalkthroughs, NO_WALKTHROUGH } from "./discovery.js";
 
 export interface CheckFileOptions {
   cwd: string;
   /** Path of the walkthrough file, absolute or relative to `cwd`. */
   path: string;
+  /** Prepared pull resolution whose Git objects should be rehydrated without re-resolution. */
+  resolution?: PullResolution;
   /** `false` skips gh entirely — CI without auth, and the test fixtures. */
   useGh?: boolean;
 }
@@ -116,6 +119,7 @@ export function softReport(loaded: LoadResult): CheckReport {
 export const checkOne = Effect.fn("checkOne")(function* (options: CheckFileOptions) {
   const { cwd, path } = options;
   const loadOptions: LoadOptions = { cwd, path };
+  if (options.resolution !== undefined) loadOptions.resolution = options.resolution;
   if (options.useGh !== undefined) loadOptions.useGh = options.useGh;
   return yield* loadWalkthrough(loadOptions).pipe(
     Effect.match({

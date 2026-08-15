@@ -179,7 +179,7 @@ const makeServerRepo = Effect.fn("makeServerRepo")(function* (
         const source = at === undefined ? undefined : yield* readSource(sourcePath);
         const loadOptions: LoadOptions = { cwd: root, path: absolute(sourcePath) };
         if (source !== undefined) loadOptions.source = source;
-        if (at !== undefined) loadOptions.at = at;
+        if (at !== undefined) loadOptions.resolution = { _tag: "PullHead", head: at };
         if (options.lang !== undefined) loadOptions.lang = options.lang;
         if (options.useGh !== undefined) loadOptions.useGh = options.useGh;
         return yield* run(loadWalkthrough(loadOptions));
