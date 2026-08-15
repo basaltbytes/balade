@@ -1289,3 +1289,40 @@ in the sweep: the review-state PUT body crosses the `Api` port as text and
 its parse instead of splitting it with the transport. What would move this: a
 facet type outgrowing its file, which would argue for a shared helper —
 weakening a rule to avoid the idiom is not on the table.
+
+## Agent presence is balade's own lifecycle; multiplexers are adapters
+
+Terminal agent multiplexers (herdr, cmux) show which pane is working, blocked,
+or done. None of their detection paths can see balade: process detection knows
+only the agent binaries bundled into the multiplexer, Pi lifecycle
+integrations load as Pi extensions — balade's authoring session deliberately
+loads none, they gate on Pi's TUI run mode, and they would report `pi` as the
+identity — and screen manifests match interactive UI balade does not draw. The
+lifecycle worth reporting is also not the Pi session's: model choice, login,
+snapshot preparation, check/repair and serving all happen outside it.
+
+So the lifecycle is balade's own — `working`, `waiting`, `settled` — behind
+the `AgentPresence` port (`src/presence.ts`), one adapter per multiplexer
+dialect, provided once in `cliLayer`. `generate` reports the transitions;
+other verbs can join later. The port is a direct service method, not a
+PubSub: sinks are few and known at wiring time, and the one delivery
+guarantee that matters — the final `settled` surviving process teardown —
+is exactly what a broker's drain-on-interrupt semantics fight.
+
+The herdr adapter self-reports over herdr's socket API (`pane.report_agent`,
+`source: custom:balade`), herdr's documented path for agents its binary does
+not know. It activates only when herdr's pane environment
+(`HERDR_ENV`/`HERDR_SOCKET_PATH`/`HERDR_PANE_ID`) is present; any other pane
+gets the no-op layer, so presence costs nothing outside a multiplexer.
+Reports coalesce through a sliding(1) queue drained by a scoped fiber —
+states are latest-wins, not a log — and a scope finalizer always flushes
+`settled`: a duplicate idle report is harmless, a pane stuck `working` is
+not. Frames carry fixed literals only, never PR-derived text, so the
+authoring containment does not move. `waiting` maps to herdr's `blocked`,
+`settled` to `idle`; herdr derives "done" itself when an unseen pane goes
+idle.
+
+Future sinks ride the same port: OSC title/progress sequences (the signal
+observation-based tools share), a cmux `set-status` adapter, or an
+operator-configured hook command that would let multiplexers integrate
+balade without balade naming them.

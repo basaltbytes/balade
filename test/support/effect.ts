@@ -5,6 +5,7 @@ import { Effect, Layer } from "effect";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLive } from "../../src/pi/client.js";
 import { PrLocator } from "../../src/commands/open/locator.js";
+import { AgentPresence } from "../../src/presence.js";
 import { BrowserLauncher } from "../../src/server/browser.js";
 import { CommandExecutor } from "../../src/shell.js";
 
@@ -15,11 +16,12 @@ export const shellLayer = Layer.mergeAll(
   BrowserLauncher.layer,
 );
 
-/** The complete command-line layer, as `src/cli.ts` provides it. */
+/** As `src/cli.ts` provides it, except presence: the suite never reports to a live multiplexer. */
 export const cliLayer = Layer.mergeAll(
   PrLocator.layer,
   piWalkthroughAuthorLive,
   contextResolverLive,
+  AgentPresence.noop,
 ).pipe(Layer.provideMerge(shellLayer));
 
 export const provideLive = <A, E, R>(effect: Effect.Effect<A, E, R>) =>

@@ -13,6 +13,7 @@ import { skillsCommand } from "./commands/skills/index.js";
 import { contextResolverLive } from "./git/git.js";
 import { piWalkthroughAuthorLive } from "./pi/client.js";
 import { PrLocator } from "./commands/open/locator.js";
+import { agentPresenceLive } from "./presence.js";
 import { BrowserLauncher } from "./server/browser.js";
 import { CommandExecutor } from "./shell.js";
 
@@ -24,9 +25,12 @@ const packageVersion = Schema.decodeUnknownSync(PackageManifest)(packageManifest
 const shellLayer = Layer.mergeAll(NodeServices.layer, CommandExecutor.layer, BrowserLauncher.layer);
 
 /** The complete command-line layer, provided once. */
-const cliLayer = Layer.mergeAll(PrLocator.layer, piWalkthroughAuthorLive, contextResolverLive).pipe(
-  Layer.provideMerge(shellLayer),
-);
+const cliLayer = Layer.mergeAll(
+  PrLocator.layer,
+  piWalkthroughAuthorLive,
+  contextResolverLive,
+  agentPresenceLive,
+).pipe(Layer.provideMerge(shellLayer));
 
 const balade = Command.make("balade").pipe(
   Command.withDescription("Human-readable walkthroughs for agent-scale pull requests"),
