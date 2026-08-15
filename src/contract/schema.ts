@@ -410,6 +410,87 @@ export const ReviewState = Schema.Struct({
   files: Schema.Record(Schema.String, ReviewMark),
 });
 
+/* ------------------------------------------------------------------ */
+/* Generation-bound reviewer Q&A                                      */
+/* ------------------------------------------------------------------ */
+
+export const QaThreadId = Schema.String.pipe(
+  Schema.check(Schema.isUUID(4)),
+  Schema.brand("@balade/QaThreadId"),
+);
+
+export const QaTurnId = Schema.String.pipe(
+  Schema.check(Schema.isUUID(4)),
+  Schema.brand("@balade/QaTurnId"),
+);
+
+export const QaAnchor = Schema.Struct({
+  sectionId: Schema.NonEmptyString,
+  excerpt: Schema.NonEmptyString,
+});
+
+export const QaQuestion = Schema.Struct({
+  id: QaTurnId,
+  question: Schema.NonEmptyString,
+  askedAt: Schema.String,
+});
+
+export const QaTurn = Schema.Struct({
+  id: QaTurnId,
+  question: Schema.NonEmptyString,
+  askedAt: Schema.String,
+  answeredAt: Schema.String,
+  answer: Schema.Array(Block),
+});
+
+const QaThreadFields = {
+  id: QaThreadId,
+  anchor: QaAnchor,
+};
+
+/** A thread has one pending question or at least one completed turn, never both states at once. */
+export const QaThread = Schema.Union([
+  Schema.Struct({
+    ...QaThreadFields,
+    status: Schema.Literal("pending"),
+    turns: Schema.Array(QaTurn),
+    pending: QaQuestion,
+  }),
+  Schema.Struct({
+    ...QaThreadFields,
+    status: Schema.Literal("answered"),
+    turns: Schema.NonEmptyArray(QaTurn),
+  }),
+  Schema.Struct({
+    ...QaThreadFields,
+    status: Schema.Literal("failed"),
+    turns: Schema.Array(QaTurn),
+    failed: QaQuestion,
+    failedAt: Schema.String,
+  }),
+]);
+
+export const QaState = Schema.Struct({
+  version: Schema.Literal(1),
+  walkthrough: Schema.String,
+  pr: Schema.Int,
+  stamp: Schema.String,
+  threads: Schema.Array(QaThread),
+});
+
+export const QaAskRequest = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("new"),
+    anchor: QaAnchor,
+    question: Schema.NonEmptyString,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("follow-up"),
+    threadId: QaThreadId,
+    question: Schema.NonEmptyString,
+  }),
+]);
+
 export const IndexEntry = Schema.Struct({
   path: Schema.String,
   title: Schema.String,

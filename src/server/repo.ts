@@ -45,6 +45,8 @@ export interface ServerRepoPort {
   readonly slug: string;
   /** Current HEAD; one third of a payload cache key. */
   readonly head: Effect.Effect<string, CommandFailed>;
+  /** Walkthrough text from the same working tree or fetched commit as `load`. */
+  readonly source: (sourcePath: string) => Effect.Effect<string, ServerRepoError>;
   /** The stamp the file carries now, or `None` when its frontmatter is unreadable. */
   readonly pin: (sourcePath: string) => Effect.Effect<Option.Option<string>, ServerRepoError>;
   /** Commits between a stamp and HEAD, or `None` when the stamp is not in this clone. */
@@ -131,6 +133,8 @@ const makeServerRepo = Effect.fn("makeServerRepo")(function* (
       at === undefined
         ? run(gitOut(["rev-parse", "HEAD"], root)).pipe(Effect.map((out) => out.trim()))
         : Effect.succeed(at),
+
+    source: Effect.fn("ServerRepo.source")(readSource),
 
     pin: Effect.fn("ServerRepo.pin")((sourcePath) =>
       envelope(sourcePath).pipe(Effect.map(Option.map((found) => found.frontmatter.commit))),

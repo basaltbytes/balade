@@ -12,6 +12,7 @@ import { openCommand } from "./commands/open/index.js";
 import { skillsCommand } from "./commands/skills/index.js";
 import { contextResolverLive } from "./git/git.js";
 import { piWalkthroughAuthorLive } from "./pi/client.js";
+import { piWalkthroughClarifierLive } from "./pi/clarifier.js";
 import { PrLocator } from "./commands/open/locator.js";
 import { agentPresenceLive } from "./presence.js";
 import { BrowserLauncher } from "./server/browser.js";
@@ -28,6 +29,7 @@ const shellLayer = Layer.mergeAll(NodeServices.layer, CommandExecutor.layer, Bro
 const cliLayer = Layer.mergeAll(
   PrLocator.layer,
   piWalkthroughAuthorLive,
+  piWalkthroughClarifierLive,
   contextResolverLive,
   agentPresenceLive,
 ).pipe(Layer.provideMerge(shellLayer));

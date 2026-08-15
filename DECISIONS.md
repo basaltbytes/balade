@@ -178,7 +178,7 @@ different host.
 ## Core pipelines separate failures from report values
 
 `loadWalkthrough`, `resolveContext`, `runCheck`, `runBuild`, `prepareSession`
-and the four served API methods are named `Effect.fn` pipelines. They request
+and the six served API methods are named `Effect.fn` pipelines. They request
 filesystem, path, command and repository capabilities through services. The
 Markdoc parser, diff parser and document compiler remain ordinary pure
 functions called by those pipelines; wrapping them in `Effect` would add an
@@ -197,7 +197,7 @@ and carry reports directly: an error diagnostic may still be renderable, while
 a missing payload stops those commands. Terminal and HTTP reporting use
 exhaustive `Match.valueTags` mappings, so adding a result or error variant
 forces its reporting boundary to handle it. These tags never cross a JSON
-edge: `check --json` still emits only `ok` and `reports`, while the four `/api`
+edge: `check --json` still emits only `ok` and `reports`, while the six `/api`
 response bodies keep their established shapes.
 
 ## Failures are tagged errors; absence is `Option`
@@ -1367,3 +1367,33 @@ now disappear at their source, while a command-local denylist would duplicate
 checker semantics and drift as diagnostics change. What would move this:
 diagnostics gaining an explicit repair owner or structured fix target in the
 shared contract.
+
+## Clarifications are generation-bound sidecars, not walkthrough content
+
+Reviewer Q&A for issue #131 lives in one
+`.balade/<walkthrough>.qa.json` sidecar beside review marks. The sidecar carries
+the walkthrough path, PR number and stamp; a mismatch makes the whole value
+absent. Questions stay anchored to the selected section id and quoted passage,
+so no locator needs to drift across edits. Pending, answered and failed are
+explicit states. A provider failure persists only the question and a generic
+failure marker, never credentials or provider diagnostics, and a later
+follow-up can retry the conversation.
+
+Every question and follow-up creates a fresh scoped Pi session. Generation and
+clarification share one pinned, read-only inspection-tool module, while each
+workflow owns its submit tool and prompt. The clarification prompt receives the
+walkthrough source, pinned diff, anchor and completed turns as untrusted data.
+Its submitted Markdoc fragment is parsed with the canonical walkthrough grammar
+and compiled into `Block` values before the sidecar changes to answered. This
+keeps Q&A out of the committed document and adds no renderer-only dialect or
+HTML sink. The server writes pending state before forking the run, serializes
+all transitions with one semaphore, and writes the sidecar by same-directory
+temporary-file rename so polling never observes partial JSON. Committing the
+pending state and installing its child-scope failure guard are one
+uninterruptible handoff: a closing server settles an in-flight question as
+failed instead of leaving a permanent pending record.
+
+Static exports deliberately omit Q&A: asking requires the local repository,
+the selected model under `~/.balade/pi/`, and the live loopback server. What
+would move this is an explicit portable-conversation feature with its own
+privacy and credential model, not an implicit extension of export payloads.

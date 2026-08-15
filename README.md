@@ -70,6 +70,13 @@ Run `npx balade <command> --help` for all flags.
 browser. `--no-browser` prints the URL without launching one; `--port` selects
 the port, and `--lang en|fr` selects the interface language.
 
+During a live review, select text inside a walkthrough section and choose
+**Ask agent**. Balade anchors the question to that section and passage, runs a
+fresh agent against the walkthrough and pinned pull-request diff, and shows the
+answer in a local thread. Section badges reopen earlier exchanges and each
+thread accepts follow-up questions. Clarifications require the model selected
+by `balade generate`; they are unavailable in static exports.
+
 A PR target uses the checked-out walkthrough when available. Otherwise, balade
 fetches `pull/<number>/head` and reads the walkthrough from that commit. This
 doesn't switch branches or modify the checkout.
@@ -222,6 +229,12 @@ Live review marks are stored under `.balade/` at the repository root. On the
 first write, balade adds that directory to `.git/info/exclude`. Marks are local
 to the clone and reviewer. Unchanged sections retain their marks after a
 re-stamp; changed sections reset.
+
+Live clarification threads are stored beside the marks as
+`.balade/<walkthrough>.qa.json`. They belong to one walkthrough commit and are
+discarded when its PR or stamp changes. Answers are compiled through the same
+validated block format as the walkthrough, but never modify the walkthrough
+file or appear in a static export.
 
 Static exports store review state in browser `localStorage`. An export contains:
 

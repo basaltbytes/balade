@@ -40,6 +40,15 @@ export type Payload = typeof Contract.Payload.Type;
 export type ReviewMark = typeof Contract.ReviewMark.Type;
 export type ReviewState = typeof Contract.ReviewState.Type;
 
+export type QaThreadId = typeof Contract.QaThreadId.Type;
+export type QaTurnId = typeof Contract.QaTurnId.Type;
+export type QaAnchor = typeof Contract.QaAnchor.Type;
+export type QaQuestion = typeof Contract.QaQuestion.Type;
+export type QaTurn = typeof Contract.QaTurn.Type;
+export type QaThread = typeof Contract.QaThread.Type;
+export type QaState = typeof Contract.QaState.Type;
+export type QaAskRequest = typeof Contract.QaAskRequest.Type;
+
 export type IndexEntry = typeof Contract.IndexEntry.Type;
 export type IndexPayload = typeof Contract.IndexPayload.Type;
 

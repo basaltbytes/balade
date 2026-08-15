@@ -1,6 +1,6 @@
 /**
  * The HTTP edge of served mode: the prebuilt SPA on `/` with the SPA fallback,
- * four JSON endpoints under `/api`, and a Node server whose lifetime is the
+ * six JSON endpoints under `/api`, and a Node server whose lifetime is the
  * caller's scope — closing the scope closes the port.
  *
  * This is the translation boundary for typed `ApiError` failures.
@@ -18,12 +18,19 @@ import {
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { sanitizeTerminalText } from "../terminal.js";
-import { ApiReviewStateInvalid, apiErrorResponse, type Api, type ApiError } from "./api.js";
+import {
+  ApiQaRequestInvalid,
+  ApiReviewStateInvalid,
+  apiErrorResponse,
+  type Api,
+  type ApiError,
+} from "./api.js";
 
 /** A review tool listens for the reviewer, not for the network. */
 const HOST = "127.0.0.1";
 const ALLOWED_HOSTS = new Set([HOST, "localhost", "[::1]"]);
 const REVIEW_STATE_BODY_LIMIT = FileSystem.MiB(4);
+const QA_BODY_LIMIT = FileSystem.KiB(64);
 
 const hostAllowed = (host: string | undefined): boolean =>
   host !== undefined && ALLOWED_HOSTS.has(host.replace(/:\d+$/u, ""));
@@ -114,11 +121,17 @@ const routes = (options: ServeOptions) =>
     HttpRouter.add("PUT", "/api/state", putState(options.api)),
     HttpRouter.add(
       "GET",
+      "/api/qa",
+      answering((path) => options.api.readQa(path)),
+    ),
+    HttpRouter.add("POST", "/api/qa", postQuestion(options.api)),
+    HttpRouter.add(
+      "GET",
       "/api/staleness",
       answering((path) => options.api.staleness(path)),
     ),
     /* The SPA takes `GET /*`. The router prefers a literal path over the
-       wildcard, so the four endpoints above win whatever the merge order. */
+       wildcard, so the six endpoints above win whatever the merge order. */
     HttpStaticServer.layer({ root: options.appDir, spa: true }),
   );
 
@@ -143,6 +156,25 @@ const putState = (api: Api) =>
         Effect.mapError((cause) => new ApiReviewStateInvalid({ cause })),
       );
       return yield* api.writeState(path, body);
+    }),
+  );
+
+const postQuestion = (api: Api) =>
+  respond(
+    Effect.gen(function* () {
+      const path = yield* queryPath;
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const contentType = request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
+      if (contentType !== "application/json") {
+        return yield* new ApiQaRequestInvalid({
+          cause: "Clarification questions require application/json.",
+        });
+      }
+      const body = yield* request.text.pipe(
+        Effect.provideService(HttpServerRequest.MaxBodySize, QA_BODY_LIMIT),
+        Effect.mapError((cause) => new ApiQaRequestInvalid({ cause })),
+      );
+      return yield* api.askQa(path, body);
     }),
   );
 

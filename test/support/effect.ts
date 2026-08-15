@@ -4,6 +4,7 @@ import { NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLive } from "../../src/pi/client.js";
+import { piWalkthroughClarifierLive } from "../../src/pi/clarifier.js";
 import { PrLocator } from "../../src/commands/open/locator.js";
 import { AgentPresence } from "../../src/presence.js";
 import { BrowserLauncher } from "../../src/server/browser.js";
@@ -20,6 +21,7 @@ export const shellLayer = Layer.mergeAll(
 export const cliLayer = Layer.mergeAll(
   PrLocator.layer,
   piWalkthroughAuthorLive,
+  piWalkthroughClarifierLive,
   contextResolverLive,
   AgentPresence.noop,
 ).pipe(Layer.provideMerge(shellLayer));

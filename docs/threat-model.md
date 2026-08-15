@@ -107,22 +107,38 @@ When the walkthrough comes from a fetched PR head, the CLI names the PR and
 head commit and labels the content unreviewed before serving it. A walkthrough
 read from the working tree carries no such notice.
 
-### 3. The local review server
+### 3. Reviewer questions → the clarification agent
 
-Binds `127.0.0.1` with no host flag (`src/server/http.ts`). Five routes; one
-mutating endpoint, `PUT /api/state`.
+Selected passages, questions, prior exchanges and the walkthrough itself are
+untrusted prompt data. Each question runs in a fresh Pi session with the same
+pinned, read-only repository inspection tools as generation. Changed
+`AGENTS.md` and `CLAUDE.md` files are always omitted from clarification runs;
+no session extension, shell, write, or network tool is available.
+
+The agent submits a Markdoc fragment, not browser markup. The fragment is
+parsed with the walkthrough grammar, cannot create sections or groups, resolves
+code references at the stamped commit, and compiles to the existing `Block`
+contract before persistence. The renderer therefore gains no new HTML sink.
+Questions and answers live only in a git-excluded Q&A sidecar bound to the
+walkthrough path, PR number and stamp. Static exports contain none of it.
+
+### 4. The local review server
+
+Binds `127.0.0.1` with no host flag (`src/server/http.ts`). Six API routes; two
+mutating endpoints, `PUT /api/state` and `POST /api/qa`.
 
 A global middleware accepts only the loopback authorities `127.0.0.1`,
 `localhost` and `[::1]`, ignoring a numeric port. This rejects DNS-rebinding
 requests before route handling because their `Host` header still names the
-attacker's origin. The state endpoint limits its JSON body to 4 MiB, and
-responses admitted by the host guard carry `X-Frame-Options: DENY` so another
+attacker's origin. The state endpoint limits its JSON body to 4 MiB and the Q&A
+endpoint limits a question to 64 KiB. Both bodies pass strict schema decoding,
+and responses admitted by the host guard carry `X-Frame-Options: DENY` so another
 site cannot frame the review UI. Typed API failures retain their internal cause
 for server-side diagnostics, while `500` responses expose only stable messages
 and never filesystem or exception details
 ([#63](https://github.com/basaltbytes/balade/issues/63)).
 
-### 4. The export bundle
+### 5. The export bundle
 
 `balade build` inlines the app and payload into one HTML file, meant to be
 opened over `file://` ([DECISIONS.md](../DECISIONS.md), "The export bundle
@@ -132,7 +148,7 @@ export, and the README names the remaining source and metadata it carries. Its
 meta CSP forbids programmatic network connections; a shared file still
 discloses all of its embedded data to its recipient.
 
-### 5. Supply chain and CI
+### 6. Supply chain and CI
 
 Dependencies are pinned exact; publishing uses OIDC trusted publishing with no
 long-lived token ([docs/releasing.md](releasing.md)). Actions are pinned to full
@@ -275,6 +291,12 @@ they describe.
 - `PUT /api/state` provides Effect's `MaxBodySize` at 4 MiB around the JSON read.
   Oversized bodies become the existing `ApiReviewStateInvalid` response instead
   of growing the Node string without a bound.
+- `POST /api/qa` provides the same body-size service at 64 KiB, strictly decodes
+  the request union, and resolves `?path=` through the served-file allowlist
+  before reading or writing a sidecar. It rejects every content type except
+  `application/json`; a cross-origin browser request therefore requires a CORS
+  preflight, and the server grants no CORS permission. A plain HTML form cannot
+  spend the reviewer's model quota.
 - Responses admitted by the host guard carry `X-Frame-Options: DENY`. The served
   UI cannot be framed even though `frame-ancestors` cannot be enforced from its
   meta CSP.
@@ -292,7 +314,7 @@ they describe.
   value that skipped the first layer can at worst borrow a palette color —
   conceal, cursor movement and OSC hyperlinks never reach the terminal.
 - Attacker-controlled paths reaching git are `--`-guarded with `:(literal)`
-  pathspec magic (`src/git/git.ts:135-145`, `src/pi/session.ts:195-206`,
+  pathspec magic (`src/git/git.ts`, `src/pi/inspection.ts`,
   `src/server/repo.ts:158`). SHA-prefixed composites cannot begin with `-`: the
   SHA is gated by `/^[0-9a-f]{40,64}$/u` (`src/git/pr.ts:117`). Frontmatter
   `commit` is validated hex (`src/contract/schema.ts:441`).
@@ -321,10 +343,12 @@ they describe.
   strip symlinks from the tarball. **Re-check this if `app/public/` is ever
   added.**
 
-**Authoring sandbox**
+**Agent sandbox**
 
-- A seven-tool allowlist, all read-only (`src/pi/session.ts:333-350`). No shell,
-  no write, no network. The agent cannot execute anything.
+- Generation and clarification each expose six shared, read-only inspection
+  tools plus one workflow-specific submit tool (`src/pi/inspection.ts`,
+  `src/pi/session.ts`, `src/pi/clarifier.ts`). No shell, no write, no network.
+  The agent cannot execute anything.
 - Pinned and base source reads share one repo-relative path gate. It rejects
   credential basenames case-insensitively (`.env*`, auth files, private-key
   formats and credential/secret names) plus `.aws/`, `.ssh/` and `.gnupg/`
@@ -347,6 +371,11 @@ they describe.
 - Pi credential isolation holds: balade uses its own agent directory
   `~/.balade/pi/` and never reads or writes `~/.pi/agent/`
   (`src/pi/client.ts:81-105`, `test/pi-agent-dir.test.ts`, issue #27).
+- A clarification starts a fresh in-memory session for every question and
+  follow-up. Its prompt labels the selected passage, walkthrough, prior
+  exchanges and question as untrusted JSON data. Only a successful
+  `submit_answer` fragment reaches the compiler; provider details do not reach
+  the sidecar or browser, which expose only a generic failed state.
 
 **Export**
 

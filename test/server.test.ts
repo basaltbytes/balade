@@ -328,6 +328,7 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
     ["/api/walkthrough", { kind: "read" }],
     [`/api/state${query}`, { kind: "read" }],
     [`/api/state${query}`, { kind: "write", body: "{}" }],
+    [`/api/qa${query}`, { kind: "read" }],
     [`/api/staleness${query}`, { kind: "read" }],
   ] satisfies ReadonlyArray<readonly [string, HostRequest]>) {
     expect(await statusWithHost(`${url}${route}`, "evil.com", request, signal)).toBe(403);
@@ -346,6 +347,41 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
   expect(payload.walkthrough).toBe(1);
   expect(payload.sourcePath).toBe(path);
   expect(payload.sections.map((section) => section.id)).toContain("overview");
+
+  const qa = await send(`/api/qa${query}`);
+  expect(qa.status).toBe(200);
+  expect(await qa.json()).toMatchObject({
+    version: 1,
+    walkthrough: path,
+    pr: payload.pr.number,
+    stamp: payload.commit,
+    threads: [],
+  });
+
+  const invalidQuestion = await send(`/api/qa${query}`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ kind: "new", question: "Missing anchor" }),
+  });
+  expect(invalidQuestion.status).toBe(400);
+
+  const formQuestion = await send(`/api/qa${query}`, {
+    method: "POST",
+    headers: { "content-type": "text/plain" },
+    body: JSON.stringify({
+      kind: "new",
+      anchor: { sectionId: "overview", excerpt: "selected" },
+      question: "Cross-origin form?",
+    }),
+  });
+  expect(formQuestion.status).toBe(400);
+
+  const oversizedQuestion = await send(`/api/qa${query}`, {
+    method: "POST",
+    headers: json,
+    body: "x".repeat(64 * 1024 + 1),
+  });
+  expect(oversizedQuestion.status).toBe(400);
 
   const unknown = await send("/api/walkthrough?path=walkthroughs/nope.md");
   expect(unknown.status).toBe(404);
@@ -718,6 +754,7 @@ describe("the payload cache", () => {
       root: "/fixture",
       slug: "fixture/repo",
       head: Effect.sync(() => head),
+      source: () => Effect.succeed(""),
       pin: () => Effect.succeed(Option.some(pin)),
       distance: () => Effect.succeed(Option.none()),
       row: () => Effect.succeed(Option.none()),
