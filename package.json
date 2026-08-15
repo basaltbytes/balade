@@ -1,6 +1,6 @@
 {
   "name": "balade",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Human-readable walkthroughs for agent-scale pull requests — a CLI that renders a walkthrough file committed to the repository into an interactive review app.",
   "keywords": [
     "cli",

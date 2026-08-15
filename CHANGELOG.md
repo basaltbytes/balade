@@ -1,5 +1,16 @@
 # balade
 
+## 0.12.0
+
+### Minor Changes
+
+- 7880e05: `--budget` now takes `low`, `medium`, or `high`. `medium`, the default, keeps the scaled budget that grows with the pull request's changed-file count. `low` allows one diff read, one search, and one source read per changed file — a constrained spend that still produces a walkthrough. `high` removes the caps. The `base`, `x2`, and `unlimited` names are gone. Authoring package 1.21.0.
+- 7b9599e: `balade generate` now reports its lifecycle to herdr when it runs inside a herdr pane: working while authoring, blocked while a login or model prompt waits for input, idle when the walkthrough is done. Detection uses herdr's own pane environment and socket API, so there is nothing to configure, and outside herdr nothing is reported.
+
+### Patch Changes
+
+- 49bad3e: CLI output is colored on interactive terminals: `check` diagnostics paint their error and warning marks, labels, and verdict lines, warnings share a painted three-line shape across commands, and served URLs, generated files, and stop messages are styled. Piped output, `check --json`, and `NO_COLOR` environments keep byte-identical plain text. The terminal-injection guard is documented in docs/threat-model.md: untrusted values are control-stripped where they are interpolated, and the write edge admits only balade's own color codes.
+
 ## 0.11.0
 
 ### Minor Changes
