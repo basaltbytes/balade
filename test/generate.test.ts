@@ -785,6 +785,49 @@ describe("the Pi adapter", () => {
 });
 
 describe("generation", () => {
+  it.effect("checks a merged pull request against the prepared generation range", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      const base = execFileSync("git", ["rev-parse", `${repo.pin}^`], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      execFileSync("git", ["checkout", "main"], { cwd: repo.dir });
+      execFileSync("git", ["merge", "--ff-only", "feature/pool"], { cwd: repo.dir });
+      repo.write(CHANGED_FILE.path, "# rewritten after the pull request merged\n");
+      repo.commit("refactor: continue on main after the merge");
+      const preparedSource = prepared(repo.dir, repo.pin);
+      const source: PullSnapshot = {
+        ...preparedSource,
+        base,
+        pull: { ...preparedSource.pull, state: "merged" },
+      };
+      /* Let the pre-fix repair loop complete so the test observes its false diagnostics. */
+      harness.faux.setResponses([submitted(validBody), submitted(validBody), submitted(validBody)]);
+
+      const result = yield* Effect.gen(function* () {
+        const model = yield* fauxModel();
+        return yield* runGeneration({
+          source,
+          model,
+          directory: "walkthroughs",
+          collisionPolicy: "exclusive",
+          onExistingWalkthroughs: () => {},
+          headInstructionPolicy: "omit-changed",
+          progressMode: "compact",
+          progress: () => {},
+        });
+      }).pipe(Effect.provide(harness.layer));
+
+      expect(result._tag).toBe("Generated");
+      expect(result.repairs).toBe(0);
+      const codes = result.report.diagnostics.map((diagnostic) => diagnostic.code);
+      expect(codes).not.toContain("stale-overlap");
+      expect(codes).not.toContain("files-empty");
+    }),
+  );
+
   it.effect("writes stamped frontmatter and repairs a draft through check", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;

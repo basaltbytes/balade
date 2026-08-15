@@ -32,6 +32,11 @@ export interface ResolveContext {
   blob(path: string): Option.Option<readonly string[]>;
 }
 
+/** How a pull request range is anchored when it is not derived from the checkout. */
+export type PullResolution =
+  | { readonly _tag: "PullHead"; readonly head: string }
+  | { readonly _tag: "PullRange"; readonly base: string; readonly head: string };
+
 /* The process-port failure vocabulary. Produced by `shell.ts`, carried across
    module boundaries by resolution and discovery, translated at the command
    boundaries that can explain them. */
@@ -67,8 +72,8 @@ export interface ResolveOptions {
   file: string;
   /** Stamped blobs the pure compiler may inspect. */
   references: readonly string[];
-  /** Fetched commit served without a checkout; tried as the head before local fallbacks. */
-  at?: string;
+  /** Fetched head or prepared range to rehydrate instead of using the current checkout. */
+  resolution?: PullResolution;
   /** `false` skips gh entirely — CI without auth, and the test fixtures. */
   useGh?: boolean;
 }

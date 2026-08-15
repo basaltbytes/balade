@@ -3,7 +3,7 @@
 import { Effect, Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
 import { formatText } from "../../terminal.js";
-import { runCheck } from "../../walkthrough/checker.js";
+import { checkOne } from "../../walkthrough/checker.js";
 import { discoveryErrorMessage } from "../../walkthrough/discovery.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
 import type { Lang, CheckReport } from "../../contract/types.js";
@@ -143,7 +143,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
 
     let turn = initial;
     let repairs = 0;
-    let report = yield* checkGeneratedDraft(options.source.root, file);
+    let report = yield* checkGeneratedDraft(options.source, file);
     while (!report.ok && repairs < MAX_REPAIR_ATTEMPTS) {
       repairs++;
       turn = yield* session
@@ -153,7 +153,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
         file,
         renderDraft(options.source, turn.draft, options.preset, options.lang),
       ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
-      report = yield* checkGeneratedDraft(options.source.root, file);
+      report = yield* checkGeneratedDraft(options.source, file);
     }
 
     const summary: GenerationSummary = {
@@ -169,20 +169,14 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
   }).pipe(Effect.scoped),
 );
 
-const checkGeneratedDraft = Effect.fn("checkGeneratedDraft")(function* (
-  root: string,
-  file: string,
-) {
-  const outcome = yield* runCheck({
-    cwd: root,
-    paths: [file],
+const checkGeneratedDraft = Effect.fn("checkGeneratedDraft")((source: PullSnapshot, file: string) =>
+  checkOne({
+    cwd: source.root,
+    path: file,
+    resolution: { _tag: "PullRange", base: source.base, head: source.head },
     useGh: false,
-  });
-  const report = outcome.reports[0];
-  return report === undefined
-    ? yield* Effect.die(new Error("balade check returned no report for an explicit file."))
-    : report;
-});
+  }),
+);
 
 type AuthoringRequestFacets = {
   preset?: AuthoringPreset;

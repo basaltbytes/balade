@@ -8,6 +8,7 @@ import type { Lang, CheckDiagnostic, Payload, RangeEcho } from "../contract/type
 import {
   ContextResolver,
   type CommandFailed,
+  type PullResolution,
   type ResolveError,
   type ResolveOptions,
 } from "../contract/context.js";
@@ -21,8 +22,8 @@ export interface LoadOptions {
   path: string;
   /** Walkthrough text already read — ref mode, where the file may not be in the working tree. */
   source?: string;
-  /** Fetched commit the walkthrough is served at (ref mode); threads to resolution. */
-  at?: string;
+  /** Fetched head or prepared pull range to rehydrate instead of using the current checkout. */
+  resolution?: PullResolution;
   /** Chrome language override (`--lang`). */
   lang?: Lang;
   /** `false` skips gh entirely. */
@@ -81,7 +82,7 @@ export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: 
     file: givenPath,
     references: referencedFiles(valid),
   };
-  if (options.at !== undefined) request.at = options.at;
+  if (options.resolution !== undefined) request.resolution = options.resolution;
   if (options.useGh !== undefined) request.useGh = options.useGh;
   const resolved = yield* resolver.resolve(request);
   const diagnostics = [...doc.diagnostics, ...resolved.diagnostics];
