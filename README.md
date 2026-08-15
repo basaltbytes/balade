@@ -148,6 +148,11 @@ Generated frontmatter records authoring package version `1.21.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
+Inside a [herdr](https://github.com/herdrdev/herdr) pane, `generate` reports
+its state over herdr's socket API: working while it authors, blocked while a
+login or model prompt waits for you, done when the walkthrough is ready. No
+setup is needed; outside herdr the reporting is off.
+
 ## Walkthrough format
 
 The frontmatter identifies the PR and commit:

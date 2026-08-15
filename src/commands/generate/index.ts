@@ -7,6 +7,7 @@ import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import type { Lang } from "../../contract/types.js";
 import { parsePrTarget } from "../../git/pr.js";
 import { getPreset, presetNames } from "../../preset/registry.js";
+import { reportPresence, reportWaitingDuring } from "../../presence.js";
 import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
 import {
@@ -174,6 +175,7 @@ export const generateCommand = Command.make(
         return;
       }
       const selection = modelSelectionFromFlags(config.provider, config.model);
+      yield* reportPresence("working");
       const source = yield* resolvePullHead({ cwd: process.cwd(), target: pull });
       for (const notice of source.notices) {
         writeStdout(warningText(notice, stdoutTheme));
@@ -204,6 +206,8 @@ export const generateCommand = Command.make(
         progressMode,
         progress,
       });
+      /* Authoring is over on both branches; the serve loop below is the reviewer's time. */
+      yield* reportPresence("settled");
       if (result.siblings.length > 0) {
         writeStdout(generationSiblingText(source.pull.number, result.siblings, stdoutTheme));
       }
@@ -303,24 +307,28 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
     methods = orderedLoginMethods(yield* author.loginMethods, filter.providerId);
   }
   if (methods.length > 0) {
-    const method = yield* Prompt.run(
-      Prompt.select({
-        message: "Log in to a Pi provider",
-        choices: methods.map((candidate) => ({
-          title: `${candidate.providerName} — ${candidate.label}`,
-          value: candidate,
-          description:
-            candidate.billing === "anthropic-extra-usage"
-              ? anthropicBillingCaveat()
-              : `${candidate.method === "oauth" ? "Subscription" : "API key"} authentication`,
-        })),
+    yield* reportWaitingDuring(
+      Effect.gen(function* () {
+        const method = yield* Prompt.run(
+          Prompt.select({
+            message: "Log in to a Pi provider",
+            choices: methods.map((candidate) => ({
+              title: `${candidate.providerName} — ${candidate.label}`,
+              value: candidate,
+              description:
+                candidate.billing === "anthropic-extra-usage"
+                  ? anthropicBillingCaveat()
+                  : `${candidate.method === "oauth" ? "Subscription" : "API key"} authentication`,
+            })),
+          }),
+        );
+        if (method.billing === "anthropic-extra-usage") {
+          writeStdout(`${anthropicBillingCaveat()}\n`);
+        }
+        const promptContext = yield* Effect.context<Prompt.Environment>();
+        yield* author.login(method, loginInteraction(promptContext));
       }),
     );
-    if (method.billing === "anthropic-extra-usage") {
-      writeStdout(`${anthropicBillingCaveat()}\n`);
-    }
-    const promptContext = yield* Effect.context<Prompt.Environment>();
-    yield* author.login(method, loginInteraction(promptContext));
     available = yield* author.availableModels;
   } else if (available.length === 0) {
     return yield* new NoProviderAuthenticated({ requested: requestedModel(filter) });
@@ -336,18 +344,20 @@ const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: M
     );
   }
 
-  const selected = yield* Prompt.run(
-    Prompt.select({
-      message: "Choose the provider and model",
-      choices: picker.models.map((candidate) => ({
-        title: `${candidate.providerName} — ${candidate.modelName}`,
-        value: candidate,
-        description:
-          candidate.providerId === "anthropic"
-            ? anthropicBillingCaveat()
-            : `${candidate.providerId}/${candidate.modelId}`,
-      })),
-    }),
+  const selected = yield* reportWaitingDuring(
+    Prompt.run(
+      Prompt.select({
+        message: "Choose the provider and model",
+        choices: picker.models.map((candidate) => ({
+          title: `${candidate.providerName} — ${candidate.modelName}`,
+          value: candidate,
+          description:
+            candidate.providerId === "anthropic"
+              ? anthropicBillingCaveat()
+              : `${candidate.providerId}/${candidate.modelId}`,
+        })),
+      }),
+    ),
   );
   yield* rememberSelected(selected);
   announceModel(selected);
