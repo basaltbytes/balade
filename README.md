@@ -138,8 +138,10 @@ collision keeps the completed new draft under a unique sibling name and reports
 both paths. `--force` atomically replaces only the matching filename, leaving
 other walkthroughs for that PR untouched.
 
-Balade validates the draft and allows up to two model repair turns. If validation
-still fails, the draft stays on disk and the command exits with status 1.
+Balade validates the draft and allows up to two model repair turns. If a turn
+leaves the same diagnostic codes on the same lines, balade stops early. If
+validation still fails, the draft stays on disk and the command exits with
+status 1.
 
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
 allowlisted tool calls; provider-hidden reasoning remains hidden.
