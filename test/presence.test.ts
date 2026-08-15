@@ -1,7 +1,7 @@
 /**
  * Herdr presence through the real socket seam: a local server stands in for
- * herdr, so the suite proves the frame dialect, state coalescing, the settled
- * flush at scope close, and that a dead socket never fails a command.
+ * herdr, so the suite proves the frame dialect, state coalescing, inert unused
+ * lifecycles, the settled flush at scope close, and failure isolation.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -9,9 +9,10 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "@effect/vitest";
-import { Effect, Layer, Schema } from "effect";
+import { ConfigProvider, Effect, Layer, Schema } from "effect";
 import {
   AgentPresence,
+  agentPresenceLive,
   herdrEndpoint,
   herdrPane,
   herdrPresenceLayer,
@@ -48,7 +49,7 @@ interface FrameServer {
 }
 
 /** Accepts one JSON line per connection and acknowledges it, as herdr does. */
-function startServer(endpoint: string): Promise<FrameServer> {
+function startServer(endpoint: string, firstAckDelayMillis = 0): Promise<FrameServer> {
   return new Promise((resolve, reject) => {
     const frames: unknown[] = [];
     const server = net.createServer((socket) => {
@@ -60,7 +61,12 @@ function startServer(endpoint: string): Promise<FrameServer> {
         const frame: unknown = JSON.parse(pending.slice(0, newline));
         frames.push(frame);
         pending = "";
-        socket.write('{"ok":true}\n');
+        const acknowledge = () => socket.write('{"ok":true}\n');
+        if (frames.length === 1 && firstAckDelayMillis > 0) {
+          setTimeout(acknowledge, firstAckDelayMillis);
+        } else {
+          acknowledge();
+        }
       });
       socket.on("error", () => {});
     });
@@ -73,19 +79,23 @@ function startServer(endpoint: string): Promise<FrameServer> {
 
 /** What herdr's `pane.report_agent` endpoint receives, as the suite checks it. */
 const ReportRequest = Schema.Struct({
-  method: Schema.String,
+  id: Schema.String,
+  method: Schema.Literal("pane.report_agent"),
   params: Schema.Struct({
-    pane_id: Schema.String,
-    source: Schema.String,
-    agent: Schema.String,
-    state: Schema.String,
-    seq: Schema.Finite,
+    pane_id: Schema.Literal(PANE_ID),
+    source: Schema.Literal("custom:balade"),
+    agent: Schema.Literal("balade"),
+    state: Schema.Literals(["working", "blocked", "idle"]),
+    seq: Schema.Int,
   }),
 });
+const decodeReport = Schema.decodeUnknownEffect(ReportRequest, {
+  onExcessProperty: "error",
+});
 
-const serverFor = (socketPath: string) =>
+const serverFor = (socketPath: string, firstAckDelayMillis = 0) =>
   Effect.acquireRelease(
-    Effect.promise(() => startServer(herdrEndpoint(socketPath))),
+    Effect.promise(() => startServer(herdrEndpoint(socketPath), firstAckDelayMillis)),
     (server) => Effect.sync(() => server.close()),
   );
 
@@ -124,7 +134,31 @@ describe("herdrPane", () => {
 });
 
 describe("herdrPresenceLayer", () => {
-  it.effect(
+  it.live(
+    "builds the live adapter from Effect configuration",
+    () =>
+      Effect.gen(function* () {
+        const pane = scratchPane();
+        const server = yield* serverFor(pane.socketPath);
+        const config = ConfigProvider.fromUnknown({
+          HERDR_ENV: "1",
+          HERDR_SOCKET_PATH: pane.socketPath,
+          HERDR_PANE_ID: pane.paneId,
+        });
+        const presence = agentPresenceLive.pipe(Layer.provide(ConfigProvider.layer(config)));
+
+        yield* Effect.gen(function* () {
+          yield* reportPresence("working");
+          yield* awaitFrames(server, 1);
+        }).pipe(Effect.provide(presence));
+
+        const reports = yield* Effect.forEach(server.frames, (frame) => decodeReport(frame));
+        expect(reports.map((report) => report.params.state)).toEqual(["working", "idle"]);
+      }).pipe(Effect.scoped),
+    TEST_MILLIS,
+  );
+
+  it.live(
     "reports transitions in herdr's dialect and flushes settled at scope close",
     () =>
       Effect.gen(function* () {
@@ -134,24 +168,13 @@ describe("herdrPresenceLayer", () => {
         yield* Effect.gen(function* () {
           yield* reportPresence("working");
           yield* awaitFrames(server, 1);
-          /* A repeated state is coalesced or deduplicated, never re-sent. */
-          yield* reportPresence("working");
           yield* reportPresence("waiting");
           yield* awaitFrames(server, 2);
         }).pipe(Effect.provide(herdrPresenceLayer(pane)));
 
         /* The finalizer completes before the layer scope closes. */
         expect(server.frames).toHaveLength(3);
-        const decodeReport = Schema.decodeUnknownEffect(ReportRequest);
         const reports = yield* Effect.forEach(server.frames, (frame) => decodeReport(frame));
-        for (const report of reports) {
-          expect(report.method).toBe("pane.report_agent");
-          expect(report.params).toMatchObject({
-            pane_id: PANE_ID,
-            source: "custom:balade",
-            agent: "balade",
-          });
-        }
         expect(reports.map((report) => report.params.state)).toEqual([
           "working",
           "blocked",
@@ -160,12 +183,54 @@ describe("herdrPresenceLayer", () => {
         const sequence = reports.map((report) => report.params.seq);
         expect(sequence).toEqual([...sequence].sort((left, right) => left - right));
         expect(new Set(sequence).size).toBe(3);
+        expect(reports.map((report) => report.id)).toEqual(
+          sequence.map((seq) => `custom:balade:${seq}`),
+        );
       }).pipe(Effect.scoped),
     TEST_MILLIS,
   );
 
-  it.effect(
-    "an absent herdr socket never fails or blocks the command",
+  it.live(
+    "keeps only the latest state pending behind an in-flight report",
+    () =>
+      Effect.gen(function* () {
+        const pane = scratchPane();
+        const server = yield* serverFor(pane.socketPath, 100);
+
+        yield* Effect.gen(function* () {
+          yield* reportPresence("working");
+          yield* awaitFrames(server, 1);
+          yield* reportPresence("waiting");
+          yield* reportPresence("working");
+          yield* awaitFrames(server, 2);
+        }).pipe(Effect.provide(herdrPresenceLayer(pane)));
+
+        const reports = yield* Effect.forEach(server.frames, (frame) => decodeReport(frame));
+        expect(reports.map((report) => report.params.state)).toEqual([
+          "working",
+          "working",
+          "idle",
+        ]);
+      }).pipe(Effect.scoped),
+    TEST_MILLIS,
+  );
+
+  it.live(
+    "sends nothing when a command acquires the service but never reports presence",
+    () =>
+      Effect.gen(function* () {
+        const pane = scratchPane();
+        const server = yield* serverFor(pane.socketPath);
+
+        yield* AgentPresence.use(() => Effect.void).pipe(Effect.provide(herdrPresenceLayer(pane)));
+
+        expect(server.frames).toEqual([]);
+      }).pipe(Effect.scoped),
+    TEST_MILLIS,
+  );
+
+  it.live(
+    "an absent herdr socket never fails the command",
     () => reportPresence("working").pipe(Effect.provide(herdrPresenceLayer(scratchPane()))),
     TEST_MILLIS,
   );
@@ -180,10 +245,11 @@ describe("reportWaitingDuring", () => {
     Effect.gen(function* () {
       const states: LifecycleState[] = [];
       const recording = Layer.sync(AgentPresence, () => ({
-        report: (state: LifecycleState) =>
+        report: Effect.fn("AgentPresence.recording.report")((state: LifecycleState) =>
           Effect.sync(() => {
             states.push(state);
           }),
+        ),
       }));
       yield* reportWaitingDuring(Effect.void).pipe(Effect.provide(recording));
       const failure = yield* reportWaitingDuring(Effect.fail("interrupted prompt")).pipe(

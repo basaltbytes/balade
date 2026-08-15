@@ -4,18 +4,18 @@
  * multiplexer dialect is one adapter behind this port. The first adapter
  * speaks herdr's socket self-report; a pane outside herdr gets the no-op.
  *
- * Reports carry only the fixed literals below — never text derived from a
- * pull request — so no untrusted byte reaches a multiplexer socket.
+ * Reports carry fixed lifecycle literals plus herdr's own pane identity and a
+ * local sequence — never text derived from a pull request.
  */
 
 import net from "node:net";
-import { Context, Effect, Layer, Queue } from "effect";
+import { Config, Context, Effect, Layer, Queue } from "effect";
 
 /** Balade's semantic lifecycle states; adapters translate to their dialect. */
 export type LifecycleState = "working" | "waiting" | "settled";
 
 export interface AgentPresencePort {
-  /** Fire-and-forget: delivery never fails, blocks, or outlives its budget. */
+  /** Enqueues without waiting; adapter delivery is bounded and never fails the caller. */
   readonly report: (state: LifecycleState) => Effect.Effect<void>;
 }
 
@@ -23,7 +23,9 @@ export interface AgentPresencePort {
 export class AgentPresence extends Context.Service<AgentPresence, AgentPresencePort>()(
   "@balade/AgentPresence",
 ) {
-  static readonly noop = Layer.sync(AgentPresence, () => ({ report: () => Effect.void }));
+  static readonly noop = Layer.sync(AgentPresence, () => ({
+    report: Effect.fn("AgentPresence.noop.report")(() => Effect.void),
+  }));
 }
 
 export const reportPresence = (state: LifecycleState) =>
@@ -56,6 +58,12 @@ export function herdrPane(env: Record<string, string | undefined>): HerdrPane | 
     : undefined;
 }
 
+const herdrPaneConfig = Config.all({
+  HERDR_ENV: Config.string("HERDR_ENV").pipe(Config.withDefault("")),
+  HERDR_SOCKET_PATH: Config.string("HERDR_SOCKET_PATH").pipe(Config.withDefault("")),
+  HERDR_PANE_ID: Config.string("HERDR_PANE_ID").pipe(Config.withDefault("")),
+}).pipe(Config.map(herdrPane));
+
 /** Windows exposes the socket as a named pipe; elsewhere the path is literal. */
 export const herdrEndpoint = (socketPath: string): string =>
   process.platform === "win32" ? `\\\\.\\pipe\\${socketPath}` : socketPath;
@@ -74,8 +82,8 @@ const RETRY_ATTEMPT_MILLIS = 1500;
  * Herdr's self-report dialect: one newline-delimited JSON request per state
  * change to `pane.report_agent`, acknowledged by any response bytes. Reports
  * coalesce through a sliding queue — only the latest pending state matters —
- * and a scope finalizer always flushes `settled`, so a pane never exits stuck
- * on `working`.
+ * and the first report arms a scope finalizer that flushes `settled`, so a pane
+ * never exits stuck on `working` while unrelated commands report nothing.
  */
 export const herdrPresenceLayer = (pane: HerdrPane): Layer.Layer<AgentPresence> =>
   Layer.effect(
@@ -85,10 +93,9 @@ export const herdrPresenceLayer = (pane: HerdrPane): Layer.Layer<AgentPresence> 
       /* Wall-clock seed: the pane outlives this process, and herdr orders
          reports per source by `seq`, so a restart must not rewind it. */
       let seq = Date.now() * 1000;
-      let attempted: LifecycleState | undefined;
+      let hasReported = false;
 
       const send = Effect.fn("AgentPresence.send")(function* (state: LifecycleState) {
-        attempted = state;
         seq++;
         const frame = `${JSON.stringify({
           id: `custom:balade:${seq}`,
@@ -108,33 +115,37 @@ export const herdrPresenceLayer = (pane: HerdrPane): Layer.Layer<AgentPresence> 
 
       const queue = yield* Queue.sliding<LifecycleState>(1);
       /* Registered before the drainer fork, so it runs after the drainer's
-         interruption and owns the socket's last word. Unconditional: a
-         duplicate idle report is harmless, a pane stuck `working` is not. */
-      yield* Effect.addFinalizer(() => send("settled"));
+         interruption and owns the socket's last word. The first report arms
+         it: commands that never use presence must not register a balade agent. */
+      yield* Effect.addFinalizer(() => (hasReported ? send("settled") : Effect.void));
       yield* Effect.forkScoped(
         Effect.gen(function* () {
           while (true) {
-            const state = yield* Queue.take(queue);
-            if (state !== attempted) yield* send(state);
+            yield* send(yield* Queue.take(queue));
           }
         }),
       );
 
       return {
-        report: (state: LifecycleState) => Queue.offer(queue, state).pipe(Effect.asVoid),
+        report: Effect.fn("AgentPresence.report")(function* (state: LifecycleState) {
+          hasReported = true;
+          yield* Queue.offer(queue, state);
+        }),
       } satisfies AgentPresencePort;
     }),
   );
 
-/** The live wiring: a herdr pane reports to herdr, any other pane nowhere. */
-export const agentPresenceLive: Layer.Layer<AgentPresence> = Layer.suspend(() => {
-  const pane = herdrPane(process.env);
-  return pane === undefined ? AgentPresence.noop : herdrPresenceLayer(pane);
-});
+/** The live wiring: parse pane configuration once; a non-herdr pane reports nowhere. */
+export const agentPresenceLive: Layer.Layer<AgentPresence> = Layer.unwrap(
+  herdrPaneConfig.pipe(
+    Effect.orElseSucceed(() => undefined),
+    Effect.map((pane) => (pane === undefined ? AgentPresence.noop : herdrPresenceLayer(pane))),
+  ),
+);
 
-/* One short-lived connection per report, herdr's expected client shape. Every
-   outcome — refused, hung, interrupted — resolves false; presence must never
-   fail a command. */
+/* One short-lived connection per report, herdr's expected client shape.
+   Refused and hung connections resolve false; interruption closes the socket.
+   Presence delivery never fails a command. */
 const deliver = (endpoint: string, frame: string, timeoutMillis: number) =>
   Effect.callback<boolean>((resume) => {
     let done = false;
