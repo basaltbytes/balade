@@ -17,7 +17,7 @@ import { plainHeadings, proseTemplate, renderProse } from "../authoring/prose.js
 import type { Lang } from "../contract/types.js";
 import type { AuthoringPreset, AuthoringRequest } from "./author.js";
 
-/** The budget sentence: exact numbers on sized tiers, no cap on `unlimited`. */
+/** The budget sentence: exact numbers on sized tiers, no cap on `high`. */
 function inspectionBudgetSentence(budget: InspectionBudget): string {
   return Number.isFinite(budget.diffReads)
     ? `Use no more than ${budget.diffReads} diff reads, ${budget.searches} searches, and ${budget.sourceReads} source reads.`

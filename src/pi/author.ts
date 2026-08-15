@@ -150,7 +150,7 @@ export interface AuthoringRequest {
   readonly lang?: Lang;
   /** Named by `--prompt`; typed by the operator, so trusted — unlike PR-derived claims. */
   readonly guidance?: string;
-  /** Named by `--budget`; sizes the inspection budget. Absent means `base`. */
+  /** Named by `--budget`; sizes the inspection budget. Absent means `medium`. */
   readonly budget?: InspectionTier;
   readonly headInstructionPolicy: HeadInstructionPolicy;
   readonly progressMode: AuthorProgressMode;

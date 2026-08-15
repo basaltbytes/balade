@@ -94,7 +94,7 @@ export async function createPiSession(
   let searches = 0;
   let sourceReads = 0;
   const changed = new Set(request.files.map((file) => file.path));
-  const budget = inspectionBudget(changed.size, request.budget ?? "base");
+  const budget = inspectionBudget(changed.size, request.budget ?? "medium");
   const { snapshot, projectContext, searchConfiguration } = preparation;
   await runSessionEffect(installSearchConfiguration(searchConfiguration));
   for (const notice of projectContext.notices) request.progress(notice);

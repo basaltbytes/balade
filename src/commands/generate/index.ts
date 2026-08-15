@@ -97,11 +97,11 @@ const guidance = Flag.string("prompt").pipe(
   ),
 );
 
-const budget = Flag.choice("budget", ["base", "x2", "unlimited"]).pipe(
+const budget = Flag.choice("budget", ["low", "medium", "high"]).pipe(
   Flag.withDescription(
-    "Inspection budget: base scales with the pull request, x2 doubles it, unlimited removes it",
+    "Inspection budget: low fixes small caps, medium scales with the pull request, high removes the caps",
   ),
-  Flag.withDefault("base" as const),
+  Flag.withDefault("medium" as const),
 );
 
 const force = Flag.boolean("force").pipe(

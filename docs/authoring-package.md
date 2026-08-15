@@ -15,7 +15,7 @@ slots carrying the typed data in. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
-The current package version is `1.20.0`. Its major version matches the
+The current package version is `1.21.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -80,19 +80,22 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.20.0
+  balade-authoring: 1.21.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
 through the same walkthrough v1 contract used by hand-authored files and
 confirms each code path, range, and `expect=` boundary echo.
 
-Inspection budgets scale with the pull request. The base tier allows two diff
-reads and two searches per changed file, and three source reads — room for the
-adjacent files a claim depends on — with floors of sixteen, thirty, and
-twenty-four so small changes stay free to explore. `--budget x2` doubles the
-estimate; `--budget unlimited` removes enforcement. The budgets exist to
-guarantee termination, never to economize on the operator's behalf, and a
+Inspection budgets scale with the pull request. The default `medium` tier
+allows two diff reads and two searches per changed file, and three source
+reads — room for the adjacent files a claim depends on — with floors of
+sixteen, thirty, and twenty-four so small changes stay free to explore.
+`--budget low` allows one diff read, one search, and one source read per
+changed file, with floors of eight, twenty, and twelve — a constrained spend
+that still produces a walkthrough; `--budget high` removes enforcement. The budgets exist to guarantee
+termination, never to economize on the operator's behalf unless the operator
+picks `low` to say exactly that, and a
 draft has no cap on sections or code ranges. Search results are repo-relative,
 sorted by path and line, capped at 200 matches, and character-truncated. They
 do not depend on ignore files or on the user's own ripgrep configuration. The
