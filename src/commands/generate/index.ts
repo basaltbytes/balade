@@ -443,7 +443,7 @@ export function makeGenerationProgress(
             `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
               `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
               `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
-              `cost $${usage.cost.toFixed(4)}`,
+              `cumulative cost $${usage.cost.toFixed(4)}`,
           ) + "\n",
         );
         break;

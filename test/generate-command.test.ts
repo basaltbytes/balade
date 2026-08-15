@@ -39,7 +39,7 @@ describe("generation command output", () => {
     ).toBe("safelink");
   });
 
-  it("summarizes compact progress and gives generate-only runs a next step", () => {
+  it("summarizes compact progress with cumulative cost and gives generate-only runs a next step", () => {
     const output: string[] = [];
     const progress = makeGenerationProgress((value) => output.push(value));
 
@@ -78,7 +78,7 @@ describe("generation command output", () => {
       "Reading relevant diffs…\n",
       "Confirming pinned source ranges…\n",
       "Submitting the walkthrough draft…\n",
-      "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cost $0.0123\n",
+      "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cumulative cost $0.0123\n",
     ]);
     expect(
       generationSuccessText({
