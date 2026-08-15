@@ -1333,3 +1333,23 @@ Future sinks ride the same port: OSC title/progress sequences (the signal
 observation-based tools share), a cmux `set-status` adapter, or an
 operator-configured hook command that would let multiplexers integrate
 balade without balade naming them.
+
+## Generation repair turns require diagnostic progress
+
+After each repair, the pipeline compares the diagnostic-location multiset
+(`code`, `line`) with the report that prompted it. An unchanged set stops the
+loop after that turn; a changed set may use the remaining attempt, up to the
+existing hard cap of two. Messages, hints and range echoes do not count as
+progress because the checker can reword or re-echo the same defect without the
+draft becoming closer to valid. Rejected: always spending the full retry budget
+(it pays again for a proven dead end), and comparing the rendered file (a model
+can rewrite prose without repairing validation).
+
+The complete report stays in the repair prompt. Filtering diagnostic codes in
+the generation command was rejected after
+[#116](https://github.com/basaltbytes/balade/issues/116) moved the prepared pull
+range into the checker: the known false staleness and empty-diff diagnostics
+now disappear at their source, while a command-local denylist would duplicate
+checker semantics and drift as diagnostics change. What would move this:
+diagnostics gaining an explicit repair owner or structured fix target in the
+shared contract.

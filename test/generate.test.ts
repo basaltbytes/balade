@@ -901,12 +901,11 @@ describe("generation", () => {
     }),
   );
 
-  it.effect("keeps a still-invalid draft after the bounded repair loop", () =>
+  it.effect("stops when a repair leaves the diagnostic codes and lines unchanged", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
       harness.faux.setResponses([
-        submitted(invalidBody, "Needs manual repair"),
         submitted(invalidBody, "Needs manual repair"),
         submitted(invalidBody, "Needs manual repair"),
       ]);
@@ -925,7 +924,8 @@ describe("generation", () => {
       }).pipe(Effect.provide(harness.layer));
 
       expect(result._tag).toBe("GeneratedWithDiagnostics");
-      expect(result.repairs).toBe(2);
+      expect(result.repairs).toBe(1);
+      expect(harness.faux.state.callCount).toBe(2);
       expect(existsSync(result.file)).toBe(true);
       expect(result.report.diagnostics.some((diagnostic) => diagnostic.level === "error")).toBe(
         true,

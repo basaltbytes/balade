@@ -145,6 +145,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
     let repairs = 0;
     let report = yield* checkGeneratedDraft(options.source, file);
     while (!report.ok && repairs < MAX_REPAIR_ATTEMPTS) {
+      const previousReport = report;
       repairs++;
       turn = yield* session
         .repair(formatText({ reports: [report] }))
@@ -154,6 +155,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
         renderDraft(options.source, turn.draft, options.preset, options.lang),
       ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
       report = yield* checkGeneratedDraft(options.source, file);
+      if (sameDiagnosticLocations(previousReport, report)) break;
     }
 
     const summary: GenerationSummary = {
@@ -168,6 +170,24 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       : ({ _tag: "GeneratedWithDiagnostics", ...summary } satisfies GeneratedWithDiagnostics);
   }).pipe(Effect.scoped),
 );
+
+function sameDiagnosticLocations(previous: CheckReport, next: CheckReport): boolean {
+  const locations = (report: CheckReport) =>
+    report.diagnostics
+      .map(({ code, line }) => ({ code, line }))
+      .toSorted(
+        (left, right) =>
+          left.code.localeCompare(right.code) || (left.line ?? -1) - (right.line ?? -1),
+      );
+  const before = locations(previous);
+  const after = locations(next);
+  return (
+    before.length === after.length &&
+    before.every(
+      (value, index) => value.code === after[index]?.code && value.line === after[index]?.line,
+    )
+  );
+}
 
 const checkGeneratedDraft = Effect.fn("checkGeneratedDraft")((source: PullSnapshot, file: string) =>
   checkOne({
