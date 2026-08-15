@@ -48,6 +48,7 @@ import {
 import { initialAuthoringPrompt, repairAuthoringPrompt } from "./authoring.js";
 import {
   createPiSession,
+  hasEnvelopeOrFence,
   preparePiSession,
   releasePiSession,
   type PiSessionDependencies,
@@ -443,11 +444,6 @@ function modelsErrorCode(cause: unknown): "oauth" | "auth" | "provider" | "unkno
   if (!Predicate.isObject(cause) || !("code" in cause)) return "unknown";
   const code = cause.code;
   return code === "oauth" || code === "auth" || code === "provider" ? code : "unknown";
-}
-
-function hasEnvelopeOrFence(body: string): boolean {
-  const trimmed = body.trimStart();
-  return trimmed.startsWith("---") || trimmed.startsWith("```");
 }
 
 const readUsage = Effect.fn("PiAuthoringSession.readUsage")(function* (

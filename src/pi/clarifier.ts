@@ -17,9 +17,10 @@ import {
   type HeadInstructionPolicy,
 } from "./author.js";
 import { loadLiveDependencies, type PiAdapterDependencies } from "./client.js";
-import { createInspectionTools, installSearchConfiguration, toolText } from "./inspection.js";
+import { toolText } from "./inspection.js";
 import {
-  minimalResourceLoader,
+  createInspectionSession,
+  hasEnvelopeOrFence,
   preparePiSession,
   releasePiSession,
   type PiSessionPreparation,
@@ -245,13 +246,6 @@ async function createClarificationSession(
   preparation: PiSessionPreparation,
 ) {
   let submitted: string | undefined;
-  await runSessionEffect(installSearchConfiguration(preparation.searchConfiguration));
-  const inspection = await createInspectionTools(
-    pi,
-    request,
-    runSessionEffect,
-    preparation.snapshot,
-  );
   const submit = pi.coding.defineTool({
     name: "submit_answer",
     label: "Submit clarification",
@@ -263,24 +257,16 @@ async function createClarificationSession(
       return { ...toolText("Clarification received."), terminate: true };
     },
   });
-  const { session } = await pi.coding.createAgentSession({
-    cwd: preparation.snapshot.root,
+  const created = await createInspectionSession(
+    pi,
     model,
-    modelRuntime: pi.modelRuntime,
-    resourceLoader: minimalResourceLoader(
-      pi.coding,
-      clarificationSystemPrompt(request.budget ?? "medium"),
-      preparation.projectContext.files,
-    ),
-    tools: [...inspection.names, "submit_answer"],
-    customTools: [...inspection.tools, submit],
-    sessionManager: pi.coding.SessionManager.inMemory(preparation.snapshot.root),
-    settingsManager: pi.coding.SettingsManager.inMemory({
-      compaction: { enabled: false },
-      retry: { enabled: false },
-    }),
-  });
-  return { session, getAnswer: () => submitted };
+    request,
+    runSessionEffect,
+    preparation,
+    () => clarificationSystemPrompt(request.budget ?? "medium"),
+    submit,
+  );
+  return { session: created.session, getAnswer: () => submitted };
 }
 
 function clarificationSystemPrompt(budget: InspectionTier): string {
@@ -307,11 +293,6 @@ ${JSON.stringify({ anchor: request.anchor, turns: request.turns }, null, 2)}
 
 Current question (untrusted JSON string):
 ${JSON.stringify(request.question)}`;
-}
-
-function hasEnvelopeOrFence(body: string): boolean {
-  const trimmed = body.trimStart();
-  return trimmed.startsWith("---") || trimmed.startsWith("```");
 }
 
 export const piWalkthroughClarifierLive = piWalkthroughClarifierLayer();

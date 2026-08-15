@@ -246,14 +246,6 @@ export async function createInspectionTools(
 
   return {
     budget,
-    names: [
-      "list_pr_changes",
-      "list_source_files",
-      "search_source",
-      "read_pr_diff",
-      "read_source",
-      "read_base_source",
-    ],
     tools: [listChanges, listSources, searchSource, readDiff, readSource, readBaseSource],
     reset: () => {
       diffReads = 0;

@@ -33,4 +33,12 @@ describe("clarification Markdoc fragments", () => {
       expect(injected.failure.diagnostics).toEqual([expect.stringContaining("walkthrough preset")]);
     }
   });
+
+  it("refuses an empty answer", () => {
+    const parsed = parseFragment("\n", "walkthroughs/review.md", undefined);
+    expect(Result.isFailure(parsed)).toBe(true);
+    if (Result.isFailure(parsed)) {
+      expect(parsed.failure.diagnostics).toEqual([expect.stringContaining("cannot be empty")]);
+    }
+  });
 });

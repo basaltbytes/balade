@@ -1380,18 +1380,20 @@ failure marker, never credentials or provider diagnostics, and a later
 follow-up can retry the conversation.
 
 Every question and follow-up creates a fresh scoped Pi session. Generation and
-clarification share one pinned, read-only inspection-tool module, while each
-workflow owns its submit tool and prompt. The clarification prompt receives the
-walkthrough source, pinned diff, anchor and completed turns as untrusted data.
+clarification share one pinned, read-only inspection-tool module and one
+sandbox session assembler, while each workflow owns its submit tool and prompt.
+The clarification prompt receives the walkthrough source, pinned diff, anchor
+and completed turns as untrusted data.
 Its submitted Markdoc fragment is parsed with the canonical walkthrough grammar
 and compiled into `Block` values before the sidecar changes to answered. This
 keeps Q&A out of the committed document and adds no renderer-only dialect or
 HTML sink. The server writes pending state before forking the run, serializes
 all transitions with one semaphore, and writes the sidecar by same-directory
 temporary-file rename so polling never observes partial JSON. Committing the
-pending state and installing its child-scope failure guard are one
-uninterruptible handoff: a closing server settles an in-flight question as
-failed instead of leaving a permanent pending record.
+pending state and starting its supervised worker are one uninterruptible
+handoff. The worker starts synchronously enough to install its exit finalizer
+before the handoff returns, so a closing server settles an in-flight question
+as failed instead of leaving a permanent pending record.
 
 Static exports deliberately omit Q&A: asking requires the local repository,
 the selected model under `~/.balade/pi/`, and the live loopback server. What

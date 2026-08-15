@@ -1,13 +1,9 @@
 /** Strict browser boundary for the served clarification API. */
 
 import { Effect, Schema } from "effect";
-import { QaState as QaStateSchema } from "../../../src/contract/schema";
+import { parseQaState } from "../../../src/contract/qa-parser";
 import type { QaAskRequest, QaState } from "../contract";
 import { BrowserFetch } from "./browser";
-
-const decodeQaState = Schema.decodeUnknownEffect(QaStateSchema, {
-  onExcessProperty: "error",
-});
 
 export class QaFetchFailed extends Schema.TaggedErrorClass<QaFetchFailed>()("QaFetchFailed", {
   cause: Schema.Defect(),
@@ -47,7 +43,7 @@ const requestQa = Effect.fn("App.requestQa")(function* (url: string, init: Reque
     try: () => response.json(),
     catch: (cause) => new QaResponseInvalid({ cause }),
   });
-  return yield* decodeQaState(body).pipe(
+  return yield* parseQaState(body).pipe(
     Effect.mapError((cause) => new QaResponseInvalid({ cause })),
   );
 });

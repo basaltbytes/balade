@@ -5,12 +5,13 @@ import {
   Context,
   Crypto,
   Effect,
+  Exit,
   Layer,
   Match,
   Option,
   Schema,
-  Scope,
   Semaphore,
+  type Scope,
 } from "effect";
 import {
   ContextResolver,
@@ -116,7 +117,7 @@ interface PendingWork {
   readonly initialContext: ResolveContext;
 }
 
-interface FailedWork {
+interface QuestionKey {
   readonly path: string;
   readonly payload: Payload;
   readonly threadId: QaThread["id"];
@@ -299,26 +300,30 @@ const enqueueQuestion = Effect.fn("QaWorkflow.enqueueQuestion")(function* (
         request,
         initialContext: work.initialContext,
       } satisfies PendingWork;
-      const failedWork = {
+      const questionKey = {
         path: work.path,
         payload: work.payload,
         threadId: pending.thread.id,
         question: work.question,
-      } satisfies FailedWork;
-      const failureGuard = yield* Scope.fork(runtime.options.scope);
-      yield* Scope.addFinalizer(
-        failureGuard,
-        markFailed(runtime, failedWork).pipe(
-          Effect.catch((writeError) =>
-            Effect.logError(
-              `balade: clarification failure state could not be saved (${writeError._tag}).`,
-            ),
-          ),
-        ),
-      );
+      } satisfies QuestionKey;
       const worker = completeQuestion(runtime, pendingWork).pipe(
-        Effect.tapCause(() => Effect.logError("balade: clarification failed.")),
-        Effect.onExit((exit) => Scope.close(failureGuard, exit)),
+        Effect.tapError((error) =>
+          Effect.logError(`balade: clarification failed (${error._tag}).`),
+        ),
+        Effect.tapDefect(() => Effect.logError("balade: clarification failed unexpectedly.")),
+        Effect.onExit(
+          Exit.match({
+            onSuccess: () => Effect.void,
+            onFailure: () =>
+              markFailed(runtime, questionKey).pipe(
+                Effect.catch((writeError) =>
+                  Effect.logError(
+                    `balade: clarification failure state could not be saved (${writeError._tag}).`,
+                  ),
+                ),
+              ),
+          }),
+        ),
         Effect.ignoreCause,
       );
       yield* worker.pipe(
@@ -351,48 +356,55 @@ const completeQuestion = Effect.fn("QaWorkflow.completeQuestion")(function* (
   const answeredAt = yield* isoNow();
   const turn: QaTurn = { ...question, answeredAt, answer: [...blocks] };
 
-  yield* runtime.lock.withPermit(
-    Effect.gen(function* () {
-      const current = yield* runtime.readCurrent(path, payload);
-      const active = current.threads.find((thread) => thread.id === pending.id);
-      if (active?.status !== "pending" || active.pending.id !== question.id) return;
-      const completed = appendTurn(active.turns, turn);
-      const answered = {
+  yield* settleQuestion(
+    runtime,
+    { path, payload, threadId: pending.id, question },
+    (active) =>
+      ({
         id: active.id,
         anchor: active.anchor,
         status: "answered",
-        turns: completed,
-      } satisfies QaThread;
-      yield* runtime.persist(path, {
-        ...current,
-        threads: replaceThread(current.threads, answered),
-      });
-    }),
+        turns: appendTurn(active.turns, turn),
+      }) satisfies QaThread,
   );
 });
 
 const markFailed = Effect.fn("QaWorkflow.markFailed")(function* (
   runtime: QaRuntime,
-  work: FailedWork,
+  work: QuestionKey,
 ) {
-  const { path, payload, threadId, question } = work;
+  const { question } = work;
   const failedAt = yield* isoNow();
-  yield* runtime.lock.withPermit(
-    Effect.gen(function* () {
-      const current = yield* runtime.readCurrent(path, payload);
-      const active = current.threads.find((thread) => thread.id === threadId);
-      if (active?.status !== "pending" || active.pending.id !== question.id) return;
-      const failed = {
+  yield* settleQuestion(
+    runtime,
+    work,
+    (active) =>
+      ({
         id: active.id,
         anchor: active.anchor,
         status: "failed",
         turns: active.turns,
         failed: question,
         failedAt,
-      } satisfies QaThread;
-      yield* runtime.persist(path, {
+      }) satisfies QaThread,
+  );
+});
+
+type PendingThread = Extract<QaThread, { status: "pending" }>;
+
+const settleQuestion = Effect.fn("QaWorkflow.settleQuestion")(function* (
+  runtime: QaRuntime,
+  key: QuestionKey,
+  transition: (active: PendingThread) => QaThread,
+) {
+  yield* runtime.lock.withPermit(
+    Effect.gen(function* () {
+      const current = yield* runtime.readCurrent(key.path, key.payload);
+      const active = current.threads.find((thread) => thread.id === key.threadId);
+      if (active?.status !== "pending" || active.pending.id !== key.question.id) return;
+      yield* runtime.persist(key.path, {
         ...current,
-        threads: replaceThread(current.threads, failed),
+        threads: replaceThread(current.threads, transition(active)),
       });
     }),
   );

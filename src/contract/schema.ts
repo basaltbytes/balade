@@ -440,7 +440,7 @@ export const QaTurn = Schema.Struct({
   question: Schema.NonEmptyString,
   askedAt: Schema.String,
   answeredAt: Schema.String,
-  answer: Schema.Array(Block),
+  answer: Schema.NonEmptyArray(Block),
 });
 
 const QaThreadFields = {

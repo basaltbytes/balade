@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -54,17 +55,20 @@ export function QaProvider({
   const [submitting, setSubmitting] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [composer, setComposer] = useState<QaAnchor | null>(null);
+  const lifecycle = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setState(emptyState(payload));
     setFailed(false);
+    setSubmitting(false);
+    lifecycle.current = null;
     if (!served) return;
 
+    const scope = new AbortController();
+    lifecycle.current = scope;
     let timer: number | undefined;
-    let interrupt = (): void => undefined;
-    let stopped = false;
     const poll = (): void => {
-      interrupt = runAppEffect(
+      runAppEffect(
         fetchQa(payload.sourcePath).pipe(
           Effect.match({
             onFailure: () => ({ ok: false as const }),
@@ -72,7 +76,7 @@ export function QaProvider({
           }),
         ),
         (outcome) => {
-          if (stopped) return;
+          if (scope.signal.aborted) return;
           if (outcome.ok) {
             setState(outcome.next);
             setFailed(false);
@@ -81,19 +85,21 @@ export function QaProvider({
           }
           timer = window.setTimeout(poll, 1_500);
         },
+        { signal: scope.signal },
       );
     };
     poll();
     return () => {
-      stopped = true;
-      interrupt();
+      scope.abort();
+      if (lifecycle.current === scope) lifecycle.current = null;
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [payload, served]);
 
   const ask = useCallback(
     (request: QaAskRequest) => {
-      if (!served || submitting) return;
+      const scope = lifecycle.current;
+      if (!served || submitting || scope === null) return;
       setSubmitting(true);
       setFailed(false);
       runAppEffect(
@@ -104,6 +110,7 @@ export function QaProvider({
           }),
         ),
         (outcome) => {
+          if (scope.signal.aborted) return;
           setSubmitting(false);
           if (outcome.ok) {
             setState(outcome.next);
@@ -112,6 +119,7 @@ export function QaProvider({
             setFailed(true);
           }
         },
+        { signal: scope.signal },
       );
     },
     [payload.sourcePath, served, submitting],

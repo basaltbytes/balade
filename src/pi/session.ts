@@ -4,11 +4,13 @@ import type {
   AgentSession,
   ModelRuntime,
   ResourceLoader,
+  ToolDefinition,
   ToolExecutionEndEvent,
   ToolExecutionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
 import { Effect, Option, Predicate, Result } from "effect";
+import type { InspectionBudget } from "../authoring/package.js";
 import type {
   AuthorChangedFile,
   AuthorDraft,
@@ -21,6 +23,7 @@ import {
   installSearchConfiguration,
   toolText,
   writeSearchConfiguration,
+  type PiInspectionRequest,
   type RunSessionEffect,
 } from "./inspection.js";
 import {
@@ -91,10 +94,7 @@ export async function createPiSession(
   preparation: PiSessionPreparation,
 ) {
   let draft: AuthorDraft | undefined;
-  const { snapshot, projectContext, searchConfiguration } = preparation;
-  await runSessionEffect(installSearchConfiguration(searchConfiguration));
-  for (const notice of projectContext.notices) request.progress(notice);
-  const inspection = await createInspectionTools(pi, request, runSessionEffect, snapshot);
+  for (const notice of preparation.projectContext.notices) request.progress(notice);
 
   const submit = pi.coding.defineTool({
     name: "submit_walkthrough",
@@ -115,23 +115,16 @@ export async function createPiSession(
     },
   });
 
-  const { session } = await pi.coding.createAgentSession({
-    cwd: snapshot.root,
+  const created = await createInspectionSession(
+    pi,
     model,
-    modelRuntime: pi.modelRuntime,
-    resourceLoader: minimalResourceLoader(
-      pi.coding,
-      authoringSystemPrompt(inspection.budget, request.preset),
-      projectContext.files,
-    ),
-    tools: [...inspection.names, "submit_walkthrough"],
-    customTools: [...inspection.tools, submit],
-    sessionManager: pi.coding.SessionManager.inMemory(snapshot.root),
-    settingsManager: pi.coding.SettingsManager.inMemory({
-      compaction: { enabled: false },
-      retry: { enabled: false },
-    }),
-  });
+    request,
+    runSessionEffect,
+    preparation,
+    (budget) => authoringSystemPrompt(budget, request.preset),
+    submit,
+  );
+  const { session } = created;
   const unsubscribe = session.subscribe((event) => {
     if (
       request.progressMode === "verbose" &&
@@ -165,9 +158,51 @@ export async function createPiSession(
     clearDraft: () => {
       draft = undefined;
     },
-    resetInspectionBudget: inspection.reset,
+    resetInspectionBudget: created.resetInspectionBudget,
     getDraft: () => draft,
   };
+}
+
+/**
+ * The single Pi sandbox assembly path. Each workflow supplies only its prompt
+ * and terminating submit tool; the pinned inspection allowlist and in-memory
+ * session policy cannot drift between generation and clarification.
+ */
+export async function createInspectionSession(
+  pi: PiSessionDependencies,
+  model: Model<string>,
+  request: PiInspectionRequest,
+  runSessionEffect: RunSessionEffect,
+  preparation: PiSessionPreparation,
+  systemPrompt: (budget: InspectionBudget) => string,
+  submit: ToolDefinition,
+) {
+  await runSessionEffect(installSearchConfiguration(preparation.searchConfiguration));
+  const inspection = await createInspectionTools(
+    pi,
+    request,
+    runSessionEffect,
+    preparation.snapshot,
+  );
+  const tools: ToolDefinition[] = [...inspection.tools, submit];
+  const { session } = await pi.coding.createAgentSession({
+    cwd: preparation.snapshot.root,
+    model,
+    modelRuntime: pi.modelRuntime,
+    resourceLoader: minimalResourceLoader(
+      pi.coding,
+      systemPrompt(inspection.budget),
+      preparation.projectContext.files,
+    ),
+    tools: tools.map((tool) => tool.name),
+    customTools: tools,
+    sessionManager: pi.coding.SessionManager.inMemory(preparation.snapshot.root),
+    settingsManager: pi.coding.SettingsManager.inMemory({
+      compaction: { enabled: false },
+      retry: { enabled: false },
+    }),
+  });
+  return { session, resetInspectionBudget: inspection.reset };
 }
 
 export function releasePiSession(session: AgentSession): Effect.Effect<void> {
@@ -218,7 +253,7 @@ function verboseToolOutput(result: ToolExecutionEndEvent["result"]): string {
     .join("\n");
 }
 
-export function minimalResourceLoader(
+function minimalResourceLoader(
   coding: CodingAgentSdk,
   systemPrompt: string,
   projectContextFiles: readonly ProjectContextFile[],
@@ -240,4 +275,9 @@ export function minimalResourceLoader(
     extendResources: () => {},
     reload: async () => {},
   };
+}
+
+export function hasEnvelopeOrFence(body: string): boolean {
+  const trimmed = body.trimStart();
+  return trimmed.startsWith("---") || trimmed.startsWith("```");
 }

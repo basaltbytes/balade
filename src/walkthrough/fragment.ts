@@ -63,6 +63,11 @@ ${source}
       }),
     );
   }
+  if (section.children.length === 0) {
+    return Result.fail(
+      new FragmentInvalid({ diagnostics: ["A clarification answer cannot be empty."] }),
+    );
+  }
   return Result.succeed({
     nodes: section.children,
     references: referencedFiles(section.children),
@@ -83,7 +88,7 @@ export function compileFragment(
   ctx: ResolveContext,
   file: string,
   sectionId: string,
-): Result.Result<readonly Block[], FragmentInvalid> {
+): Result.Result<readonly [Block, ...Block[]], FragmentInvalid> {
   const diagnostics: CheckDiagnostic[] = [];
   const files = new Map(ctx.files.map((entry) => [entry.path, entry]));
   const env: CompileEnv = {
@@ -107,9 +112,13 @@ export function compileFragment(
   };
   const blocks = compileBlocks(parsed.nodes, env, sectionId);
   const errors = diagnostics.filter((diagnostic) => diagnostic.level === "error");
-  return errors.length === 0
-    ? Result.succeed(blocks)
-    : Result.fail(new FragmentInvalid({ diagnostics: errors.map(formatDiagnostic) }));
+  if (errors.length > 0) {
+    return Result.fail(new FragmentInvalid({ diagnostics: errors.map(formatDiagnostic) }));
+  }
+  const first = blocks[0];
+  return first === undefined
+    ? Result.fail(new FragmentInvalid({ diagnostics: ["A clarification answer cannot be empty."] }))
+    : Result.succeed([first, ...blocks.slice(1)]);
 }
 
 function referencedFiles(nodes: readonly Node[]): readonly string[] {
