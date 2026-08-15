@@ -7,6 +7,7 @@ import type { NavNode, Payload, Section } from "../contract";
 import { sectionById } from "../data/review";
 import { MarkButton, ProgressBar } from "./bits";
 import { FileStatusIcon, Octicon, statusColor } from "./octicon";
+import { QaSidebar } from "./qa-sidebar";
 import { useReview } from "./review-context";
 import { useStrings } from "./strings";
 
@@ -204,6 +205,7 @@ export function Nav({ payload }: { payload: Payload }) {
           </button>
         </div>
       </div>
+      <QaSidebar sections={sections} />
       <NavTree nodes={payload.nav} active={active} sections={sections} depth={0} />
     </nav>
   );

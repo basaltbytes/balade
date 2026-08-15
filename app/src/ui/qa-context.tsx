@@ -21,9 +21,11 @@ interface QaApi {
   readonly submitting: boolean;
   readonly failed: boolean;
   readonly activeSectionId: string | null;
+  readonly activeThreadId: QaThread["id"] | null;
   readonly composer: QaAnchor | null;
   readonly threadsFor: (sectionId: string) => readonly QaThread[];
   readonly openSection: (sectionId: string) => void;
+  readonly openThread: (sectionId: string, threadId: QaThread["id"]) => void;
   readonly openComposer: (anchor: QaAnchor) => void;
   readonly close: () => void;
   readonly ask: (request: QaAskRequest) => void;
@@ -54,6 +56,7 @@ export function QaProvider({
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [activeThreadId, setActiveThreadId] = useState<QaThread["id"] | null>(null);
   const [composer, setComposer] = useState<QaAnchor | null>(null);
   const lifecycle = useRef<AbortController | null>(null);
 
@@ -61,6 +64,9 @@ export function QaProvider({
     setState(emptyState(payload));
     setFailed(false);
     setSubmitting(false);
+    setActiveSectionId(null);
+    setActiveThreadId(null);
+    setComposer(null);
     lifecycle.current = null;
     if (!served) return;
 
@@ -132,24 +138,33 @@ export function QaProvider({
       submitting,
       failed,
       activeSectionId,
+      activeThreadId,
       composer,
       threadsFor: (sectionId) =>
         state.threads.filter((thread) => thread.anchor.sectionId === sectionId),
       openSection: (sectionId) => {
         setActiveSectionId(sectionId);
+        setActiveThreadId(null);
+        setComposer(null);
+      },
+      openThread: (sectionId, threadId) => {
+        setActiveSectionId(sectionId);
+        setActiveThreadId(threadId);
         setComposer(null);
       },
       openComposer: (anchor) => {
         setActiveSectionId(anchor.sectionId);
+        setActiveThreadId(null);
         setComposer(anchor);
       },
       close: () => {
         setActiveSectionId(null);
+        setActiveThreadId(null);
         setComposer(null);
       },
       ask,
     }),
-    [activeSectionId, ask, composer, failed, served, state, submitting],
+    [activeSectionId, activeThreadId, ask, composer, failed, served, state, submitting],
   );
 
   return <QaContext.Provider value={value}>{children}</QaContext.Provider>;

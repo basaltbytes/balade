@@ -124,7 +124,14 @@ export function QaPanel() {
   const qa = useQa();
   const strings = useStrings();
   const sectionId = qa.activeSectionId;
-  const threads = sectionId === null ? [] : qa.threadsFor(sectionId);
+  const anchoredThreads = sectionId === null ? [] : qa.threadsFor(sectionId);
+  const threads =
+    qa.activeThreadId === null
+      ? anchoredThreads
+      : [...anchoredThreads].sort(
+          (left, right) =>
+            Number(right.id === qa.activeThreadId) - Number(left.id === qa.activeThreadId),
+        );
   useAnswerLanguages(qa.state.threads);
   if (sectionId === null) return null;
 
@@ -160,7 +167,7 @@ export function QaPanel() {
           )}
           {qa.composer !== null && <QuestionForm anchor={qa.composer} />}
           {threads.map((thread) => (
-            <Thread key={thread.id} thread={thread} />
+            <Thread key={thread.id} thread={thread} active={thread.id === qa.activeThreadId} />
           ))}
         </div>
       </aside>
@@ -205,10 +212,13 @@ function QuestionForm({ anchor }: { anchor: QaAnchor }) {
   );
 }
 
-function Thread({ thread }: { thread: QaThread }) {
+function Thread({ thread, active }: { thread: QaThread; active: boolean }) {
   const strings = useStrings();
   return (
-    <article className="rounded-lg border border-border p-4">
+    <article
+      data-qa-thread={thread.id}
+      className={`rounded-lg border p-4 ${active ? "border-primary/60" : "border-border"}`}
+    >
       <blockquote className="mb-4 border-l-2 border-border pl-3 text-[12px] text-muted-foreground">
         {thread.anchor.excerpt}
       </blockquote>

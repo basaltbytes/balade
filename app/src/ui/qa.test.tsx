@@ -9,11 +9,14 @@ import type { QaState } from "../contract";
 import type { FetchLike } from "../data/browser";
 import { pr96 } from "../fixtures/pr96";
 import { QaProvider, useQa } from "./qa-context";
+import { QaSidebar } from "./qa-sidebar";
 import { QaIndicator, QaPanel } from "./qa";
 import { StringsProvider } from "./strings";
 
 const threadId = QaThreadId.make("34d91d9f-21f4-4c3b-9b72-b1f76166395c");
 const turnId = QaTurnId.make("57992f39-f492-4b7c-8580-d2483916bba2");
+const pendingThreadId = QaThreadId.make("e5f2c1d4-b271-47ae-aacb-c67d59a57bc9");
+const pendingTurnId = QaTurnId.make("da10bbcd-8cca-4ff5-bb22-b2ab0a8d86f0");
 const payload = {
   ...pr96,
   files: [],
@@ -54,6 +57,23 @@ const secondState: QaState = {
   pr: secondPayload.pr.number,
   stamp: secondPayload.commit,
   threads: [],
+};
+const pendingState: QaState = {
+  ...state,
+  threads: [
+    ...state.threads,
+    {
+      id: pendingThreadId,
+      anchor: { sectionId: "overview", excerpt: "The planning pool is live." },
+      status: "pending",
+      turns: [],
+      pending: {
+        id: pendingTurnId,
+        question: "How does the worker finish?",
+        askedAt: "2026-08-15T10:01:00.000Z",
+      },
+    },
+  ],
 };
 
 const installFetch = (fetch: FetchLike): void => {
@@ -109,6 +129,59 @@ describe("clarification threads in the walkthrough", () => {
       expect(container.textContent).toContain("Why is this safe?");
       expect(container.textContent).toContain("Because the answer is pinned.");
       expect(container.textContent).toContain("Ask a follow-up");
+    }),
+  );
+
+  it.effect("keeps a closed pending question reachable from the sidebar", () =>
+    Effect.gen(function* () {
+      installFetch((url) =>
+        Promise.resolve(
+          url.startsWith("/api/qa")
+            ? Response.json(pendingState)
+            : new Response("", { status: 404 }),
+        ),
+      );
+      yield* Effect.promise(() =>
+        act(async () => {
+          root.render(
+            <StringsProvider lang="en">
+              <QaProvider payload={payload} served>
+                <QaSidebar
+                  sections={new Map(payload.sections.map((section) => [section.id, section]))}
+                />
+                <QaPanel />
+              </QaProvider>
+            </StringsProvider>,
+          );
+        }),
+      );
+      const label = "How does the worker finish? · Working";
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(container.querySelector(`button[aria-label="${label}"]`)).not.toBeNull(),
+        ),
+      );
+      const thread = container.querySelector(`button[aria-label="${label}"]`);
+      if (!(thread instanceof HTMLButtonElement)) {
+        return yield* Effect.die("pending sidebar thread missing");
+      }
+      yield* Effect.promise(() => act(async () => thread.click()));
+      expect(container.querySelector("[data-qa-panel]")).not.toBeNull();
+      expect(container.querySelector("[data-qa-thread]")?.getAttribute("data-qa-thread")).toBe(
+        pendingThreadId,
+      );
+
+      const close = container.querySelector(
+        '[data-qa-panel] button[aria-label="Close clarifications"]',
+      );
+      if (!(close instanceof HTMLButtonElement)) {
+        return yield* Effect.die("clarification close button missing");
+      }
+      yield* Effect.promise(() => act(async () => close.click()));
+
+      expect(container.querySelector("[data-qa-panel]")).toBeNull();
+      expect(container.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
+      expect(container.textContent).toContain("Overview");
     }),
   );
 

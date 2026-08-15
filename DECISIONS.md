@@ -1383,7 +1383,11 @@ Every question and follow-up creates a fresh scoped Pi session. Generation and
 clarification share one pinned, read-only inspection-tool module and one
 sandbox session assembler, while each workflow owns its submit tool and prompt.
 The clarification prompt receives the walkthrough source, pinned diff, anchor
-and completed turns as untrusted data.
+and completed turns as untrusted data. It teaches the same focused display
+vocabulary as generation — pinned code, core and preset widgets, pseudo-code,
+and mermaid — but omits whole-document structure. Answers lead with the direct
+response and then explain at the depth the question needs; concise means
+relevant, not terse.
 Its submitted Markdoc fragment is parsed with the canonical walkthrough grammar
 and compiled into `Block` values before the sidecar changes to answered. This
 keeps Q&A out of the committed document and adds no renderer-only dialect or
@@ -1399,3 +1403,10 @@ Static exports deliberately omit Q&A: asking requires the local repository,
 the selected model under `~/.balade/pi/`, and the live loopback server. What
 would move this is an explicit portable-conversation feature with its own
 privacy and credential model, not an implicit extension of export payloads.
+
+The walkthrough sidebar lists every clarification thread independently of its
+anchor section. Each entry shows the latest question, anchor title and explicit
+pending, answered or failed state; pending entries animate and every entry opens
+its section drawer with that thread highlighted first. Closing the drawer
+therefore never hides the only route back to an in-flight question, and several
+concurrent questions stay visible at once.

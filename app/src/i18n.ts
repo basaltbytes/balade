@@ -57,6 +57,7 @@ export interface Strings {
     followUp: string;
     followUpPlaceholder: string;
     exchanges: (n: number) => string;
+    status: Record<"pending" | "answered" | "failed", string>;
   };
 
   /* code */
@@ -157,6 +158,7 @@ const en: Strings = {
     followUp: "Ask a follow-up",
     followUpPlaceholder: "What else should the agent clarify?",
     exchanges: (n) => `${n} ${n === 1 ? "exchange" : "exchanges"}`,
+    status: { pending: "Working", answered: "Answered", failed: "Failed" },
   },
 
   view: { plain: "plain", change: "change", diff: "diff" },
@@ -254,6 +256,7 @@ const fr: Strings = {
     followUp: "Poser une question complémentaire",
     followUpPlaceholder: "Que doit encore préciser l’agent ?",
     exchanges: (n) => `${n} échange${n === 1 ? "" : "s"}`,
+    status: { pending: "En cours", answered: "Répondu", failed: "Échec" },
   },
 
   view: { plain: "brut", change: "changements", diff: "diff" },

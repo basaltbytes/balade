@@ -10,11 +10,28 @@ import { expect, it } from "@effect/vitest";
 import { contextResolverLive } from "../src/git/git.js";
 import {
   WalkthroughClarifier,
+  clarificationSystemPrompt,
   piWalkthroughClarifierLayer,
   type ClarificationRequest,
 } from "../src/pi/clarifier.js";
 import { shellLayer } from "./support/effect.js";
 import { createFixtureRepo } from "./support/repo.js";
+
+it("teaches clarification sessions the rich answer surface without whole-document structure", () => {
+  const prompt = clarificationSystemPrompt("medium", {
+    name: "example",
+    authoring: '{% x-model name="example" /%}',
+  });
+
+  expect(prompt).toContain("not making the explanation terse");
+  expect(prompt).toContain('{% code file="src/example.ts" from=10 to=24');
+  expect(prompt).toContain("pseudo fence");
+  expect(prompt).toContain("mermaid fence");
+  expect(prompt).toContain("diagram");
+  expect(prompt).toContain('{% x-model name="example" /%}');
+  expect(prompt).not.toContain("section (file)");
+  expect(prompt).not.toContain("mandatory closing full-PR diff");
+});
 
 it.effect("runs every clarification in a fresh scoped Pi session", () =>
   Effect.scoped(

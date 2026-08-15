@@ -34,6 +34,7 @@ import {
   type ClarifierSetupError,
   type WalkthroughClarifierPort,
 } from "../pi/clarifier.js";
+import { getPreset } from "../preset/registry.js";
 import { QaStateStore } from "../state.js";
 import { compileFragment, parseFragment } from "../walkthrough/fragment.js";
 import { PayloadCache } from "./cache.js";
@@ -123,6 +124,8 @@ interface QuestionKey {
   readonly threadId: QaThread["id"];
   readonly question: QaQuestion;
 }
+
+type ClarificationFacets = { preset?: NonNullable<ClarificationRequest["preset"]> };
 
 interface EnqueueWork {
   readonly path: string;
@@ -279,6 +282,11 @@ const enqueueQuestion = Effect.fn("QaWorkflow.enqueueQuestion")(function* (
           return { state, thread };
         }),
       );
+      const preset = work.payload.preset === undefined ? undefined : getPreset(work.payload.preset);
+      const clarificationFacets: ClarificationFacets = {};
+      if (preset !== undefined) {
+        clarificationFacets.preset = { name: preset.name, authoring: preset.authoring };
+      }
       const request: ClarificationRequest = {
         root: work.root,
         pin: work.payload.commit,
@@ -291,6 +299,7 @@ const enqueueQuestion = Effect.fn("QaWorkflow.enqueueQuestion")(function* (
         anchor: pending.thread.anchor,
         turns: pending.thread.turns,
         question: work.question.question,
+        ...clarificationFacets,
       };
       const pendingWork = {
         path: work.path,
