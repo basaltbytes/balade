@@ -1,8 +1,10 @@
-/** Safe output discovery, exclusive creation, collision recovery and atomic replacement. */
+/** Safe output discovery, pre-flight supersession planning and atomic replacement. */
 
 import { Effect, FileSystem, Path, Result, Schema } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { escapesRoot, gitPath } from "../../contract/paths.js";
+import type { Lang } from "../../contract/types.js";
+import { gitOut } from "../../shell.js";
 import { frontmatterBlock, parseFrontmatter } from "../../walkthrough/frontmatter.js";
 
 export class OutputOutsideRepository extends Schema.TaggedErrorClass<OutputOutsideRepository>()(
@@ -14,7 +16,7 @@ export class DraftWriteFailed extends Schema.TaggedErrorClass<DraftWriteFailed>(
   "DraftWriteFailed",
   {
     file: Schema.String,
-    operation: Schema.Literals(["write", "replace"]),
+    operation: Schema.Literals(["replace", "remove"]),
     reason: Schema.String,
     cause: Schema.Defect(),
   },
@@ -35,43 +37,41 @@ export class OutputAccessFailed extends Schema.TaggedErrorClass<OutputAccessFail
   },
 ) {}
 
-export class ExistingSameHead extends Schema.TaggedClass<ExistingSameHead>()(
-  "ExistingSameHead",
-  {},
-) {}
+export interface StampedExisting {
+  readonly _tag: "Stamped";
+  readonly pin: string;
+  readonly lang: Lang;
+}
 
-export class ExistingDifferentHead extends Schema.TaggedClass<ExistingDifferentHead>()(
-  "ExistingDifferentHead",
-  { pin: Schema.String },
-) {}
+/** The stamp cannot be read or parsed, so neither its head nor its language is known. */
+export interface UnstampedExisting {
+  readonly _tag: "Unstamped";
+}
 
-export class ExistingStampInvalid extends Schema.TaggedClass<ExistingStampInvalid>()(
-  "ExistingStampInvalid",
-  {},
-) {}
+export type ExistingStamp = StampedExisting | UnstampedExisting;
 
-export class ExistingStampUnreadable extends Schema.TaggedClass<ExistingStampUnreadable>()(
-  "ExistingStampUnreadable",
-  { reason: Schema.String, cause: Schema.Defect() },
-) {}
+/** One existing same-PR walkthrough, read before the paid authoring turn. */
+export interface ExistingWalkthrough {
+  readonly file: string;
+  readonly relativeFile: string;
+  readonly stamp: ExistingStamp;
+}
 
-const ExistingStamp = Schema.Union([
-  ExistingSameHead,
-  ExistingDifferentHead,
-  ExistingStampInvalid,
-  ExistingStampUnreadable,
-]);
-export type ExistingStamp = typeof ExistingStamp.Type;
+export interface RefreshingWalkthrough extends ExistingWalkthrough {
+  readonly stamp: StampedExisting;
+}
 
-export class OutputAlreadyExists extends Schema.TaggedErrorClass<OutputAlreadyExists>()(
-  "OutputAlreadyExists",
-  {
-    file: Schema.String,
-    retainedFile: Schema.String,
-    currentHead: Schema.String,
-    existing: ExistingStamp,
-  },
-) {}
+/**
+ * The pre-flight overwrite decision, split by how each same-identity file is
+ * stamped. Identity is (PR, lang): a stamped different-language walkthrough
+ * never conflicts and appears in neither list.
+ */
+export interface SupersessionPlan {
+  /** Stamped at an older head: refreshing is unambiguous intent, announce and proceed. */
+  readonly refreshing: readonly RefreshingWalkthrough[];
+  /** Stamped at the current head, or unreadable: replacing needs the operator's say-so. */
+  readonly undecided: readonly ExistingWalkthrough[];
+}
 
 export interface GenerationOutputTarget {
   readonly root: string;
@@ -82,29 +82,83 @@ export interface GenerationOutputTarget {
 export interface WriteGenerationDraftOptions extends GenerationOutputTarget {
   readonly title: string;
   readonly contents: string;
-  readonly currentHead: string;
-  readonly collisionPolicy: CollisionPolicy;
+  /** Same-identity files resolved for replacement before the paid turn began. */
+  readonly supersede: readonly ExistingWalkthrough[];
 }
 
-export type CollisionPolicy = "exclusive" | "replace";
+export interface SupersededWalkthrough {
+  /** Repository-relative walkthrough this run replaced or removed. */
+  readonly file: string;
+  /** Repository-relative copy kept beside it when its content was not committed. */
+  readonly retainedAt?: string;
+}
 
 export interface WrittenGenerationDraft {
   readonly file: string;
   readonly siblings: readonly string[];
+  readonly superseded: readonly SupersededWalkthrough[];
 }
 
-/** Find likely prior outputs without creating the requested directory. */
-export const findGeneratedWalkthroughs = Effect.fn("findGeneratedWalkthroughs")(
+/** The directory checks alone, so a bad `--dir` fails before any paid turn. */
+export const validateGenerationOutput = Effect.fn("validateGenerationOutput")(
+  (target: GenerationOutputTarget) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      yield* validateOutputDirectory(fs, path, target.root, target.directory);
+    }),
+);
+
+/** Read every same-PR walkthrough's stamp without creating the requested directory. */
+export const inspectExistingWalkthroughs = Effect.fn("inspectExistingWalkthroughs")(
   (target: GenerationOutputTarget) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const output = yield* validateOutputDirectory(fs, path, target.root, target.directory);
-      return yield* listPullWalkthroughs(fs, path, target.root, output, target.pullNumber);
+      const files = yield* listPullWalkthroughs(fs, path, target.root, output, target.pullNumber);
+      return yield* Effect.forEach(files, (relativeFile) =>
+        Effect.gen(function* () {
+          const file = path.join(target.root, relativeFile);
+          const stamp = yield* readExistingStamp(fs, file);
+          return { file, relativeFile, stamp } satisfies ExistingWalkthrough;
+        }),
+      );
     }),
 );
 
-/** Write one completed authoring turn according to the command's clobber policy. */
+/**
+ * Decide before the model runs which existing files this run supersedes.
+ * An unreadable stamp cannot prove a different identity, so it conflicts with
+ * every run for the PR and is grouped with the current-head files: replacing
+ * either is a decision, not a refresh.
+ */
+export function planSupersession(
+  existing: readonly ExistingWalkthrough[],
+  currentHead: string,
+  lang: Lang,
+): SupersessionPlan {
+  const refreshing: RefreshingWalkthrough[] = [];
+  const undecided: ExistingWalkthrough[] = [];
+  for (const candidate of existing) {
+    const stamp = candidate.stamp;
+    if (stamp._tag === "Unstamped") {
+      undecided.push(candidate);
+    } else if (stamp.lang === lang) {
+      if (stamp.pin === currentHead) undecided.push(candidate);
+      else refreshing.push({ ...candidate, stamp });
+    }
+  }
+  return { refreshing, undecided };
+}
+
+/**
+ * Write one completed authoring turn and supersede the files the pre-flight
+ * plan resolved. The write itself can no longer fail on a collision, so the
+ * check and repair loop after it always runs. Committed superseded content
+ * needs no copy — git is its safety net; uncommitted content is retained
+ * beside the output before anything replaces or removes it.
+ */
 export const writeGenerationDraft = Effect.fn("writeGenerationDraft")(
   (options: WriteGenerationDraftOptions) =>
     Effect.gen(function* () {
@@ -114,10 +168,29 @@ export const writeGenerationDraft = Effect.fn("writeGenerationDraft")(
       yield* prepareOutputDirectory(fs, path, options.root, output, options.directory);
 
       const file = path.join(output, `pr-${options.pullNumber}-${slugifyTitle(options.title)}.md`);
-      if (options.collisionPolicy === "replace") {
-        yield* replaceGeneratedDraft(file, options.contents);
-      } else {
-        yield* writeExclusive(fs, path, file, options.contents, options.currentHead);
+      const superseded: SupersededWalkthrough[] = [];
+      for (const existing of options.supersede) {
+        const retainedAt = yield* retainUncommittedContent(fs, options.root, existing);
+        superseded.push(
+          retainedAt === undefined
+            ? { file: existing.relativeFile }
+            : { file: existing.relativeFile, retainedAt },
+        );
+      }
+      yield* replaceGeneratedDraft(file, options.contents);
+      for (const existing of options.supersede) {
+        if (path.resolve(existing.file) === path.resolve(file)) continue;
+        yield* fs.remove(existing.file, { force: true }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new DraftWriteFailed({
+                file: existing.relativeFile,
+                operation: "remove",
+                reason: platformReason(cause),
+                cause,
+              }),
+          ),
+        );
       }
 
       const relativeFile = gitPath(path, path.relative(options.root, file));
@@ -128,11 +201,11 @@ export const writeGenerationDraft = Effect.fn("writeGenerationDraft")(
         output,
         options.pullNumber,
       )).filter((candidate) => candidate !== relativeFile);
-      return { file, siblings } satisfies WrittenGenerationDraft;
+      return { file, siblings, superseded } satisfies WrittenGenerationDraft;
     }),
 );
 
-/** Repairs and forced writes replace one known file through a same-directory rename. */
+/** Repairs and generation writes replace one known file through a same-directory rename. */
 export const replaceGeneratedDraft = Effect.fn("replaceGeneratedDraft")(
   (file: string, contents: string) =>
     Effect.gen(function* () {
@@ -158,90 +231,49 @@ export const replaceGeneratedDraft = Effect.fn("replaceGeneratedDraft")(
     ),
 );
 
-const writeExclusive = Effect.fn("writeGenerationDraft.exclusive")(
-  (
-    fs: FileSystem.FileSystem,
-    path: Path.Path,
-    file: string,
-    contents: string,
-    currentHead: string,
-  ) =>
-    fs.writeFileString(file, contents, { flag: "wx" }).pipe(
-      Effect.catch((cause) =>
-        Effect.gen(function* () {
-          if (cause.reason._tag === "AlreadyExists") {
-            return yield* retainCollision(fs, path, file, contents, currentHead);
-          }
-          return yield* new DraftWriteFailed({
-            file,
-            operation: "write",
-            reason: platformReason(cause),
-            cause,
-          });
+/**
+ * A fixed `<file>.superseded` name keeps retention bounded — a later run
+ * overwrites the copy instead of accumulating siblings — and keeps the copy
+ * out of walkthrough discovery, which only matches `.md`. The content is
+ * re-read at write time: the file may have changed during the paid turn.
+ */
+const retainUncommittedContent = Effect.fn("retainUncommittedContent")(function* (
+  fs: FileSystem.FileSystem,
+  root: string,
+  existing: ExistingWalkthrough,
+) {
+  const status = yield* gitOut(["status", "--porcelain", "--", existing.relativeFile], root);
+  if (status.trim() === "") return undefined;
+  const contents = yield* Effect.result(fs.readFileString(existing.file));
+  if (Result.isFailure(contents)) return undefined;
+  yield* fs.writeFileString(`${existing.file}.superseded`, contents.success).pipe(
+    Effect.mapError(
+      (cause) =>
+        new DraftRetentionFailed({
+          file: existing.relativeFile,
+          reason: platformReason(cause),
+          cause,
         }),
-      ),
     ),
-);
+  );
+  return `${existing.relativeFile}.superseded`;
+});
 
-const retainCollision = Effect.fn("writeGenerationDraft.retainCollision")(
-  (
-    fs: FileSystem.FileSystem,
-    path: Path.Path,
-    file: string,
-    contents: string,
-    currentHead: string,
-  ) =>
-    Effect.gen(function* () {
-      const retainedFile = yield* retainCompletedDraft(fs, path, file, contents);
-      const existing = yield* inspectExistingStamp(fs, file, currentHead);
-      return yield* new OutputAlreadyExists({ file, retainedFile, currentHead, existing });
-    }),
-);
-
-const retainCompletedDraft = Effect.fn("retainCompletedDraft")(
-  (fs: FileSystem.FileSystem, path: Path.Path, file: string, contents: string) =>
-    Effect.gen(function* () {
-      const temporary = yield* fs.makeTempFileScoped({
-        directory: path.dirname(file),
-        prefix: ".balade-recovery-",
-      });
-      const token = `${path.basename(path.dirname(temporary))}-${path.basename(temporary)}`.slice(
-        ".balade-recovery-".length,
-      );
-      const retainedFile = path.join(
-        path.dirname(file),
-        `${path.basename(file, ".md")}-recovered-${token}.md`,
-      );
-      yield* fs.writeFileString(temporary, contents);
-      yield* fs.rename(temporary, retainedFile);
-      return retainedFile;
-    }).pipe(
-      Effect.scoped,
-      Effect.mapError(
-        (cause) => new DraftRetentionFailed({ file, reason: platformReason(cause), cause }),
-      ),
-    ),
-);
-
-const inspectExistingStamp = Effect.fn("inspectExistingStamp")(function* (
+const readExistingStamp = Effect.fn("readExistingStamp")(function* (
   fs: FileSystem.FileSystem,
   file: string,
-  currentHead: string,
 ) {
   const contents = yield* Effect.result(fs.readFileString(file));
-  if (Result.isFailure(contents)) {
-    return new ExistingStampUnreadable({
-      reason: platformReason(contents.failure),
-      cause: contents.failure,
-    });
-  }
+  if (Result.isFailure(contents)) return { _tag: "Unstamped" } as const satisfies ExistingStamp;
   const block = frontmatterBlock(contents.success);
-  if (block === null) return new ExistingStampInvalid();
+  if (block === null) return { _tag: "Unstamped" } as const satisfies ExistingStamp;
   const existing = parseFrontmatter(block, file).frontmatter;
-  if (existing === null) return new ExistingStampInvalid();
-  return existing.commit === currentHead
-    ? new ExistingSameHead()
-    : new ExistingDifferentHead({ pin: existing.commit });
+  if (existing === null) return { _tag: "Unstamped" } as const satisfies ExistingStamp;
+  return {
+    _tag: "Stamped",
+    pin: existing.commit,
+    lang: existing.meta["lang"] === "fr" ? "fr" : "en",
+  } as const satisfies ExistingStamp;
 });
 
 const listPullWalkthroughs = Effect.fn("listPullWalkthroughs")(function* (

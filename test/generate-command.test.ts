@@ -3,19 +3,19 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 import {
-  generationPreflightText,
+  generationBlockedMessage,
+  generationRefreshText,
+  generationReplaceQuestion,
   generationSiblingText,
   generationSummaryText,
   generationSuccessText,
+  generationSupersededText,
   makeGenerationProgress,
 } from "../src/commands/generate/index.js";
 import { generateErrorMessage } from "../src/commands/generate/pipeline.js";
-import {
-  ExistingDifferentHead,
-  ExistingSameHead,
-  ExistingStampInvalid,
-  ExistingStampUnreadable,
-  OutputAlreadyExists,
+import type {
+  ExistingWalkthrough,
+  RefreshingWalkthrough,
 } from "../src/commands/generate/output.js";
 import {
   AuthorModelId,
@@ -128,51 +128,63 @@ describe("generation command output", () => {
     ]);
   });
 
-  it("explains preflight matches and post-write siblings", () => {
-    expect(generationPreflightText(100, ["walkthroughs/pr-100-existing.md"])).toContain(
-      "this run may choose the same filename",
+  it("resolves the overwrite decision in pre-flight prose, never a paid re-run", () => {
+    const stale: RefreshingWalkthrough = {
+      file: "/repo/walkthroughs/pr-100-review.md",
+      relativeFile: "walkthroughs/pr-100-review.md",
+      stamp: { _tag: "Stamped", pin: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", lang: "en" },
+    };
+    const current: ExistingWalkthrough = {
+      ...stale,
+      stamp: { _tag: "Stamped", pin: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", lang: "en" },
+    };
+    const unstamped: ExistingWalkthrough = {
+      file: "/repo/walkthroughs/pr-100-notes.md",
+      relativeFile: "walkthroughs/pr-100-notes.md",
+      stamp: { _tag: "Unstamped" },
+    };
+    const head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    expect(generationRefreshText([stale], head)).toBe(
+      "Refreshing walkthroughs/pr-100-review.md (aaaaaaa → bbbbbbb).\n",
     );
+    expect(generationReplaceQuestion([current])).toBe(
+      "Replace walkthroughs/pr-100-review.md (already stamped at this head)? Pass --dir instead to keep both.",
+    );
+    expect(generationReplaceQuestion([unstamped])).toContain("unreadable walkthrough stamp");
+    expect(generationBlockedMessage([current])).toBe(
+      "walkthroughs/pr-100-review.md is already stamped at the current pull-request head. " +
+        "Re-run with --force to replace it, or use --dir to redirect the output.",
+    );
+    expect(generationBlockedMessage([unstamped])).toContain("without a readable walkthrough stamp");
+    expect(generationBlockedMessage([current, unstamped])).toContain("--force");
+  });
+
+  it("reports supersessions and post-write siblings", () => {
+    expect(
+      generationSupersededText(
+        [
+          { file: "walkthroughs/pr-100-review.md" },
+          {
+            file: "walkthroughs/pr-100-notes.md",
+            retainedAt: "walkthroughs/pr-100-notes.md.superseded",
+          },
+        ],
+        "walkthroughs/pr-100-review.md",
+      ),
+    ).toBe(
+      "Superseded walkthroughs/pr-100-notes.md; its uncommitted content is kept at " +
+        "walkthroughs/pr-100-notes.md.superseded.\n",
+    );
+    expect(
+      generationSupersededText(
+        [{ file: "walkthroughs/pr-100-earlier.md" }],
+        "walkthroughs/pr-100-review.md",
+      ),
+    ).toBe("Superseded walkthroughs/pr-100-earlier.md.\n");
     expect(
       generationSiblingText(100, ["walkthroughs/pr-100-en.md", "walkthroughs/pr-100-fr.md"]),
     ).toContain("Other walkthroughs for PR 100");
-  });
-
-  it("distinguishes collision stamps while always naming the retained draft", () => {
-    const base = {
-      file: "/repo/walkthroughs/pr-100-review.md",
-      retainedFile: "/repo/walkthroughs/pr-100-review-recovered-123.md",
-      currentHead: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    } as const;
-    const messages = [
-      generateErrorMessage(new OutputAlreadyExists({ ...base, existing: new ExistingSameHead() })),
-      generateErrorMessage(
-        new OutputAlreadyExists({
-          ...base,
-          existing: new ExistingDifferentHead({
-            pin: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          }),
-        }),
-      ),
-      generateErrorMessage(
-        new OutputAlreadyExists({ ...base, existing: new ExistingStampInvalid() }),
-      ),
-      generateErrorMessage(
-        new OutputAlreadyExists({
-          ...base,
-          existing: new ExistingStampUnreadable({
-            reason: "PermissionDenied",
-            cause: new Error("private detail"),
-          }),
-        }),
-      ),
-    ];
-
-    expect(messages[0]).toContain("same head");
-    expect(messages[1]).toContain("stamped aaaaaaa");
-    expect(messages[1]).toContain("head is now bbbbbbb");
-    expect(messages[2]).toContain("without a readable walkthrough stamp");
-    expect(messages[3]).toContain("PermissionDenied");
-    for (const message of messages) expect(message).toContain(base.retainedFile);
   });
 
   it("gives each startup failure an action-specific message", () => {

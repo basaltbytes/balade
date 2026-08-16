@@ -29,12 +29,12 @@ import {
 import {
   DraftRetentionFailed,
   DraftWriteFailed,
-  findGeneratedWalkthroughs,
-  type CollisionPolicy,
+  type ExistingWalkthrough,
   OutputAccessFailed,
-  OutputAlreadyExists,
   OutputOutsideRepository,
   replaceGeneratedDraft,
+  type SupersededWalkthrough,
+  validateGenerationOutput,
   writeGenerationDraft,
 } from "./output.js";
 
@@ -53,10 +53,8 @@ export interface RunGenerationOptions {
   readonly source: PullSnapshot;
   readonly model: AuthorModel;
   readonly directory: string;
-  /** `--force` becomes this explicit policy at the command boundary. */
-  readonly collisionPolicy: CollisionPolicy;
-  /** Runs before the paid authoring turn when same-PR outputs already exist. */
-  readonly onExistingWalkthroughs: (files: readonly string[]) => void;
+  /** Same-identity files the command boundary resolved for replacement pre-flight. */
+  readonly supersede: readonly ExistingWalkthrough[];
   /** Named by `--preset`; teaches the author its tags and stamps the frontmatter. */
   readonly preset?: AuthoringPreset;
   /** Named by `--lang`; the draft is authored in it and `meta.lang` is stamped. */
@@ -76,6 +74,7 @@ interface GenerationSummary {
   readonly usage: AuthorUsage;
   readonly repairs: number;
   readonly siblings: readonly string[];
+  readonly superseded: readonly SupersededWalkthrough[];
 }
 
 export interface Generated extends GenerationSummary {
@@ -95,7 +94,6 @@ export type GenerateError =
   | DraftMalformed
   | OutputOutsideRepository
   | OutputAccessFailed
-  | OutputAlreadyExists
   | DraftWriteFailed
   | DraftRetentionFailed
   | RepairFailed;
@@ -103,13 +101,11 @@ export type GenerateError =
 export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationOptions) =>
   Effect.gen(function* () {
     const author = yield* WalkthroughAuthor;
-    const existing = yield* findGeneratedWalkthroughs({
+    yield* validateGenerationOutput({
       root: options.source.root,
       directory: options.directory,
       pullNumber: options.source.pull.number,
     });
-    if (existing.length > 0) options.onExistingWalkthroughs(existing);
-
     const requestFacets: AuthoringRequestFacets = {};
     if (options.preset !== undefined) requestFacets.preset = options.preset;
     if (options.lang !== undefined) requestFacets.lang = options.lang;
@@ -136,8 +132,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       pullNumber: options.source.pull.number,
       title: initial.draft.title,
       contents: renderDraft(options.source, initial.draft, options.preset, options.lang),
-      currentHead: options.source.pin,
-      collisionPolicy: options.collisionPolicy,
+      supersede: options.supersede,
     });
     const file = output.file;
 
@@ -164,6 +159,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       usage: turn.usage,
       repairs,
       siblings: output.siblings,
+      superseded: output.superseded,
     };
     return report.ok
       ? ({ _tag: "Generated", ...summary } satisfies Generated)
@@ -266,28 +262,14 @@ export function generateErrorMessage(error: GenerateError): string {
       return `Output directory ${error.directory} is not a writable source directory inside ${error.root}.`;
     case "OutputAccessFailed":
       return `Could not ${outputAccessAction(error.operation)} at ${error.path} (${error.reason}).`;
-    case "OutputAlreadyExists":
-      return outputCollisionMessage(error);
     case "DraftWriteFailed":
-      return `Could not ${error.operation} generated walkthrough ${error.file} (${error.reason}).`;
+      return error.operation === "remove"
+        ? `Could not remove superseded walkthrough ${error.file} (${error.reason}).`
+        : `Could not replace generated walkthrough ${error.file} (${error.reason}).`;
     case "DraftRetentionFailed":
-      return `A completed draft collided with ${error.file}, but balade could not retain it beside that file (${error.reason}).`;
+      return `Superseding ${error.file} stopped: its uncommitted content could not be retained beside it (${error.reason}).`;
     case "RepairFailed":
       return `balade retained ${error.file}, but the repair turn failed: ${repairFailureMessage(error.cause)}`;
-  }
-}
-
-function outputCollisionMessage(error: OutputAlreadyExists): string {
-  const retained = `The completed draft was retained at ${error.retainedFile}.`;
-  switch (error.existing._tag) {
-    case "ExistingSameHead":
-      return `${error.file} already exists for this same head. ${retained} Re-run with --force to replace it, or use --dir to redirect the output.`;
-    case "ExistingDifferentHead":
-      return `${error.file} is stamped ${shortCommit(error.existing.pin)}, but the pull-request head is now ${shortCommit(error.currentHead)}. ${retained} Re-run with --force to refresh it, or use --dir to redirect the output.`;
-    case "ExistingStampInvalid":
-      return `${error.file} already exists without a readable walkthrough stamp. ${retained} Re-run with --force to replace it, or use --dir to redirect the output.`;
-    case "ExistingStampUnreadable":
-      return `${error.file} already exists, but its walkthrough stamp could not be read (${error.existing.reason}). ${retained} Re-run with --force to replace it, or use --dir to redirect the output.`;
   }
 }
 
@@ -301,8 +283,6 @@ function outputAccessAction(operation: OutputAccessFailed["operation"]): string 
       return "prepare the output directory";
   }
 }
-
-const shortCommit = (commit: string): string => commit.slice(0, 7);
 
 function repairFailureMessage(cause: RepairCause): string {
   switch (cause._tag) {

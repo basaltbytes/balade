@@ -670,17 +670,31 @@ git-tracked `**/walkthroughs/*.md` at any depth, so the dot-directory is found
 by the same rule as a root `walkthroughs/`, and `--dir` still overrides it.
 
 Output paths are repository-relative, exclude `.git`, and are checked through
-their nearest existing canonical ancestor before any directory is created.
-The first draft uses an exclusive create unless the operator passes `--force`.
-That flag writes through the same temporary-file-and-rename path as repairs and
-replaces only the exact title-derived filename; it never removes other
-`pr-<n>-*.md` walkthroughs. Without the flag, generation lists matching files
-before the paid authoring turn as a collision warning. If the completed turn
-does collide, balade preserves it under a unique sibling filename before
-reporting whether the existing walkthrough is stamped at the same head, at an
-older head, or cannot be read. Each repair is also written to a temporary file
+their nearest existing canonical ancestor before any directory is created — and
+before the paid turn, so a bad `--dir` never costs a model run.
+
+The overwrite decision also resolves pre-flight, never at write time
+([#134](https://github.com/basaltbytes/balade/issues/134), revising the
+collision policy #100 shipped). Conflict detection binds to (PR, lang) read
+from each existing `pr-<n>-*.md` stamp, not to the exact filename — the
+filename is unknowable before the model titles the draft, and an `en` and an
+`fr` walkthrough for the same PR never conflict. A file stamped at an older
+head is announced (`Refreshing … (old → new)`) and superseded without a prompt
+or flag; a file stamped at the current head — or with an unreadable stamp,
+which cannot prove a different identity — asks on a TTY and refuses at t=0 in
+non-interactive runs, where `--force` survives solely as the skip-prompt
+escape. The completed draft writes through the same temporary-file-and-rename
+path as repairs, then superseded same-identity files with a different slug are
+removed, so a re-rolled title cannot leave a stale duplicate. Hand-edit safety
+moved from refusal to retention: content reachable in git needs no copy, while
+dirty or untracked superseded content is first copied to `<file>.superseded` —
+a fixed name, so retention stays bounded and outside `.md` discovery. The write
+path can no longer fail on a collision, so the check-and-repair loop always
+runs and no message ever advises paying for a second turn. This overturns
+#100's Addendum 1 (drift did not auto-overwrite) and deletes its
+recovered-draft sidecar. Each repair is also written to a temporary file
 beside the draft and atomically renamed, so a failed write cannot truncate the
-retained version. If a model or write fails during repair, the typed error keeps
+generated version. If a model or write fails during repair, the typed error keeps
 both the file path and its last check report for manual recovery.
 
 One semaphore owns each Pi session's turns, and the initial turn runs while the
