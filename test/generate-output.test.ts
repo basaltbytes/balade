@@ -1,7 +1,7 @@
 /** Generated-walkthrough output policy through the real filesystem and git seams. */
 
 import { Effect } from "effect";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -164,6 +164,42 @@ describe("generation output", () => {
       expect(written.siblings).toEqual(["walkthroughs/pr-42-french-review.md"]);
       expect(readdirSync(join(repo.dir, "walkthroughs"))).not.toContainEqual(
         expect.stringContaining(".balade-write-"),
+      );
+    }).pipe(Effect.provide(shellLayer)),
+  );
+
+  it.effect("a late retention failure cannot strand the completed draft", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      /* Untracked, so supersession must retain it — and the copy path is blocked. */
+      repo.write("walkthroughs/pr-42-earlier-title.md", stamped(OLDER_HEAD));
+      mkdirSync(join(repo.dir, "walkthroughs/pr-42-earlier-title.md.superseded"), {
+        recursive: true,
+      });
+      const existing = yield* inspectExistingWalkthroughs({
+        root: repo.dir,
+        directory: "walkthroughs",
+        pullNumber: 42,
+      });
+      const plan = planSupersession(existing, repo.pin, "en");
+
+      const error = yield* writeGenerationDraft({
+        root: repo.dir,
+        directory: "walkthroughs",
+        pullNumber: 42,
+        title: "Refreshed review",
+        contents: "refreshed draft\n",
+        supersede: [...plan.refreshing, ...plan.undecided],
+      }).pipe(Effect.flip);
+
+      expect(error._tag).toBe("DraftRetentionFailed");
+      /* The paid draft reaches disk before any non-target supersession runs. */
+      expect(readFileSync(join(repo.dir, "walkthroughs/pr-42-refreshed-review.md"), "utf8")).toBe(
+        "refreshed draft\n",
+      );
+      /* The file whose content could not be retained is left in place. */
+      expect(readFileSync(join(repo.dir, "walkthroughs/pr-42-earlier-title.md"), "utf8")).toBe(
+        stamped(OLDER_HEAD),
       );
     }).pipe(Effect.provide(shellLayer)),
   );
