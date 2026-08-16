@@ -14,7 +14,18 @@ export class QaResponseInvalid extends Schema.TaggedErrorClass<QaResponseInvalid
   { cause: Schema.Defect() },
 ) {}
 
-export type QaApiError = QaFetchFailed | QaResponseInvalid;
+export class QaHttpFailed extends Schema.TaggedErrorClass<QaHttpFailed>()("QaHttpFailed", {
+  status: Schema.Int,
+  statusText: Schema.String,
+}) {}
+
+/** The clarification POST reached the server, but local agent setup did not finish. */
+export class QaAgentUnavailable extends Schema.TaggedErrorClass<QaAgentUnavailable>()(
+  "QaAgentUnavailable",
+  {},
+) {}
+
+export type QaApiError = QaFetchFailed | QaHttpFailed | QaResponseInvalid | QaAgentUnavailable;
 
 export const fetchQa = Effect.fn("App.fetchQa")(function* (sourcePath: string) {
   return yield* requestQa(`/api/qa?path=${encodeURIComponent(sourcePath)}`, { method: "GET" });
@@ -32,7 +43,11 @@ export const askQa = Effect.fn("App.askQa")(function* (sourcePath: string, reque
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(request),
-  });
+  }).pipe(
+    Effect.catchTag("QaHttpFailed", (error) =>
+      Effect.fail(error.status === 503 ? new QaAgentUnavailable() : error),
+    ),
+  );
 });
 
 const requestQa = Effect.fn("App.requestQa")(function* (url: string, init: RequestInit) {
@@ -49,8 +64,9 @@ const requestJson = Effect.fn("App.requestQaJson")(function* (url: string, init:
     catch: (cause) => new QaFetchFailed({ cause }),
   });
   if (!response.ok) {
-    return yield* new QaFetchFailed({
-      cause: { status: response.status, statusText: response.statusText },
+    return yield* new QaHttpFailed({
+      status: response.status,
+      statusText: response.statusText,
     });
   }
   return yield* Effect.tryPromise({

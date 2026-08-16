@@ -13,6 +13,11 @@ const state: QaState = {
   stamp: "0123456789abcdef",
   threads: [],
 };
+const question = {
+  kind: "new" as const,
+  anchor: { sectionId: "overview", excerpt: "selected passage" },
+  question: "Why?",
+};
 
 const withFetch = <A, E>(effect: Effect.Effect<A, E, BrowserFetch>, fetch: FetchLike) =>
   effect.pipe(Effect.provide(fetchLayer(fetch)));
@@ -34,13 +39,7 @@ describe("the browser clarification API", () => {
       Effect.gen(function* () {
         expect(yield* fetchQaAgentStatus()).toEqual({ status: "setup-required" });
         expect(yield* fetchQa(state.walkthrough)).toEqual(state);
-        expect(
-          yield* askQa(state.walkthrough, {
-            kind: "new",
-            anchor: { sectionId: "overview", excerpt: "selected passage" },
-            question: "Why?",
-          }),
-        ).toEqual(state);
+        expect(yield* askQa(state.walkthrough, question)).toEqual(state);
         expect(calls).toEqual([
           {
             url: "/api/agent",
@@ -67,24 +66,60 @@ describe("the browser clarification API", () => {
     );
   });
 
-  it.effect("rejects malformed successful responses and refused requests", () =>
+  it.effect("rejects a malformed clarification state", () =>
     Effect.gen(function* () {
-      const malformed = yield* Effect.flip(
+      const error = yield* Effect.flip(
         withFetch(fetchQa(state.walkthrough), () => Promise.resolve(Response.json({ version: 1 }))),
       );
-      expect(malformed._tag).toBe("QaResponseInvalid");
+      expect(error._tag).toBe("QaResponseInvalid");
+    }),
+  );
 
-      const malformedStatus = yield* Effect.flip(
+  it.effect("rejects a malformed agent status", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
         withFetch(fetchQaAgentStatus(), () => Promise.resolve(Response.json({ status: "maybe" }))),
       );
-      expect(malformedStatus._tag).toBe("QaResponseInvalid");
+      expect(error._tag).toBe("QaResponseInvalid");
+    }),
+  );
 
-      const refused = yield* Effect.flip(
+  it.effect("preserves an HTTP refusal as a typed boundary error", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
         withFetch(fetchQa(state.walkthrough), () =>
+          Promise.resolve(new Response("", { status: 500, statusText: "Server Error" })),
+        ),
+      );
+      expect(error).toEqual(
+        expect.objectContaining({
+          _tag: "QaHttpFailed",
+          status: 500,
+          statusText: "Server Error",
+        }),
+      );
+    }),
+  );
+
+  it.effect("classifies a refused clarification setup independently of cached readiness", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        withFetch(askQa(state.walkthrough, question), () =>
           Promise.resolve(new Response("", { status: 503 })),
         ),
       );
-      expect(refused._tag).toBe("QaFetchFailed");
+      expect(error._tag).toBe("QaAgentUnavailable");
+    }),
+  );
+
+  it.effect("preserves a non-setup clarification refusal as an HTTP error", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        withFetch(askQa(state.walkthrough, question), () =>
+          Promise.resolve(new Response("", { status: 409 })),
+        ),
+      );
+      expect(error._tag).toBe("QaHttpFailed");
     }),
   );
 });

@@ -28,7 +28,7 @@ const agentModelManagerTest = Layer.succeed(AgentModelManager, {
   configure: () => new NoProviderAuthenticated({ requested: "any provider/any model" }),
 });
 
-/** As `src/cli.ts` provides it, except presence: the suite never reports to a live multiplexer. */
+/** Production adapters plus inert test seams for model setup and agent presence. */
 export const cliLayer = Layer.mergeAll(
   PrLocator.layer,
   piWalkthroughAuthorLive,

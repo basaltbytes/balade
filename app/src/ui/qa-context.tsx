@@ -19,7 +19,7 @@ interface QaApi {
   readonly available: boolean;
   readonly state: QaState;
   readonly agent: QaAgentState;
-  readonly submission: QaSubmissionState;
+  readonly request: QaRequestState;
   readonly failure: QaFailureState;
   readonly panel: QaPanelState;
   readonly threadsFor: (sectionId: string) => readonly QaThread[];
@@ -37,14 +37,18 @@ type QaAgentState =
   | { readonly _tag: "SetupRequired" }
   | { readonly _tag: "Unavailable" };
 
-type QaSubmissionState =
+type QaRequestState =
   | { readonly _tag: "Idle" }
   | { readonly _tag: "Asking" }
-  | { readonly _tag: "SettingUp" };
+  | { readonly _tag: "SettingUp" }
+  | { readonly _tag: "RequestFailed" }
+  | { readonly _tag: "SetupFailed" };
+
+type QaPollState = { readonly _tag: "Current" } | { readonly _tag: "Unavailable" };
 
 type QaFailureState =
   | { readonly _tag: "None" }
-  | { readonly _tag: "RequestFailed" }
+  | { readonly _tag: "Unavailable" }
   | { readonly _tag: "SetupFailed" };
 
 type QaPanelState =
@@ -60,8 +64,8 @@ type QaPanelState =
 const CLOSED_PANEL: QaPanelState = { _tag: "Closed" };
 const UNCHECKED_AGENT: QaAgentState = { _tag: "Unchecked" };
 const CHECKING_AGENT: QaAgentState = { _tag: "Checking" };
-const IDLE_SUBMISSION: QaSubmissionState = { _tag: "Idle" };
-const NO_FAILURE: QaFailureState = { _tag: "None" };
+const IDLE_REQUEST: QaRequestState = { _tag: "Idle" };
+const CURRENT_POLL: QaPollState = { _tag: "Current" };
 
 const QaContext = createContext<QaApi | null>(null);
 
@@ -86,16 +90,16 @@ export function QaProvider({
 }) {
   const [state, setState] = useState<QaState>(() => emptyState(payload));
   const [agent, setAgent] = useState<QaAgentState>(UNCHECKED_AGENT);
-  const [submission, setSubmission] = useState<QaSubmissionState>(IDLE_SUBMISSION);
-  const [failure, setFailure] = useState<QaFailureState>(NO_FAILURE);
+  const [requestState, setRequest] = useState<QaRequestState>(IDLE_REQUEST);
+  const [pollState, setPollState] = useState<QaPollState>(CURRENT_POLL);
   const [panel, setPanel] = useState<QaPanelState>(CLOSED_PANEL);
   const lifecycle = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setState(emptyState(payload));
     setAgent(UNCHECKED_AGENT);
-    setSubmission(IDLE_SUBMISSION);
-    setFailure(NO_FAILURE);
+    setRequest(IDLE_REQUEST);
+    setPollState(CURRENT_POLL);
     setPanel(CLOSED_PANEL);
     lifecycle.current = null;
     if (!served) return;
@@ -115,11 +119,9 @@ export function QaProvider({
           if (scope.signal.aborted) return;
           if (outcome.ok) {
             setState(outcome.next);
-            setFailure((current) => (current._tag === "RequestFailed" ? NO_FAILURE : current));
+            setPollState(CURRENT_POLL);
           } else {
-            setFailure((current) =>
-              current._tag === "SetupFailed" ? current : { _tag: "RequestFailed" },
-            );
+            setPollState({ _tag: "Unavailable" });
           }
           timer = window.setTimeout(poll, 1_500);
         },
@@ -190,21 +192,20 @@ export function QaProvider({
   const ask = useCallback(
     (request: QaAskRequest) => {
       const scope = lifecycle.current;
-      if (!served || submission._tag !== "Idle" || scope === null) return;
+      if (!served || isRequestPending(requestState) || scope === null) return;
       const needsSetup = agent._tag === "SetupRequired";
-      setSubmission(needsSetup ? { _tag: "SettingUp" } : { _tag: "Asking" });
-      setFailure(NO_FAILURE);
+      setRequest(needsSetup ? { _tag: "SettingUp" } : { _tag: "Asking" });
       runAppEffect(
         askQa(payload.sourcePath, request).pipe(
           Effect.match({
-            onFailure: () => ({ ok: false as const }),
+            onFailure: (error) => ({ ok: false as const, error }),
             onSuccess: (next) => ({ ok: true as const, next }),
           }),
         ),
         (outcome) => {
           if (scope.signal.aborted) return;
-          setSubmission(IDLE_SUBMISSION);
           if (outcome.ok) {
+            setRequest(IDLE_REQUEST);
             setAgent({ _tag: "Ready" });
             setState(outcome.next);
             setPanel((current) =>
@@ -215,13 +216,17 @@ export function QaProvider({
                 : current,
             );
           } else {
-            setFailure(needsSetup ? { _tag: "SetupFailed" } : { _tag: "RequestFailed" });
+            setRequest(
+              outcome.error._tag === "QaAgentUnavailable"
+                ? { _tag: "SetupFailed" }
+                : { _tag: "RequestFailed" },
+            );
           }
         },
         { signal: scope.signal },
       );
     },
-    [agent, payload.sourcePath, served, submission],
+    [agent, payload.sourcePath, requestState, served],
   );
 
   const value = useMemo<QaApi>(
@@ -229,8 +234,8 @@ export function QaProvider({
       available: served,
       state,
       agent,
-      submission,
-      failure,
+      request: requestState,
+      failure: qaFailure(requestState, pollState),
       panel,
       threadsFor: (sectionId) =>
         state.threads.filter((thread) => thread.anchor.sectionId === sectionId),
@@ -240,10 +245,32 @@ export function QaProvider({
       close: () => setPanel(CLOSED_PANEL),
       ask,
     }),
-    [agent, ask, failure, openComposer, openSection, openThread, panel, served, state, submission],
+    [
+      agent,
+      ask,
+      openComposer,
+      openSection,
+      openThread,
+      panel,
+      pollState,
+      requestState,
+      served,
+      state,
+    ],
   );
 
   return <QaContext.Provider value={value}>{children}</QaContext.Provider>;
+}
+
+function isRequestPending(state: QaRequestState): boolean {
+  return state._tag === "Asking" || state._tag === "SettingUp";
+}
+
+function qaFailure(request: QaRequestState, poll: QaPollState): QaFailureState {
+  if (request._tag === "SetupFailed") return { _tag: "SetupFailed" };
+  return request._tag === "RequestFailed" || poll._tag === "Unavailable"
+    ? { _tag: "Unavailable" }
+    : { _tag: "None" };
 }
 
 export function useQa(): QaApi {

@@ -292,11 +292,11 @@ function FollowUp({ thread }: { thread: Exclude<QaThread, { status: "pending" }>
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const qa = useQa();
   const strings = useStrings();
-  const busy = qa.submission._tag !== "Idle";
+  const busy = qa.request._tag === "SettingUp" || qa.request._tag === "Asking";
   const label =
-    qa.submission._tag === "SettingUp"
+    qa.request._tag === "SettingUp"
       ? strings.qa.setupWaiting
-      : qa.submission._tag === "Asking"
+      : qa.request._tag === "Asking"
         ? strings.qa.submitting
         : qa.agent._tag === "SetupRequired"
           ? strings.qa.setupAndAsk

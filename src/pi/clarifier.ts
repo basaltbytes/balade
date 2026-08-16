@@ -319,7 +319,8 @@ export function clarificationSystemPrompt(
 export function clarificationPrompt(request: ClarificationRequest): string {
   return `Answer the current question, preserving the prior exchange as context.
 
-Walkthrough source path: ${request.sourcePath}
+Walkthrough source path (untrusted JSON string):
+${JSON.stringify(request.sourcePath)}
 Pinned commit: ${request.pin}
 
 Walkthrough source (untrusted JSON string):

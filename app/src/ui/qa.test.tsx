@@ -185,13 +185,16 @@ describe("clarification threads in the walkthrough", () => {
     }),
   );
 
-  it.effect("keeps a follow-up draft when submission is refused", () =>
+  it.effect("keeps a follow-up draft when agent setup is refused", () =>
     Effect.gen(function* () {
-      installFetch((_url, init) =>
-        Promise.resolve(
+      let stateReads = 0;
+      installFetch((url, init) => {
+        if (url === "/api/agent") return Promise.resolve(Response.json({ status: "ready" }));
+        if (init?.method !== "POST") stateReads++;
+        return Promise.resolve(
           init?.method === "POST" ? new Response("", { status: 503 }) : Response.json(state),
-        ),
-      );
+        );
+      });
       yield* Effect.promise(() =>
         act(async () => {
           root.render(
@@ -235,10 +238,12 @@ describe("clarification threads in the walkthrough", () => {
       yield* Effect.promise(() => act(async () => form.requestSubmit()));
 
       yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          expect(container.textContent).toContain("Clarifications are temporarily unavailable."),
-        ),
+        vi.waitFor(() => expect(container.textContent).toContain("Agent setup did not finish.")),
       );
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(stateReads).toBeGreaterThan(1), { timeout: 2_500 }),
+      );
+      expect(container.textContent).toContain("Agent setup did not finish.");
       expect(textarea.value).toBe("Please keep this draft");
     }),
   );

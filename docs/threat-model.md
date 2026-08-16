@@ -387,10 +387,10 @@ they describe.
   competing login prompts. The browser receives only `ready` or
   `setup-required` from `GET /api/agent`.
 - A clarification starts a fresh in-memory session for every question and
-  follow-up. Its prompt labels the selected passage, walkthrough, prior
-  exchanges and question as untrusted JSON data. Only a successful
-  `submit_answer` fragment reaches the compiler; provider details do not reach
-  the sidecar or browser, which expose only a generic failed state.
+  follow-up. Its prompt labels the walkthrough path, selected passage,
+  walkthrough source, prior exchanges and question as untrusted JSON data. Only
+  a successful `submit_answer` fragment reaches the compiler; provider details
+  do not reach the sidecar or browser, which expose only a generic failed state.
 
 **Export**
 

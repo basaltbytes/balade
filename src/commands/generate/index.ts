@@ -454,9 +454,6 @@ export function generationSiblingText(
   );
 }
 
-const listFiles = (files: readonly string[]): string =>
-  `${files.length === 1 ? "a walkthrough" : "walkthroughs"}: ${files.join(", ")}`;
-
 type GenerationCliError = GenerateError | AgentModelConfigurationError | Terminal.QuitError;
 
 function generationCliErrorMessage(error: GenerationCliError): string {

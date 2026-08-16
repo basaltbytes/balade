@@ -303,7 +303,7 @@ describe("agent model selection", () => {
     }),
   );
 
-  it.effect("preserves typed setup cancellation from picker and author ports", () =>
+  it.effect("preserves typed cancellation from the model picker", () =>
     Effect.gen(function* () {
       const pickerCancelled = makeInteraction({
         chooseModel: () => new AgentModelSelectionCancelled(),
@@ -315,7 +315,11 @@ describe("agent model selection", () => {
       expect(yield* Effect.flip(pickerManager.configure({ _tag: "UsePreference" }))).toEqual(
         new AgentModelSelectionCancelled(),
       );
+    }),
+  );
 
+  it.effect("preserves typed cancellation from the author login port", () =>
+    Effect.gen(function* () {
       const loginManager = yield* makeAgentModelManager(
         makeAuthor({
           availableModels: () => [],
