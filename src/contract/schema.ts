@@ -359,6 +359,11 @@ const PullRequest = Schema.Struct({
 
 export const Lang = Schema.Literals(["en", "fr"]);
 
+/** The one defaulting rule for a stamped or absent `meta.lang`: anything but `fr` is `en`. */
+export function langOfMeta(value: string | undefined): typeof Lang.Type {
+  return value === "fr" ? "fr" : "en";
+}
+
 export const Payload = Schema.Struct({
   /** Input schema version carried by the walkthrough. */
   walkthrough: Schema.Literal(1),

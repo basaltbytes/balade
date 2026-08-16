@@ -23,6 +23,7 @@ import type {
 } from "../contract/types.js";
 import type { ResolveContext } from "../contract/context.js";
 import { sha256 } from "../contract/hash.js";
+import { langOfMeta } from "../contract/schema.js";
 import { fileName } from "../contract/paths.js";
 import { frontmatterLine } from "./frontmatter.js";
 import { SECTION_ID } from "./tags.js";
@@ -341,10 +342,6 @@ function toneOf(
   if (status === "A") return "new";
   if (status === "D") return "del";
   return "mod";
-}
-
-function langOfMeta(value: string | undefined): Lang {
-  return value === "fr" ? "fr" : "en";
 }
 
 function hasContent(node: Node): boolean {

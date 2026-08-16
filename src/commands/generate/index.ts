@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { Context, Effect, Option, Schema, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
+import { langOfMeta } from "../../contract/schema.js";
 import type { Lang } from "../../contract/types.js";
 import { parsePrTarget } from "../../git/pr.js";
 import { getPreset, presetNames } from "../../preset/registry.js";
@@ -199,7 +200,7 @@ export const generateCommand = Command.make(
       const plan = planSupersession(
         existing,
         source.pin,
-        Option.getOrElse(config.lang, () => "en" as const),
+        langOfMeta(Option.getOrUndefined(config.lang)),
       );
       if (plan.undecided.length > 0 && !config.force) {
         if (process.stdin.isTTY === true) {
@@ -581,34 +582,30 @@ export function generationSummaryText(
   );
 }
 
+/** Why one existing file needs an explicit decision before it is replaced. */
+const undecidedState = (candidate: ExistingWalkthrough): string =>
+  candidate.stamp._tag === "Stamped"
+    ? "already stamped at the current head"
+    : "missing a readable walkthrough stamp";
+
+const undecidedFiles = (undecided: readonly ExistingWalkthrough[]): string =>
+  undecided.map((candidate) => sanitizeTerminalText(candidate.relativeFile)).join(", ");
+
 /** The TTY confirmation for a same-head or unreadably stamped walkthrough. */
 export function generationReplaceQuestion(undecided: readonly ExistingWalkthrough[]): string {
   const first = undecided[0];
-  if (undecided.length === 1 && first !== undefined) {
-    const state =
-      first.stamp._tag === "Stamped"
-        ? "already stamped at this head"
-        : "unreadable walkthrough stamp";
-    return `Replace ${sanitizeTerminalText(first.relativeFile)} (${state})? Pass --dir instead to keep both.`;
-  }
-  const files = undecided
-    .map((candidate) => sanitizeTerminalText(candidate.relativeFile))
-    .join(", ");
-  return `Replace ${files}? Pass --dir instead to keep both.`;
+  const state = undecided.length === 1 && first !== undefined ? ` (${undecidedState(first)})` : "";
+  return `Replace ${undecidedFiles(undecided)}${state}? Pass --dir instead to keep both.`;
 }
 
 /** The non-interactive refusal, at t=0 where it costs nothing. */
 export function generationBlockedMessage(undecided: readonly ExistingWalkthrough[]): string {
   const first = undecided[0];
-  if (undecided.length === 1 && first !== undefined) {
-    const state =
-      first.stamp._tag === "Stamped"
-        ? "is already stamped at the current pull-request head"
-        : "already exists without a readable walkthrough stamp";
-    return `${first.relativeFile} ${state}. Re-run with --force to replace it, or use --dir to redirect the output.`;
-  }
-  const files = undecided.map((candidate) => candidate.relativeFile).join(", ");
-  return `${files} already exist for this pull request. Re-run with --force to replace them, or use --dir to redirect the output.`;
+  const state =
+    undecided.length === 1 && first !== undefined
+      ? `is ${undecidedState(first)}. Re-run with --force to replace it`
+      : "already exist for this pull request. Re-run with --force to replace them";
+  return `${undecidedFiles(undecided)} ${state}, or use --dir to redirect the output.`;
 }
 
 /** Refreshing a stale-stamped walkthrough is unambiguous intent: announce, never ask. */
@@ -620,7 +617,8 @@ export function generationRefreshText(
   return refreshing
     .map(
       (candidate) =>
-        `Refreshing ${theme.emphasis(sanitizeTerminalText(candidate.relativeFile))} (${shortCommit(sanitizeTerminalText(candidate.stamp.pin))} → ${shortCommit(currentHead)}).\n`,
+        /* The pins are schema-validated hex; only the filename needs sanitizing. */
+        `Refreshing ${theme.emphasis(sanitizeTerminalText(candidate.relativeFile))} (${shortCommit(candidate.stamp.pin)} → ${shortCommit(currentHead)}).\n`,
     )
     .join("");
 }

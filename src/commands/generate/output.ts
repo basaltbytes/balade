@@ -3,6 +3,7 @@
 import { Effect, FileSystem, Path, Result, Schema } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { escapesRoot, gitPath } from "../../contract/paths.js";
+import { langOfMeta } from "../../contract/schema.js";
 import type { Lang } from "../../contract/types.js";
 import { gitOut } from "../../shell.js";
 import { frontmatterBlock, parseFrontmatter } from "../../walkthrough/frontmatter.js";
@@ -168,18 +169,25 @@ export const writeGenerationDraft = Effect.fn("writeGenerationDraft")(
       yield* prepareOutputDirectory(fs, path, options.root, output, options.directory);
 
       const file = path.join(output, `pr-${options.pullNumber}-${slugifyTitle(options.title)}.md`);
+      const isTarget = (existing: ExistingWalkthrough) =>
+        path.resolve(existing.file) === path.resolve(file);
       const superseded: SupersededWalkthrough[] = [];
-      for (const existing of options.supersede) {
-        const retainedAt = yield* retainUncommittedContent(fs, options.root, existing);
+      const record = (existing: ExistingWalkthrough, retainedAt: string | undefined) =>
         superseded.push(
           retainedAt === undefined
             ? { file: existing.relativeFile }
             : { file: existing.relativeFile, retainedAt },
         );
+
+      /* Only the write target's own bytes are at risk from the replace, so only
+         they are copied first; every other supersession waits until the
+         completed draft is on disk, where a late failure can strand nothing. */
+      for (const existing of options.supersede.filter(isTarget)) {
+        record(existing, yield* retainUncommittedContent(fs, options.root, existing));
       }
       yield* replaceGeneratedDraft(file, options.contents);
-      for (const existing of options.supersede) {
-        if (path.resolve(existing.file) === path.resolve(file)) continue;
+      for (const existing of options.supersede.filter((entry) => !isTarget(entry))) {
+        record(existing, yield* retainUncommittedContent(fs, options.root, existing));
         yield* fs.remove(existing.file, { force: true }).pipe(
           Effect.mapError(
             (cause) =>
@@ -259,21 +267,24 @@ const retainUncommittedContent = Effect.fn("retainUncommittedContent")(function*
   return `${existing.relativeFile}.superseded`;
 });
 
+const UNSTAMPED: ExistingStamp = { _tag: "Unstamped" };
+
 const readExistingStamp = Effect.fn("readExistingStamp")(function* (
   fs: FileSystem.FileSystem,
   file: string,
 ) {
   const contents = yield* Effect.result(fs.readFileString(file));
-  if (Result.isFailure(contents)) return { _tag: "Unstamped" } as const satisfies ExistingStamp;
+  if (Result.isFailure(contents)) return UNSTAMPED;
   const block = frontmatterBlock(contents.success);
-  if (block === null) return { _tag: "Unstamped" } as const satisfies ExistingStamp;
+  if (block === null) return UNSTAMPED;
   const existing = parseFrontmatter(block, file).frontmatter;
-  if (existing === null) return { _tag: "Unstamped" } as const satisfies ExistingStamp;
-  return {
+  if (existing === null) return UNSTAMPED;
+  const stamped: ExistingStamp = {
     _tag: "Stamped",
     pin: existing.commit,
-    lang: existing.meta["lang"] === "fr" ? "fr" : "en",
-  } as const satisfies ExistingStamp;
+    lang: langOfMeta(existing.meta["lang"]),
+  };
+  return stamped;
 });
 
 const listPullWalkthroughs = Effect.fn("listPullWalkthroughs")(function* (

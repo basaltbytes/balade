@@ -149,14 +149,16 @@ describe("generation command output", () => {
       "Refreshing walkthroughs/pr-100-review.md (aaaaaaa → bbbbbbb).\n",
     );
     expect(generationReplaceQuestion([current])).toBe(
-      "Replace walkthroughs/pr-100-review.md (already stamped at this head)? Pass --dir instead to keep both.",
+      "Replace walkthroughs/pr-100-review.md (already stamped at the current head)? Pass --dir instead to keep both.",
     );
-    expect(generationReplaceQuestion([unstamped])).toContain("unreadable walkthrough stamp");
+    expect(generationReplaceQuestion([unstamped])).toContain(
+      "missing a readable walkthrough stamp",
+    );
     expect(generationBlockedMessage([current])).toBe(
-      "walkthroughs/pr-100-review.md is already stamped at the current pull-request head. " +
+      "walkthroughs/pr-100-review.md is already stamped at the current head. " +
         "Re-run with --force to replace it, or use --dir to redirect the output.",
     );
-    expect(generationBlockedMessage([unstamped])).toContain("without a readable walkthrough stamp");
+    expect(generationBlockedMessage([unstamped])).toContain("missing a readable walkthrough stamp");
     expect(generationBlockedMessage([current, unstamped])).toContain("--force");
   });
 
