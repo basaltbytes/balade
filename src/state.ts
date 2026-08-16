@@ -7,7 +7,7 @@
  *
  * The state directory is excluded through the clone's `info/exclude` (in the
  * git common directory) rather than the committed `.gitignore`, so a
- * reviewer's marks never touch the repository.
+ * review data never touches the tracked repository.
  * A missing or mismatched file is legitimate absence. Unreadable, corrupt and
  * unwritable state stays in the typed error channel for the server boundary to
  * report or log deliberately.

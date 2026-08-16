@@ -76,13 +76,21 @@ During a live review, select text inside a walkthrough section and choose
 **Ask agent**. Balade anchors the question to that section and passage, runs a
 fresh agent against the walkthrough and pinned pull-request diff, and shows the
 answer in a local thread. Section badges reopen earlier exchanges and each
-thread accepts follow-up questions. If no Balade agent model is configured, the
-first question opens one-time provider and model prompts in the terminal that
-started `balade open`, then submits the original question automatically. Run
-`balade agent setup` to configure it ahead of time. Clarifications are
-unavailable in static exports. Run `balade agent logout` to remove stored
-Balade logins and exercise first-run setup again. Credentials supplied through
-the environment remain available.
+thread accepts follow-up questions. A **Clarifications** section in the sidebar
+keeps every pending, answered and failed thread reachable, including when its
+drawer is closed or several questions are running. If no usable Balade login
+and model are configured, the first question opens one-time provider and model
+prompts in the terminal that started `balade open`, then submits the original
+question automatically. Run `balade agent setup` to configure it ahead of time.
+Clarifications are unavailable in static exports. Run `balade agent logout` to
+remove stored Balade logins and exercise first-run setup again. Credentials
+supplied through the environment remain available.
+
+```sh
+npx balade agent setup
+npx balade agent setup --provider openai-codex --model gpt-5.4
+npx balade agent logout
+```
 
 A PR target uses the checked-out walkthrough when available. Otherwise, balade
 fetches `pull/<number>/head` and reads the walkthrough from that commit. This
@@ -246,7 +254,9 @@ marks. They belong to one walkthrough commit and are discarded when its PR or
 stamp changes. Answers are compiled through the same validated block format as
 the walkthrough, but never modify the walkthrough file or appear in a static
 export. If the walkthrough changes while it is open, a new question is rejected
-with a prompt to reload so it cannot attach to a different generation.
+with a prompt to reload so it cannot attach to a different generation. If the
+server process stops before an answer finishes, opening the walkthrough again
+marks that question failed and keeps the thread available for a follow-up.
 
 Static exports store review state in browser `localStorage`. An export contains:
 

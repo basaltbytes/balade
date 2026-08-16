@@ -21,7 +21,7 @@ So the whole model rests on one rule:
 > input.** That includes the repository's own files at the PR head.
 
 The authoring prompt already says this outright for PR metadata
-(`src/pi/authoring.ts:40`). This document extends it to every other surface.
+(`src/pi/authoring.ts:127-129`). This document extends it to every other surface.
 
 Two properties follow, and they are the ones worth defending:
 
@@ -53,7 +53,8 @@ attack*.
   highest-value attack and leaves no technical trace.
 - **Repository contents** — source at both revisions, history, private repos the
   reviewer's token can reach.
-- **Provider credentials** — the Pi authoring session's auth.
+- **Provider credentials** — the auth shared by Balade's generation and live
+  clarification workflows.
 
 ## Entry points
 
@@ -61,7 +62,7 @@ attack*.
 
 `balade generate` puts PR title, body, linked-issue text and commit subjects
 into the prompt. These are explicitly framed as untrusted claims, never
-instructions (`src/pi/authoring.ts:40`, `:129`).
+instructions (`src/pi/authoring.ts:127-129`).
 
 Repository instruction files (`AGENTS.md` / `CLAUDE.md`) come from the pinned
 PR head. An instruction file changed by the PR is omitted and reported unless
@@ -86,7 +87,7 @@ that read guidance from a file at the PR head would reopen the boundary
 
 `balade open <pr-url>` compiles a walkthrough read straight from the untrusted
 PR head, and displays file bytes from it
-(`src/commands/open/locator.ts:102-122`, `src/server/repo.ts:106-109`).
+(`src/commands/open/locator.ts:102-125`, `src/server/repo.ts:112-116`).
 
 Nothing from the PR head executes on the machine: the head is never checked out,
 so no hook, filter or `.gitattributes` rule applies; `git show` emits raw blobs;
@@ -127,9 +128,10 @@ checks that generation before and after setup and again after preparing agent
 context, rejecting stale pages before they can persist a question.
 
 The agent submits a Markdoc fragment, not browser markup. The fragment is
-parsed with the walkthrough grammar, cannot create sections or groups, resolves
-code references at the stamped commit, and compiles to the existing `Block`
-contract before persistence. The renderer therefore gains no new HTML sink.
+parsed with the walkthrough grammar, cannot create sections, groups or file
+browsers, resolves code references at the stamped commit, and compiles to the
+existing `Block` contract before persistence. The renderer therefore gains no
+new HTML sink.
 Questions and answers live only in a git-excluded Q&A sidecar bound to the
 walkthrough path, PR number and stamp. Static exports contain none of it.
 
@@ -142,7 +144,7 @@ A global middleware accepts only the loopback authorities `127.0.0.1`,
 `localhost` and `[::1]`, ignoring a numeric port. This rejects DNS-rebinding
 requests before route handling because their `Host` header still names the
 attacker's origin. The state endpoint limits its JSON body to 4 MiB and the Q&A
-endpoint limits a question to 64 KiB. Both bodies pass strict schema decoding,
+endpoint limits its request body to 64 KiB. Both bodies pass strict schema decoding,
 and responses admitted by the host guard carry `X-Frame-Options: DENY` so another
 site cannot frame the review UI. Typed API failures retain their internal cause
 for server-side diagnostics, while `500` responses expose only stable messages
@@ -195,11 +197,12 @@ they describe.
   structurally cannot express a link. This is the strongest control in the app.
 - `Rich` (`app/src/ui/rich.tsx`) renders every branch as a React text child. No
   `href`, no `style` from data, no HTML sink.
-- Two `dangerouslySetInnerHTML` sinks **in balade's own source**. The first
-  (`app/src/widgets/code.tsx:138`) is fed by shiki over payload text; grammars
+- Three `dangerouslySetInnerHTML` sinks **in balade's own source**. The code and
+  generic-fence sinks (`app/src/widgets/code.tsx:142`,
+  `app/src/widgets/fence.tsx:23`) are fed by shiki over payload text; grammars
   are a closed 31-entry allowlist falling back to `"text"`
-  (`app/src/highlight/shiki.ts:86-90`). The second
-  (`app/src/widgets/mermaid.tsx`) is fed by mermaid — see below.
+  (`app/src/highlight/shiki.ts:32-94`). The mermaid sink
+  (`app/src/widgets/mermaid.tsx:28`) is fed by mermaid — see below.
   `@git-diff-view/react` adds four more on the same attacker-controlled bytes.
 - **shiki's `codeToHtml` output is safe to inject.** Text nodes are escaped by
   `hast-util-to-html` via `stringifyEntities`, attribute values by
@@ -207,7 +210,7 @@ they describe.
   false`), with shiki calling `toHtml` with no options
   (`@shikijs/core@4.4.1/dist/index.mjs:1024`, `:1035`). Nothing balade passes
   can change that: only `lang`, `theme` and `transformers`
-  (`app/src/highlight/shiki.ts:171-186`), and its single transformer only adds
+  (`app/src/highlight/shiki.ts:186-200`), and its single transformer only adds
   static class names. `style` values come from the bundled theme, never from
   input.
 - **mermaid's SVG output is injected, and `securityLevel: "strict"` alone does
@@ -272,13 +275,13 @@ they describe.
   adapter uses typed `Result` values for registry inspection and HAST rendering;
   on failure it stays on the custom adapter and returns a root containing only
   the raw text node, so no lowlight fallback or content-derived property is
-  introduced (`app/src/highlight/shiki.ts:96-229`,
-  `app/src/highlight/diff-highlighter.ts:24-80`).
+  introduced (`app/src/highlight/shiki.ts:96-232`,
+  `app/src/highlight/diff-highlighter.ts:24-86`).
 - Diagram coordinates are clamped to 1–64 by both the CLI transform and the
   renderer (`src/contract/diagram.ts`, `app/src/widgets/diagram.tsx`). No
   diagram can make the renderer materialize more than 4,096 grid cells.
 - The only payload-derived `href` is `pr.url` (`app/src/ui/chrome.tsx:36`),
-  which is GitHub-derived (`src/git/git.ts:229`) and additionally protected by
+  which is GitHub-derived (`src/git/git.ts:239`) and additionally protected by
   React 19's `javascript:` blocking.
 - `@git-diff-view/react@0.1.7` escapes all content it renders. Its four
   `dangerouslySetInnerHTML` sinks are fed by templates that route every
@@ -324,11 +327,13 @@ they describe.
   single-parameter SGR color sequences (`sanitizeStyledTerminalText`), so a
   value that skipped the first layer can at worst borrow a palette color —
   conceal, cursor movement and OSC hyperlinks never reach the terminal.
-- Attacker-controlled paths reaching git are `--`-guarded with `:(literal)`
-  pathspec magic (`src/git/git.ts`, `src/pi/inspection.ts`,
-  `src/server/repo.ts:158`). SHA-prefixed composites cannot begin with `-`: the
-  SHA is gated by `/^[0-9a-f]{40,64}$/u` (`src/git/pr.ts:117`). Frontmatter
-  `commit` is validated hex (`src/contract/schema.ts:441`).
+- Standalone attacker-controlled paths reaching git follow `--`. Diff and agent
+  inspection pathspecs additionally use `:(literal)` magic
+  (`src/git/git.ts:150`, `src/pi/inspection.ts:175`); server metadata lookups
+  place `--` before the served path (`src/server/repo.ts:167`). SHA-prefixed
+  composites cannot begin with `-`: the SHA is gated by
+  `/^[0-9a-f]{40,64}$/u` (`src/git/pr.ts:116`). Frontmatter `commit` is
+  validated hex (`src/contract/schema.ts:561`).
 - PR-controlled revision names follow `--end-of-options` in
   `git rev-parse --verify --quiet`, so a leading dash remains revision data and
   cannot abort resolution (`src/git/git.ts`).
@@ -344,8 +349,11 @@ they describe.
   real path before reading, creating or replacing a sidecar, so a symlink below
   `.balade/` cannot redirect the write. Two independent barriers; **no arbitrary
   file write exists.**
+- Concurrent first writes recover only from an `AlreadyExists` race, then read
+  and revalidate the canonical sidecar. No other creation failure is mistaken
+  for a successful competing write.
 - The `.balade/` line appended to the clone's `info/exclude` is a module
-  constant (`src/state.ts:40`) — **no injection into that file is possible.**
+  constant (`src/state.ts:44`) — **no injection into that file is possible.**
   Its destination directory is `git rev-parse --git-common-dir` output for the
   local clone (`src/shell.ts`), local git metadata a PR head cannot influence.
 - Static serving is not traversable: decode → null-reject → normalize →
@@ -353,7 +361,7 @@ they describe.
   That path does **not** resolve symlinks, so a symlink inside the served root
   would be followed — but the root cannot contain one: it is the hardcoded
   `APP_DIR` beside the CLI with no flag to override it
-  (`src/server/http.ts:34`, `:58-67`); `dist/app` is rollup output with
+  (`src/server/http.ts:59`, `:136`); `dist/app` is rollup output with
   `emptyOutDir: true` and no `publicDir` copy step (`app/vite.config.ts:24`);
   no CLI path writes into it; and both `npm pack` and `pnpm pack` were tested to
   strip symlinks from the tarball. **Re-check this if `app/public/` is ever
@@ -373,14 +381,17 @@ they describe.
 - PR and linked-issue URLs from `gh` must parse to repository locations before
   provenance is classified. A malformed location drops the optional GitHub
   enrichment with a notice instead of becoming a guessed third-party label.
-- PR-head `AGENTS.md` and `CLAUDE.md` files enter the system prompt only when
-  unchanged by the PR or explicitly trusted with `--trust-head-instructions`.
-  Project-context closing tags are rejected before interpolation.
+- Generation admits changed PR-head `AGENTS.md` and `CLAUDE.md` files only when
+  explicitly trusted with `--trust-head-instructions`; clarification always
+  omits them. Project-context closing tags are rejected before interpolation in
+  both workflows.
 - The snapshot is `git archive <pin>` with lexical, symlink and realpath
   containment (`src/pi/snapshot.ts:135-172`, tested in
   `test/snapshot.test.ts:34-71`).
 - `search_source` regexes go to ripgrep (Rust regex — linear time, no
-  catastrophic backtracking), bounded to 20 searches / 200 matches / 80k chars.
+  catastrophic backtracking). Results are capped at 200 matches / 80k chars;
+  call counts use the shared inspection tier. Live Q&A uses `medium`, while
+  generation accepts `low`, `medium` or uncapped `high`.
 - Inspection tools reserve their shared search and source-read budgets before
   their first asynchronous operation, so concurrently dispatched calls cannot
   overspend either limit.
@@ -410,12 +421,12 @@ they describe.
 
 **Export**
 
-- The `</script>` and `<!--` escaping in `src/commands/build/html.ts:39-62` is
-  sound and **load-bearing** — today's bundle contains eleven `<!--` and four
-  `<script>` sequences. See the DECISIONS entry "The inlined bundle is escaped,
-  the baked payload is JSON-escaped" and `test/build.test.ts:186`.
+- The `</script>` and `<!--` escaping in `src/commands/build/html.ts:43-66` is
+  sound and **load-bearing**. The export test drives both sequences through the
+  payload and inlined bundle (`test/build.test.ts:189-206`). See the DECISIONS
+  entry "The inlined bundle is escaped, the baked payload is JSON-escaped."
 - `payload.lang` interpolated into `<html lang>` is constrained to `"en" | "fr"`
-  (`src/contract/schema.ts:339`).
+  (`src/contract/schema.ts:360`, `:376`).
 - The export's meta CSP admits its inline script and style but sets
   `connect-src 'none'`; the served page has a separate policy admitting scripts,
   styles and API calls only from its own origin. Neither policy admits frames,
@@ -438,8 +449,8 @@ Stating these keeps the model honest.
 - **A compromised dependency at install time.** Exact pinning and a lockfile
   make a swap visible in a diff; they do not stop a malicious version the
   reviewer installs.
-- **The provider seeing PR content.** `balade generate` sends diff and source to
-  the model provider. That is the feature.
+- **The provider seeing PR content.** Generation and live clarification send
+  pinned diff and source context to the model provider. That is the feature.
 - **Anything after an export leaves the machine.** A shared HTML file is a
   shared file. See [#67](https://github.com/basaltbytes/balade/issues/67).
 

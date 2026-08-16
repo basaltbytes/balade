@@ -1,4 +1,4 @@
-/** Pi's per-generation session, restricted to balade-owned read-only tools. */
+/** Shared Pi session preparation and inspection assembly for generation and clarification. */
 
 import type {
   AgentSession,

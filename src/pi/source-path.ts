@@ -1,4 +1,4 @@
-/** The source-path policy shared by pinned and base authoring reads. */
+/** The source-path policy shared by pinned and base agent inspection reads. */
 
 import { Result, Schema } from "effect";
 import { isContainedRepoRelativePath } from "../contract/paths.js";

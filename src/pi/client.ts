@@ -1,4 +1,4 @@
-/** Pi 0.83 adapter. The package is loaded only when a generation method runs. */
+/** Pi 0.83 adapter. The package loads only when an agent-powered workflow needs it. */
 
 import type { AgentSession, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
@@ -119,7 +119,7 @@ export async function loadLiveDependencies(
   };
 }
 
-/** Inert until a method calls `dependencies`; check/open/build never import Pi. */
+/** Inert until a method needs dependencies; initial open, check and build never import Pi. */
 export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {}) {
   return Layer.effect(
     WalkthroughAuthor,

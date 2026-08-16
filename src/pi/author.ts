@@ -1,7 +1,7 @@
 /**
- * The balade-owned boundary around Pi. The command and generation workflow
- * speak only these values; vendor models, events, sessions and errors stop in
- * `client.ts`.
+ * The Balade-owned provider, model, credential and generation boundary around
+ * Pi. Clarification reuses selected domain values through its separate service;
+ * vendor models, events, sessions and errors stop in the Pi adapters.
  */
 
 import { Context, Effect, Option, Redacted, Schema, Scope } from "effect";

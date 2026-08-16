@@ -182,7 +182,7 @@ different host.
 ## Core pipelines separate failures from report values
 
 `loadWalkthrough`, `resolveContext`, `runCheck`, `runBuild`, `prepareSession`
-and the six served API methods are named `Effect.fn` pipelines. They request
+and the seven served API methods are named `Effect.fn` pipelines. They request
 filesystem, path, command and repository capabilities through services. The
 Markdoc parser, diff parser and document compiler remain ordinary pure
 functions called by those pipelines; wrapping them in `Effect` would add an
@@ -201,7 +201,7 @@ and carry reports directly: an error diagnostic may still be renderable, while
 a missing payload stops those commands. Terminal and HTTP reporting use
 exhaustive `Match.valueTags` mappings, so adding a result or error variant
 forces its reporting boundary to handle it. These tags never cross a JSON
-edge: `check --json` still emits only `ok` and `reports`, while the six `/api`
+edge: `check --json` still emits only `ok` and `reports`, while the seven `/api`
 response bodies keep their established shapes.
 
 ## Failures are tagged errors; absence is `Option`
@@ -540,28 +540,32 @@ The explicit pin makes npm dedupe onto the version balade's own `effect` pin
 matches. Bump it in lockstep with every effect-family bump; drop it when the
 Effect v4 packages stabilize their internal ranges.
 
-Every Pi surface sits behind the one `WalkthroughAuthor` service, the
-anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
-Anthropic subscription path closing, in which case the same seam takes a
-Codex-SDK-plus-API-key pair of adapters instead.
+Pi's 0.x SDK stops at two Balade-owned service boundaries:
+`WalkthroughAuthor` for generation, provider/model discovery and credential
+operations, and `WalkthroughClarifier` for one stateless answer. What would move
+this: Pi's Anthropic subscription path closing, in which case the same seams
+take a Codex-SDK-plus-API-key pair of adapters instead.
 
-The Pi adapter itself is split at the session boundary: `pi/client.ts` owns
-account, authentication and global settings, while `pi/session.ts` owns the
-scoped authoring session, its read-only tool policy and provider-event
-forwarding. `pi/project-context.ts` owns repository-instruction selection and
-the system-prompt trust boundary. Project-context loading composes the pinned
+The adapter is split at the session boundary. `pi/client.ts` owns account,
+authentication, global settings and the generation adapter; `pi/session.ts`
+owns pinned snapshot/context preparation and the shared read-only inspection
+sandbox; `pi/clarifier.ts` owns the clarification turn and its validated submit
+tool. `pi/project-context.ts` owns repository-instruction selection and the
+system-prompt trust boundary. Project-context loading composes the pinned
 snapshot's typed effects directly. Session preparation stays inside the
-`WalkthroughAuthor.start` Effect, preserving snapshot and project-context
-failures as typed errors and translating search-configuration failures at the
-filesystem boundary. Only calls into Pi's Promise-based SDK cross through
-`Effect.tryPromise`; unknown SDK exceptions become `AuthorSessionStartFailed`.
+calling service Effect, preserving snapshot and project-context failures as
+typed errors and translating search-configuration failures at the filesystem
+boundary. Promise-based SDK calls cross through explicit Effect runtime
+boundaries; unknown SDK exceptions become the owning workflow's tagged session
+or request failure.
 The immutable snapshot memoizes
 its source-file listing as an Effect and shares it with Pi's Promise-based tool
 callbacks, where the runtime boundary belongs.
 This keeps preference durability independent from the security-sensitive tool
 sandbox and session lifecycle. `agent/model.ts` owns the higher-level
-provider/model configuration workflow shared by generation, clarification and
-`balade agent setup`; `agent/terminal.ts` is its sole interactive adapter.
+provider/model configuration workflow shared by generation, clarification,
+`balade agent setup` and `balade agent logout`; `agent/terminal.ts` is its sole
+interactive adapter.
 Selection rules, login ordering, typed configuration failures and preference
 warnings therefore have one implementation instead of drifting between CLI
 verbs.
@@ -618,11 +622,12 @@ closing tag always rejects the file with a notice, even when the file is
 otherwise trusted, and attribute characters in its untrusted repository path
 are escaped before Pi interpolates the path into the system prompt.
 
-The allowlist contains only seven balade-owned tools: list PR changes, list
-pinned paths, search pinned source, read a pinned diff, read numbered lines at
-the pin or base, and submit the structured draft. The agent never receives Pi's
-shell or mutation tools. `submit_walkthrough` ends the agent loop; the adapter
-stamps the schema version, PR and commit after the model returns.
+The generation allowlist contains only seven balade-owned tools: list PR
+changes, list pinned paths, search pinned source, read a pinned diff, read
+numbered lines at the pin or base, and submit the structured draft. The agent
+never receives Pi's shell or mutation tools. `submit_walkthrough` ends the agent
+loop; the adapter stamps the schema version, PR and commit after the model
+returns.
 
 Pinned source inspection is filesystem-backed (revised 2026-08-04, issue #28).
 After the resolver fetches the PR head object, `git archive` extracts that pin
@@ -646,16 +651,14 @@ partial tree. Each open updates access metadata outside `tree/`; a global LRU
 keeps five entries and deletes older ones. This bounds retained disk while
 preserving the common repeat-run cache hit.
 
-The baseline authoring turn is deliberately bounded to eight diff reads and
-twenty searches plus twelve source reads shared across pin and base. Search gets
-the larger allowance because a capped match list makes the following reads more
-targeted. The prompt asks for the behavioral spine in two to five sections and
-normally three to eight focused ranges, with ten as a hard maximum. These limits
-keep provider context and cost proportional to a review story instead of
-rewarding an inventory of every changed file. All inspection allowances reset
-for a repair turn so the agent can verify a corrected range. The submit tool
-rejects drafts above the range ceiling and asks the agent to focus the complete
-draft before accepting it.
+The authoring turn receives the selected inspection tier. `medium`, the
+default, scales diff reads, searches and source reads with the changed-file
+count and keeps floors of 16, 30 and 24. `low` scales with floors of 8, 20 and
+12; `high` removes enforcement. The prompt sizes sections and code ranges to the
+change instead of imposing fixed counts or a range ceiling. All inspection
+allowances reset for a generation repair turn so the agent can verify a
+corrected range. The later entry "Budgets guarantee termination; only the
+operator opts into economy" records the scaling rationale and tier semantics.
 
 A failed check gets at most two repair turns. Repairs use a new
 `AgentSession.prompt()` in the same in-memory session, rather than Pi's queued
@@ -1401,12 +1404,15 @@ the destination, the store applies the same contained repository-relative path
 rule as source inspection and rejects invalid paths in its typed error channel.
 It then resolves every existing path component below the canonical repository
 root and rejects symlinks or other aliases that escape the expected location;
-missing directories are created one checked component at a time. The sidecar
-carries the walkthrough path, PR number and stamp; a mismatch makes the whole
-value absent. Each ask also carries the PR number and stamp displayed by the
-browser. The server verifies that generation before setup, after setup, and
-after preparing the agent context; a mismatch rejects the ask and tells the
-reviewer to reload instead of attaching an answer to a different walkthrough.
+missing directories are created one checked component at a time. Concurrent
+first writes recover only an `AlreadyExists` directory result and then run the
+same canonical-path and directory-type checks, so the race does not weaken
+containment. The sidecar carries the walkthrough path, PR number and stamp; a
+mismatch makes the whole value absent. Each ask also carries the PR number and
+stamp displayed by the browser. The server verifies that generation before
+setup, after setup, and after preparing the agent context; a mismatch rejects
+the ask and tells the reviewer to reload instead of attaching an answer to a
+different walkthrough.
 Questions stay anchored to the selected section id and quoted passage, so no
 locator needs to drift across edits. Pending, answered and failed are explicit
 states. A provider failure persists only the question and a generic failure
@@ -1425,13 +1431,17 @@ relevant, not terse.
 Its submitted Markdoc fragment is parsed with the canonical walkthrough grammar
 and compiled into `Block` values before the sidecar changes to answered. This
 keeps Q&A out of the committed document and adds no renderer-only dialect or
-HTML sink. `submit_answer` runs that canonical validator before terminating the
-Pi session. An invalid submission returns exact diagnostics as untrusted tool
-data, and the same agent repairs and resubmits the complete answer in the same
-turn. At most two changing repair cycles are allowed, matching generation; an
-unchanged diagnostic set stops early, and a final invalid fragment becomes the
-existing failed thread state. Validator infrastructure failures retain their
-original typed Effect cause, while provider failures remain clarifier errors.
+HTML sink. Answer fragments reject whole-document `section`, `group` and
+`files` tags. `submit_answer` runs that canonical validator before terminating
+the Pi session. An invalid submission returns exact diagnostics as untrusted
+tool data, and the same agent repairs and resubmits the complete answer in the
+same turn. At most two changing repair cycles are allowed, matching generation;
+an unchanged diagnostic set stops early, and a final invalid fragment becomes
+the existing failed thread state. Validator infrastructure failures retain
+their original typed Effect cause, while provider failures remain clarifier
+errors. Expected failures log only sanitized operational identifiers before
+becoming the durable failed state; unexpected defects keep their cause and log
+its sanitized rendering.
 The server writes pending state before forking the run, serializes
 all transitions with one semaphore, and writes the sidecar by same-directory
 temporary-file rename so polling never observes partial JSON. Committing the
@@ -1463,7 +1473,9 @@ anchor section. Each entry shows the latest question, anchor title and explicit
 pending, answered or failed state; pending entries animate and every entry opens
 its section drawer with that thread highlighted first. Closing the drawer
 therefore never hides the only route back to an in-flight question, and several
-concurrent questions stay visible at once.
+concurrent questions stay visible at once. While an ask is in flight, polling
+pauses and responses from older polls are ignored, so stale state cannot hide a
+question the server just accepted.
 The drawer's mutually exclusive closed, section, thread and composer locations
 are one tagged UI state rather than independently nullable coordinates. If the
 server refuses a follow-up before accepting it as pending, the drawer stays

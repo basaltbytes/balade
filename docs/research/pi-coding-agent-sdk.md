@@ -30,7 +30,7 @@ File paths below are relative to the repo root at that commit.
 | 2 | Pi owns credentials in its own store; embedding apps can reuse them | **Verified** (plain file, not keychain) | `packages/coding-agent/src/core/auth-storage.ts`, `src/config.ts`, `docs/sdk.md` |
 | 3 | Queryable model registry | **Verified** | `packages/ai/src/models.ts` (`Models` interface), `packages/coding-agent/src/core/model-runtime.ts`, `.../model-registry.ts` |
 | 4 | Embeddable as a TypeScript library, no shelling out | **Verified** | `packages/coding-agent/docs/sdk.md`, `examples/sdk/*`, npm `@earendil-works/pi-coding-agent` 0.83.0 |
-| 5 | Practical integration constraints | **Facts gathered** — Node >=22.19.0 (balade declares >=20), ESM-only, 0.x with routine breaking changes | package.json of each package, `CHANGELOG.md` |
+| 5 | Practical integration constraints | **Facts gathered** — Node >=22.19.0 (balade's declared minimum is 22.22.2), ESM-only, 0.x with routine breaking changes | package.json of each package, `CHANGELOG.md` |
 
 ## 1. Subscription auth
 

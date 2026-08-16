@@ -1,4 +1,4 @@
-/** Provider/model configuration shared by generation, live Q&A, and the setup command. */
+/** Provider/model lifecycle shared by generation, live Q&A, setup and logout. */
 
 import { Context, Effect, Option, Schema, Semaphore } from "effect";
 import {
