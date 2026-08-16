@@ -2,7 +2,7 @@
 
 import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
-import { Effect, Layer, Result, Schema } from "effect";
+import { Deferred, Effect, Fiber, Layer, Result, Schema } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -249,6 +249,30 @@ it.effect("preserves validation infrastructure failures in the typed error chann
         .answer(fixture.request("Validation failure?"), () => new FixtureValidationFailed())
         .pipe(Effect.flip);
       expect(error).toBeInstanceOf(FixtureValidationFailed);
+    }),
+  ),
+);
+
+it.live("interrupts canonical validation when the clarification session is aborted", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fixture = yield* clarifierFixture();
+      fixture.faux.setResponses([submittedAnswer("Validation waits.")]);
+      const started = yield* Deferred.make<void>();
+      const interrupted = yield* Deferred.make<void>();
+      const fiber = yield* fixture.clarifier
+        .answer(fixture.request("Can validation stop?"), () =>
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+          ),
+        )
+        .pipe(Effect.forkChild);
+
+      yield* Deferred.await(started);
+      yield* Fiber.interrupt(fiber);
+
+      yield* Deferred.await(interrupted).pipe(Effect.timeout("1 second"));
     }),
   ),
 );

@@ -66,10 +66,12 @@ ${source}
   if (errors.length > 0 || section === undefined) {
     return Result.fail(new FragmentInvalid({ diagnostics: errors.map(formatDiagnostic) }));
   }
-  if (containsStructuralTag(section.children)) {
+  if (containsForbiddenTag(section.children)) {
     return Result.fail(
       new FragmentInvalid({
-        diagnostics: ["A clarification answer cannot create walkthrough sections or groups."],
+        diagnostics: [
+          "A clarification answer cannot create walkthrough sections, groups, or file browsers.",
+        ],
       }),
     );
   }
@@ -85,10 +87,15 @@ ${source}
   });
 }
 
-function containsStructuralTag(nodes: readonly Node[]): boolean {
+function containsForbiddenTag(nodes: readonly Node[]): boolean {
   for (const node of nodes) {
-    if (node.type === "tag" && (node.tag === "section" || node.tag === "group")) return true;
-    if (containsStructuralTag(node.children)) return true;
+    if (
+      node.type === "tag" &&
+      (node.tag === "section" || node.tag === "group" || node.tag === "files")
+    ) {
+      return true;
+    }
+    if (containsForbiddenTag(node.children)) return true;
   }
   return false;
 }

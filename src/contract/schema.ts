@@ -430,6 +430,11 @@ export const QaTurnId = Schema.String.pipe(
   Schema.brand("@balade/QaTurnId"),
 );
 
+export const QaGeneration = Schema.Struct({
+  pr: Schema.Int,
+  stamp: Schema.String,
+});
+
 export const QaAnchor = Schema.Struct({
   sectionId: Schema.NonEmptyString,
   excerpt: Schema.NonEmptyString,
@@ -487,11 +492,13 @@ export const QaState = Schema.Struct({
 export const QaAskRequest = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("new"),
+    generation: QaGeneration,
     anchor: QaAnchor,
     question: Schema.NonEmptyString,
   }),
   Schema.Struct({
     kind: Schema.Literal("follow-up"),
+    generation: QaGeneration,
     threadId: QaThreadId,
     question: Schema.NonEmptyString,
   }),

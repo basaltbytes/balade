@@ -599,6 +599,72 @@ describe("the Pi adapter", () => {
     }),
   );
 
+  it.effect("reserves the search budget before parallel path resolution", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      let finalRequest = "";
+      /* One changed file floors the medium budget at 30 searches. */
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          Array.from({ length: 31 }, () =>
+            ai.fauxToolCall("search_source", {
+              query: "planning.pool.item",
+              mode: "fixed",
+              path: "models/planning_pool_item.py",
+            }),
+          ),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          finalRequest = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(finalRequest).toContain("Source search budget reached after 30 searches");
+    }),
+  );
+
+  it.effect("reserves the shared source-read budget before parallel path parsing", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      let finalRequest = "";
+      /* One changed file floors the medium budget at 24 source reads. */
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          Array.from({ length: 25 }, (_, index) =>
+            ai.fauxToolCall(index % 2 === 0 ? "read_source" : "read_base_source", {
+              path: "models/planning_pool_item.py",
+              from: 1,
+              to: 1,
+            }),
+          ),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          finalRequest = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(finalRequest).toContain("Source inspection budget reached after 24 reads");
+    }),
+  );
+
   it.effect("accepts a draft with many code ranges — the walkthrough has no range cap", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;

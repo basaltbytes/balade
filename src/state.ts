@@ -16,6 +16,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 import { parseQaJson, type QaParseError } from "./contract/qa-parser.js";
 import { parseReviewJson, type ReviewParseError } from "./contract/review-parser.js";
 import { isContainedRepoRelativePath } from "./contract/paths.js";
@@ -181,14 +182,26 @@ function makeSidecarStore<State extends { readonly walkthrough: string }, ParseE
   policy: SidecarPolicy<State, ParseError>,
 ): SidecarStore<State> {
   const dir = path.join(options.repoRoot, STATE_DIR);
-  const fileFor = (sourcePath: string): Effect.Effect<string, StatePathRejected> =>
-    isContainedRepoRelativePath(sourcePath) && !path.isAbsolute(sourcePath)
-      ? Effect.succeed(path.join(dir, policy.filePath(sourcePath)))
-      : new StatePathRejected({ path: sourcePath });
+  const expectedFile = (sourcePath: string): string => path.join(dir, policy.filePath(sourcePath));
 
   return {
     read: Effect.fn(`${policy.service}.read`)(function* (sourcePath) {
-      const file = yield* fileFor(sourcePath);
+      const selected = yield* safeSidecarFile(
+        options.repoRoot,
+        sourcePath,
+        policy.filePath(sourcePath),
+        "read",
+        fs,
+        path,
+      ).pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "StatePathRejected"
+            ? cause
+            : new StateReadFailed({ path: expectedFile(sourcePath), cause }),
+        ),
+      );
+      if (Option.isNone(selected)) return Option.none();
+      const file = selected.value;
       const raw = yield* fs.readFileString(file).pipe(
         Effect.map(Option.some),
         Effect.catch((cause) =>
@@ -208,11 +221,28 @@ function makeSidecarStore<State extends { readonly walkthrough: string }, ParseE
     }),
 
     write: Effect.fn(`${policy.service}.write`)(function* (sourcePath, state) {
-      const file = yield* fileFor(sourcePath);
+      const selected = yield* safeSidecarFile(
+        options.repoRoot,
+        sourcePath,
+        policy.filePath(sourcePath),
+        "write",
+        fs,
+        path,
+      ).pipe(
+        Effect.mapError((cause) =>
+          cause._tag === "StatePathRejected"
+            ? cause
+            : new StateWriteFailed({ path: expectedFile(sourcePath), cause }),
+        ),
+      );
+      if (Option.isNone(selected)) {
+        return yield* new StateWriteFailed({
+          path: expectedFile(sourcePath),
+          cause: new Error("Sidecar path preparation completed without a writable path."),
+        });
+      }
+      const file = selected.value;
       const fileDirectory = path.dirname(file);
-      yield* fs
-        .makeDirectory(fileDirectory, { recursive: true })
-        .pipe(Effect.mapError((cause) => new StateWriteFailed({ path: file, cause })));
       yield* Effect.gen(function* () {
         const temporary = yield* fs.makeTempFileScoped({
           directory: fileDirectory,
@@ -234,6 +264,86 @@ function makeSidecarStore<State extends { readonly walkthrough: string }, ParseE
       );
     }),
   };
+}
+
+type SidecarAccess = "read" | "write";
+
+/** Resolve every existing path component before any write can follow it. */
+const safeSidecarFile = Effect.fn("SidecarStore.safeFile")(function* (
+  repoRoot: string,
+  sourcePath: string,
+  relativeFile: string,
+  access: SidecarAccess,
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+): Effect.fn.Return<Option.Option<string>, StatePathRejected | PlatformError> {
+  if (!isContainedRepoRelativePath(sourcePath) || path.isAbsolute(sourcePath)) {
+    return yield* new StatePathRejected({ path: sourcePath });
+  }
+
+  const canonicalRepoRoot = yield* fs.realPath(repoRoot);
+  const lexicalRoot = path.join(repoRoot, STATE_DIR);
+  const canonicalRoot = path.join(canonicalRepoRoot, STATE_DIR);
+  const root = yield* prepareSafeDirectory(
+    lexicalRoot,
+    canonicalRoot,
+    sourcePath,
+    access,
+    fs,
+    path,
+  );
+  if (Option.isNone(root)) return Option.none();
+
+  const segments = relativeFile.split("/");
+  const name = segments.at(-1);
+  if (name === undefined) return yield* new StatePathRejected({ path: sourcePath });
+  let lexicalDirectory = lexicalRoot;
+  let canonicalDirectory = canonicalRoot;
+  for (const segment of segments.slice(0, -1)) {
+    lexicalDirectory = path.join(lexicalDirectory, segment);
+    canonicalDirectory = path.join(canonicalDirectory, segment);
+    const directory = yield* prepareSafeDirectory(
+      lexicalDirectory,
+      canonicalDirectory,
+      sourcePath,
+      access,
+      fs,
+      path,
+    );
+    if (Option.isNone(directory)) return Option.none();
+  }
+
+  const file = path.join(lexicalDirectory, name);
+  if (yield* fs.exists(file)) {
+    const canonicalFile = yield* fs.realPath(file);
+    if (!samePath(path, canonicalFile, path.join(canonicalDirectory, name))) {
+      return yield* new StatePathRejected({ path: sourcePath });
+    }
+  }
+  return Option.some(file);
+});
+
+const prepareSafeDirectory = Effect.fn("SidecarStore.prepareSafeDirectory")(function* (
+  lexical: string,
+  canonical: string,
+  sourcePath: string,
+  access: SidecarAccess,
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+): Effect.fn.Return<Option.Option<string>, StatePathRejected | PlatformError> {
+  if (!(yield* fs.exists(lexical))) {
+    if (access === "read") return Option.none();
+    yield* fs.makeDirectory(lexical);
+  }
+  const resolved = yield* fs.realPath(lexical);
+  const info = yield* fs.stat(lexical);
+  return samePath(path, resolved, canonical) && info.type === "Directory"
+    ? Option.some(lexical)
+    : yield* new StatePathRejected({ path: sourcePath });
+});
+
+function samePath(path: Path.Path, left: string, right: string): boolean {
+  return path.relative(left, right) === "";
 }
 
 /**

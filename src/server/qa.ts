@@ -1,6 +1,7 @@
 /** Generation-bound Q&A state machine and background clarification workflow. */
 
 import {
+  Cause,
   Clock,
   Context,
   Crypto,
@@ -25,11 +26,12 @@ import {
   type PullResolution,
   type ResolveContext,
 } from "../contract/context.js";
-import { QaThreadId, QaTurnId } from "../contract/schema.js";
+import { QaGeneration as QaGenerationSchema, QaThreadId, QaTurnId } from "../contract/schema.js";
 import type {
   Payload,
   QaAgentStatus,
   QaAskRequest,
+  QaGeneration,
   QaQuestion,
   QaState,
   QaThread,
@@ -42,6 +44,7 @@ import {
 } from "../pi/clarifier.js";
 import { getPreset } from "../preset/registry.js";
 import { QaStateStore } from "../state.js";
+import { sanitizeTerminalText } from "../terminal.js";
 import { compileFragment, parseFragment } from "../walkthrough/fragment.js";
 import { PayloadCache } from "./cache.js";
 import { ServerRepo } from "./repo.js";
@@ -83,6 +86,11 @@ export class QaIdentifierFailed extends Schema.TaggedErrorClass<QaIdentifierFail
   { cause: Schema.Defect() },
 ) {}
 
+export class QaGenerationChanged extends Schema.TaggedErrorClass<QaGenerationChanged>()(
+  "QaGenerationChanged",
+  { expected: QaGenerationSchema, actual: QaGenerationSchema },
+) {}
+
 export type QaWorkflowError =
   | QaWalkthroughUnavailable
   | QaStateUnavailable
@@ -90,7 +98,8 @@ export type QaWorkflowError =
   | QaThreadNotFound
   | QaThreadBusy
   | QaAgentUnavailable
-  | QaIdentifierFailed;
+  | QaIdentifierFailed
+  | QaGenerationChanged;
 
 export interface QaWorkflowPort {
   readonly agentStatus: Effect.Effect<QaAgentStatus, QaAgentUnavailable>;
@@ -161,6 +170,7 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
         const agentModels = yield* AgentModelManager;
         const crypto = yield* Crypto.Crypto;
         const lock = yield* Semaphore.make(1);
+        const reconciledGenerations = new Set<string>();
 
         const loadPayload = Effect.fn("QaWorkflow.loadPayload")(function* (path: string) {
           const loaded = yield* payloads
@@ -175,6 +185,12 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
           return loaded.payload;
         });
 
+        const persist = Effect.fn("QaWorkflow.persist")((path: string, state: QaState) =>
+          store
+            .write(path, state)
+            .pipe(Effect.mapError((cause) => new QaStateUnavailable({ path, cause }))),
+        );
+
         const readCurrent = Effect.fn("QaWorkflow.readCurrent")(function* (
           path: string,
           payload: Payload,
@@ -182,20 +198,23 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
           const stored = yield* store
             .read(path)
             .pipe(Effect.mapError((cause) => new QaStateUnavailable({ path, cause })));
-          return Option.match(stored, {
+          const current = Option.match(stored, {
             onNone: () => emptyState(path, payload),
             onSome: (state) =>
               state.pr === payload.pr.number && state.stamp === payload.commit
                 ? state
                 : emptyState(path, payload),
           });
-        });
+          const key = generationKey(path, payload);
+          if (reconciledGenerations.has(key)) return current;
 
-        const persist = Effect.fn("QaWorkflow.persist")((path: string, state: QaState) =>
-          store
-            .write(path, state)
-            .pipe(Effect.mapError((cause) => new QaStateUnavailable({ path, cause }))),
-        );
+          const reconciled = current.threads.some((thread) => thread.status === "pending")
+            ? failPendingThreads(current, yield* isoNow())
+            : current;
+          if (reconciled !== current) yield* persist(path, reconciled);
+          reconciledGenerations.add(key);
+          return reconciled;
+        });
         const runtime: QaRuntime = {
           options,
           resolver,
@@ -216,15 +235,25 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
 
         const agentStatus = readAgentStatus(agentModels);
 
-        const ask = Effect.fn("QaWorkflow.ask")(function* (path: string, request: QaAskRequest) {
+        const loadRequestPayload = Effect.fn("QaWorkflow.loadRequestPayload")(function* (
+          path: string,
+          request: QaAskRequest,
+        ) {
           const payload = yield* loadPayload(path);
+          yield* requireGeneration(payload, request.generation);
           if (
             request.kind === "new" &&
             !payload.sections.some((section) => section.id === request.anchor.sectionId)
           ) {
             return yield* new QaSectionNotFound({ sectionId: request.anchor.sectionId });
           }
+          return payload;
+        });
+
+        const ask = Effect.fn("QaWorkflow.ask")(function* (path: string, request: QaAskRequest) {
+          yield* loadRequestPayload(path, request);
           const model = yield* agentModels.ensure.pipe(Effect.mapError(mapAgentSetupError));
+          const payload = yield* loadRequestPayload(path, request);
           const prepared = yield* Effect.all(
             {
               source: repo
@@ -236,6 +265,7 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
             },
             { concurrency: "unbounded" },
           );
+          yield* loadRequestPayload(path, request);
           const now = isoNow();
           const questionId = yield* crypto.randomUUIDv4.pipe(
             Effect.flatMap(decodeTurnId),
@@ -329,7 +359,13 @@ const enqueueQuestion = Effect.fn("QaWorkflow.enqueueQuestion")(function* (
         Effect.tapError((error) =>
           Effect.logError(`balade: clarification failed (${error._tag}).`),
         ),
-        Effect.tapDefect(() => Effect.logError("balade: clarification failed unexpectedly.")),
+        Effect.tapDefect((defect) =>
+          Effect.logError(
+            sanitizeTerminalText(
+              `balade: clarification failed unexpectedly.\n${Cause.pretty(Cause.die(defect))}`,
+            ),
+          ),
+        ),
         Effect.onExit(
           Exit.match({
             onSuccess: () => Effect.void,
@@ -343,7 +379,9 @@ const enqueueQuestion = Effect.fn("QaWorkflow.enqueueQuestion")(function* (
               ),
           }),
         ),
-        Effect.ignoreCause,
+        /* Expected clarification failures become the durable failed state above.
+           Defects and interruption remain in the forked fiber's cause. */
+        Effect.ignore,
       );
       yield* worker.pipe(
         Effect.forkIn(runtime.options.scope, {
@@ -490,6 +528,39 @@ function emptyState(path: string, payload: Payload): QaState {
     stamp: payload.commit,
     threads: [],
   };
+}
+
+function generationKey(path: string, payload: Payload): string {
+  return `${path}\0${payload.pr.number}\0${payload.commit}`;
+}
+
+function failPendingThreads(state: QaState, failedAt: string): QaState {
+  return {
+    ...state,
+    threads: state.threads.map(
+      (thread): QaThread =>
+        thread.status === "pending"
+          ? {
+              id: thread.id,
+              anchor: thread.anchor,
+              status: "failed",
+              turns: thread.turns,
+              failed: thread.pending,
+              failedAt,
+            }
+          : thread,
+    ),
+  };
+}
+
+function requireGeneration(
+  payload: Payload,
+  expected: QaGeneration,
+): Effect.Effect<void, QaGenerationChanged> {
+  const actual = { pr: payload.pr.number, stamp: payload.commit } satisfies QaGeneration;
+  return actual.pr === expected.pr && actual.stamp === expected.stamp
+    ? Effect.void
+    : new QaGenerationChanged({ expected, actual });
 }
 
 function changedFiles(payload: Payload): ClarificationRequest["files"] {

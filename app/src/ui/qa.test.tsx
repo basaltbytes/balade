@@ -244,6 +244,7 @@ describe("clarification threads in the walkthrough", () => {
         vi.waitFor(() => expect(stateReads).toBeGreaterThan(1), { timeout: 2_500 }),
       );
       expect(container.textContent).toContain("Agent setup did not finish.");
+      expect(container.textContent).toContain("Set up & ask");
       expect(textarea.value).toBe("Please keep this draft");
     }),
   );
@@ -388,6 +389,50 @@ describe("clarification threads in the walkthrough", () => {
       expect(container.textContent).not.toContain("Why is this safe?");
     }),
   );
+
+  it.effect("does not let an older poll hide a newly submitted question", () =>
+    Effect.gen(function* () {
+      let resolvePoll: ((response: Response) => void) | undefined;
+      installFetch((url, init) => {
+        if (init?.method === "POST") return Promise.resolve(Response.json(pendingState));
+        if (url.startsWith("/api/qa")) {
+          return new Promise((resolve) => {
+            resolvePoll = resolve;
+          });
+        }
+        return Promise.resolve(Response.json({ status: "ready" }));
+      });
+      yield* Effect.promise(() =>
+        act(async () => {
+          root.render(
+            <StringsProvider lang="en">
+              <QaProvider payload={payload} served>
+                <QaProbe />
+              </QaProvider>
+            </StringsProvider>,
+          );
+        }),
+      );
+      yield* Effect.promise(() => vi.waitFor(() => expect(resolvePoll).not.toBeUndefined()));
+      const ask = container.querySelector('button[aria-label="ask old walkthrough"]');
+      if (!(ask instanceof HTMLButtonElement)) return yield* Effect.die("ask button missing");
+      yield* Effect.promise(() => act(async () => ask.click()));
+      yield* Effect.promise(() =>
+        vi.waitFor(() => expect(container.textContent).toContain("How does the worker finish?")),
+      );
+
+      const resolve = resolvePoll;
+      if (resolve === undefined) return yield* Effect.die("poll resolver missing");
+      yield* Effect.promise(() =>
+        act(async () => {
+          resolve(Response.json({ ...state, threads: [] }));
+          await Promise.resolve();
+        }),
+      );
+
+      expect(container.textContent).toContain("How does the worker finish?");
+    }),
+  );
 });
 
 function QaProbe() {
@@ -407,7 +452,12 @@ function QaProbe() {
       />
       <output>
         {qa.state.walkthrough}
-        {qa.state.threads.flatMap((thread) => thread.turns.map((turn) => turn.question)).join("|")}
+        {qa.state.threads
+          .flatMap((thread) => [
+            ...thread.turns.map((turn) => turn.question),
+            ...(thread.status === "pending" ? [thread.pending.question] : []),
+          ])
+          .join("|")}
       </output>
     </div>
   );

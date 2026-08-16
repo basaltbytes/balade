@@ -238,8 +238,8 @@ async function createClarificationSession<
       "Validate and submit the complete Markdoc clarification body. Invalid bodies return diagnostics for correction; a valid body finishes the turn.",
     executionMode: "sequential" as const,
     parameters: pi.ai.Type.Object({ body: pi.ai.Type.String({ minLength: 1 }) }),
-    execute: async (_id, params) => {
-      const checked = await Effect.runPromiseExit(validate(params.body));
+    execute: async (_id, params, signal) => {
+      const checked = await Effect.runPromiseExit(validate(params.body), { signal });
       if (Exit.isFailure(checked)) {
         submission = { _tag: "ValidationFailed", cause: checked.cause };
         return { ...toolText("Clarification validation could not complete."), terminate: true };

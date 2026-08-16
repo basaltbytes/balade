@@ -25,7 +25,18 @@ export class QaAgentUnavailable extends Schema.TaggedErrorClass<QaAgentUnavailab
   {},
 ) {}
 
-export type QaApiError = QaFetchFailed | QaHttpFailed | QaResponseInvalid | QaAgentUnavailable;
+/** The browser is showing a different walkthrough generation than the server. */
+export class QaGenerationChanged extends Schema.TaggedErrorClass<QaGenerationChanged>()(
+  "QaGenerationChanged",
+  {},
+) {}
+
+export type QaApiError =
+  | QaFetchFailed
+  | QaHttpFailed
+  | QaResponseInvalid
+  | QaAgentUnavailable
+  | QaGenerationChanged;
 
 export const fetchQa = Effect.fn("App.fetchQa")(function* (sourcePath: string) {
   return yield* requestQa(`/api/qa?path=${encodeURIComponent(sourcePath)}`, { method: "GET" });
@@ -45,7 +56,13 @@ export const askQa = Effect.fn("App.askQa")(function* (sourcePath: string, reque
     body: JSON.stringify(request),
   }).pipe(
     Effect.catchTag("QaHttpFailed", (error) =>
-      Effect.fail(error.status === 503 ? new QaAgentUnavailable() : error),
+      Effect.fail(
+        error.status === 503
+          ? new QaAgentUnavailable()
+          : error.status === 412
+            ? new QaGenerationChanged()
+            : error,
+      ),
     ),
   );
 });

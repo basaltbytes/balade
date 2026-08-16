@@ -43,6 +43,7 @@ export type ReviewState = typeof Contract.ReviewState.Type;
 export type QaAgentStatus = typeof Contract.QaAgentStatus.Type;
 export type QaThreadId = typeof Contract.QaThreadId.Type;
 export type QaTurnId = typeof Contract.QaTurnId.Type;
+export type QaGeneration = typeof Contract.QaGeneration.Type;
 export type QaAnchor = typeof Contract.QaAnchor.Type;
 export type QaQuestion = typeof Contract.QaQuestion.Type;
 export type QaTurn = typeof Contract.QaTurn.Type;

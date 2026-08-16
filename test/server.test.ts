@@ -6,7 +6,15 @@
 
 import { Effect, Layer, Option, Schema } from "effect";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -756,6 +764,40 @@ describe("review-state files", () => {
       expect(exclude.split("\n")).toContain(".balade/");
       expect(checkIgnore(worktree.dir)).toBe(".balade");
     }).pipe(provideLive),
+  );
+
+  it.effect("rejects a sidecar parent redirected through a symbolic link", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const isolated = createFixtureRepo();
+        const outside = mkdtempSync(join(tmpdir(), "balade-sidecar-outside-"));
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            isolated.cleanup();
+            rmSync(outside, { recursive: true, force: true });
+          }),
+        );
+        mkdirSync(join(isolated.dir, ".balade"));
+        symlinkSync(
+          outside,
+          join(isolated.dir, ".balade", "walkthroughs"),
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        const store = yield* ReviewStateStore.pipe(
+          Effect.provide(
+            ReviewStateStore.layer({
+              repoRoot: isolated.dir,
+              gitCommonDir: join(isolated.dir, ".git"),
+            }),
+          ),
+        );
+
+        const error = yield* store.write("walkthroughs/valid.md", state).pipe(Effect.flip);
+
+        expect(error).toMatchObject({ _tag: "StatePathRejected", path: "walkthroughs/valid.md" });
+        expect(existsSync(join(outside, "valid.md.review.json"))).toBe(false);
+      }).pipe(provideLive),
+    ),
   );
 
   it.effect("excludes through the module git directory from a submodule", () =>

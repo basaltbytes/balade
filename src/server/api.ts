@@ -283,7 +283,7 @@ function firstFailure(diagnostics: readonly CheckDiagnostic[]): string {
 }
 
 export interface ApiErrorResponse {
-  readonly status: 400 | 404 | 409 | 500 | 503;
+  readonly status: 400 | 404 | 409 | 412 | 500 | 503;
   readonly message: string;
 }
 
@@ -337,6 +337,10 @@ export function apiErrorResponse(error: ApiError): ApiErrorResponse {
     QaThreadBusy: (): ApiErrorResponse => ({
       status: 409,
       message: "This clarification thread is already answering a question.",
+    }),
+    QaGenerationChanged: (): ApiErrorResponse => ({
+      status: 412,
+      message: "The walkthrough changed after this page was loaded. Reload before asking again.",
     }),
     QaAgentUnavailable: ({ reason }): ApiErrorResponse => ({
       status: 503,

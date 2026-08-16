@@ -15,13 +15,19 @@ describe("clarification Markdoc fragments", () => {
     if (Result.isSuccess(parsed)) expect(parsed.success.references).toEqual(["src/answer.ts"]);
   });
 
-  it("refuses answer-owned sections and unavailable preset names before interpolation", () => {
+  it("refuses whole-walkthrough structure and unavailable presets before interpolation", () => {
     const nested = parseFragment(
       '{% section id="nested" title="Nested" %}No{% /section %}',
       "walkthroughs/review.md",
       undefined,
     );
     expect(Result.isFailure(nested)).toBe(true);
+
+    const files = parseFragment("{% files /%}", "walkthroughs/review.md", undefined);
+    expect(Result.isFailure(files)).toBe(true);
+    if (Result.isFailure(files)) {
+      expect(files.failure.diagnostics).toEqual([expect.stringContaining("file browsers")]);
+    }
 
     const injected = parseFragment(
       "Answer",

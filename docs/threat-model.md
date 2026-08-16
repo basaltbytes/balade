@@ -121,7 +121,10 @@ required, not provider, model or credential details. A first `POST /api/qa` may
 start the shared provider/model setup interaction in the trusted terminal that
 launched `balade open`; the question is enqueued only after setup succeeds. The
 endpoint still requires an `application/json` body and emits no CORS
-permission, so a cross-origin form cannot initiate that credential flow.
+permission, so a cross-origin form cannot initiate that credential flow. The
+request includes the PR number and stamp displayed by the browser. The server
+checks that generation before and after setup and again after preparing agent
+context, rejecting stale pages before they can persist a question.
 
 The agent submits a Markdoc fragment, not browser markup. The fragment is
 parsed with the walkthrough grammar, cannot create sections or groups, resolves
@@ -336,8 +339,11 @@ they describe.
   against the served set (`src/server/api.ts`). The state store independently
   rejects empty, absolute, backslash-containing and dot-segment source paths
   before mirroring the complete repository-relative path below `.balade/`
-  (`src/state.ts`, `src/contract/paths.ts`). Two independent barriers; **no
-  arbitrary file write exists.**
+  (`src/state.ts`, `src/contract/paths.ts`). It canonicalizes the repository
+  root and verifies every existing destination component against its expected
+  real path before reading, creating or replacing a sidecar, so a symlink below
+  `.balade/` cannot redirect the write. Two independent barriers; **no arbitrary
+  file write exists.**
 - The `.balade/` line appended to the clone's `info/exclude` is a module
   constant (`src/state.ts:40`) — **no injection into that file is possible.**
   Its destination directory is `git rev-parse --git-common-dir` output for the
@@ -375,6 +381,9 @@ they describe.
   `test/snapshot.test.ts:34-71`).
 - `search_source` regexes go to ripgrep (Rust regex — linear time, no
   catastrophic backtracking), bounded to 20 searches / 200 matches / 80k chars.
+- Inspection tools reserve their shared search and source-read budgets before
+  their first asynchronous operation, so concurrently dispatched calls cannot
+  overspend either limit.
 - The process installs the balade-owned `RIPGREP_CONFIG_PATH` once before Pi can
   dispatch searches in parallel. No search restores process-global state, so
   every ripgrep spawn retains `--no-ignore` and `--no-follow`.
@@ -395,6 +404,9 @@ they describe.
   walkthrough source, prior exchanges and question as untrusted JSON data. Only
   a successful `submit_answer` fragment reaches the compiler; provider details
   do not reach the sidecar or browser, which expose only a generic failed state.
+- A restarted server converts abandoned pending sidecar entries to that generic
+  failed state on its first read. It never resumes or guesses the outcome of an
+  interrupted provider request.
 
 **Export**
 

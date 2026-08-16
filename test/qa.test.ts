@@ -1,8 +1,8 @@
 /** Clarification workflow through real git resolution and file sidecars, with Pi at its port. */
 
 import { Effect, Layer, Result } from "effect";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import {
   AgentModelManager,
@@ -64,12 +64,14 @@ describe("the clarification workflow", () => {
         if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
         const path = prepared.session.paths[0];
         if (path === undefined) return yield* Effect.die("fixture path missing");
+        const generation = yield* qaGeneration(prepared.session.api, path);
 
         const error = yield* Effect.flip(
           prepared.session.api.askQa(
             path,
             JSON.stringify({
               kind: "new",
+              generation,
               anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
               question: "Can setup be cancelled?",
             }),
@@ -82,6 +84,132 @@ describe("the clarification workflow", () => {
         });
         expect((yield* prepared.session.api.readQa(path)).threads).toEqual([]);
         expect(existsSync(join(repo.dir, ".balade", qaFilePath(path)))).toBe(false);
+      }),
+    ),
+  );
+
+  it.live("rejects a question when setup outlives the displayed generation", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const repo = createFixtureRepo();
+        yield* Effect.addFinalizer(() => Effect.sync(repo.cleanup));
+        repo.addWalkthrough("valid.md", "valid.md");
+        let replacementStamp: string | undefined;
+        let clarificationStarted = false;
+        const changingModels = Layer.succeed(AgentModelManager, {
+          status: Effect.succeed(new AgentModelSetupRequired()),
+          ensure: Effect.sync(() => {
+            repo.write("models/planning_pool_item.py", "# changed while setup was open\n");
+            replacementStamp = repo.commit("feat: replace displayed generation");
+            const file = join(repo.dir, "walkthroughs/valid.md");
+            writeFileSync(
+              file,
+              readFileSync(file, "utf8").replace(repo.pin, replacementStamp),
+              "utf8",
+            );
+            return model;
+          }),
+          configure: () => Effect.succeed(model),
+          logout: Effect.void,
+        });
+        const clarifier = Layer.succeed(WalkthroughClarifier, {
+          answer: () => {
+            clarificationStarted = true;
+            return Effect.die("stale clarification must not start");
+          },
+        });
+        const layer = Layer.mergeAll(contextResolverLive, clarifier, changingModels).pipe(
+          Layer.provideMerge(shellLayer),
+        );
+        const prepared = yield* prepareSession({
+          cwd: repo.dir,
+          selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
+          useGh: false,
+        }).pipe(Effect.provide(layer));
+        if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
+        const path = prepared.session.paths[0];
+        if (path === undefined) return yield* Effect.die("fixture path missing");
+        const generation = yield* qaGeneration(prepared.session.api, path);
+
+        const error = yield* Effect.flip(
+          prepared.session.api.askQa(
+            path,
+            JSON.stringify({
+              kind: "new",
+              generation,
+              anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
+              question: "Which generation is this?",
+            }),
+          ),
+        );
+
+        expect(error).toMatchObject({
+          _tag: "QaGenerationChanged",
+          expected: generation,
+          actual: { pr: generation.pr, stamp: replacementStamp },
+        });
+        expect(clarificationStarted).toBe(false);
+        expect(existsSync(join(repo.dir, ".balade", qaFilePath(path)))).toBe(false);
+      }),
+    ),
+  );
+
+  it.live("recovers a pending question whose worker did not survive a restart", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const repo = createFixtureRepo();
+        yield* Effect.addFinalizer(() => Effect.sync(repo.cleanup));
+        repo.addWalkthrough("valid.md", "valid.md");
+        const clarifier = Layer.succeed(WalkthroughClarifier, {
+          answer: () => Effect.die("recovered work must not start a new clarification"),
+        });
+        const layer = Layer.mergeAll(contextResolverLive, clarifier, agentModels).pipe(
+          Layer.provideMerge(shellLayer),
+        );
+        const prepared = yield* prepareSession({
+          cwd: repo.dir,
+          selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
+          useGh: false,
+        }).pipe(Effect.provide(layer));
+        if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
+        const path = prepared.session.paths[0];
+        if (path === undefined) return yield* Effect.die("fixture path missing");
+        const generation = yield* qaGeneration(prepared.session.api, path);
+        const file = join(repo.dir, ".balade", qaFilePath(path));
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(
+          file,
+          JSON.stringify({
+            version: 1,
+            walkthrough: path,
+            ...generation,
+            threads: [
+              {
+                id: "34d91d9f-21f4-4c3b-9b72-b1f76166395c",
+                anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
+                status: "pending",
+                turns: [],
+                pending: {
+                  id: "57992f39-f492-4b7c-8580-d2483916bba2",
+                  question: "Did the worker survive?",
+                  askedAt: "2026-08-16T08:00:00.000Z",
+                },
+              },
+            ],
+          }),
+          "utf8",
+        );
+
+        const recovered = yield* prepared.session.api.readQa(path);
+
+        expect(recovered.threads).toMatchObject([
+          {
+            status: "failed",
+            failed: { question: "Did the worker survive?" },
+          },
+        ]);
+        /* SAFETY: the assertion intentionally forgets JSON.parse's `any` result to unknown. */
+        expect(JSON.parse(readFileSync(file, "utf8")) as unknown).toEqual(recovered);
       }),
     ),
   );
@@ -132,12 +260,14 @@ describe("the clarification workflow", () => {
         if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
         const path = prepared.session.paths[0];
         if (path === undefined) return yield* Effect.die("fixture path missing");
+        const generation = yield* qaGeneration(prepared.session.api, path);
         expect(yield* prepared.session.api.agentStatus).toEqual({ status: "setup-required" });
 
         yield* prepared.session.api.askQa(
           path,
           JSON.stringify({
             kind: "new",
+            generation,
             anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
             question: "Can this repair itself?",
           }),
@@ -152,7 +282,7 @@ describe("the clarification workflow", () => {
         expect(requests).toHaveLength(1);
         expect(rejections[0]).toEqual(
           expect.arrayContaining([
-            expect.stringContaining("cannot create walkthrough sections or groups"),
+            expect.stringContaining("cannot create walkthrough sections, groups, or file browsers"),
           ]),
         );
 
@@ -162,6 +292,7 @@ describe("the clarification workflow", () => {
           path,
           JSON.stringify({
             kind: "follow-up",
+            generation,
             threadId,
             question: "Can repair stay invalid?",
           }),
@@ -211,11 +342,13 @@ describe("the clarification workflow", () => {
         if (path === undefined) return yield* Effect.die("fixture path missing");
         const payload = yield* prepared.session.api.walkthrough(path);
         if ("kind" in payload) return yield* Effect.die("fixture unexpectedly returned an index");
+        const generation = { pr: payload.pr.number, stamp: payload.commit };
 
         const pending = yield* prepared.session.api.askQa(
           path,
           JSON.stringify({
             kind: "new",
+            generation,
             anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
             question: "Why is this pinned?",
           }),
@@ -238,7 +371,7 @@ describe("the clarification workflow", () => {
         if (threadId === undefined) return yield* Effect.die("answered thread missing");
         yield* prepared.session.api.askQa(
           path,
-          JSON.stringify({ kind: "follow-up", threadId, question: "What changed?" }),
+          JSON.stringify({ kind: "follow-up", generation, threadId, question: "What changed?" }),
         );
         const followedUp = yield* awaitTurns(prepared.session.api, path, 2);
         expect(followedUp.threads[0]?.turns.map((turn) => turn.question)).toEqual([
@@ -250,7 +383,12 @@ describe("the clarification workflow", () => {
         failNext = true;
         yield* prepared.session.api.askQa(
           path,
-          JSON.stringify({ kind: "follow-up", threadId, question: "Can this fail?" }),
+          JSON.stringify({
+            kind: "follow-up",
+            generation,
+            threadId,
+            question: "Can this fail?",
+          }),
         );
         const failed = yield* awaitThread(prepared.session.api, path, "failed");
         expect(failed.threads[0]).toMatchObject({
@@ -308,11 +446,13 @@ describe("the clarification workflow", () => {
             if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
             const path = prepared.session.paths[0];
             if (path === undefined) return yield* Effect.die("fixture path missing");
+            const generation = yield* qaGeneration(prepared.session.api, path);
 
             const pending = yield* prepared.session.api.askQa(
               path,
               JSON.stringify({
                 kind: "new",
+                generation,
                 anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
                 question: "Will this be settled?",
               }),
@@ -350,6 +490,12 @@ const awaitThread = Effect.fn("test.awaitQaThread")(function* (
     yield* Effect.sleep("10 millis");
   }
   return yield* Effect.die(`clarification did not reach ${status}`);
+});
+
+const qaGeneration = Effect.fn("test.qaGeneration")(function* (api: Api, path: string) {
+  const payload = yield* api.walkthrough(path);
+  if ("kind" in payload) return yield* Effect.die("fixture unexpectedly returned an index");
+  return { pr: payload.pr.number, stamp: payload.commit };
 });
 
 const awaitTurns = Effect.fn("test.awaitQaTurns")(function* (

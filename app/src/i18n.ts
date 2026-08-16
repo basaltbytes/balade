@@ -55,6 +55,7 @@ export interface Strings {
     setupWaiting: string;
     setupRequired: string;
     setupFailed: string;
+    generationChanged: string;
     pending: string;
     failed: string;
     unavailable: string;
@@ -161,6 +162,7 @@ const en: Strings = {
     setupRequired:
       "Agent setup is required. When you ask, continue in the terminal where Balade is running; your question will be sent automatically afterward.",
     setupFailed: "Agent setup did not finish. Your question is still here; try again.",
+    generationChanged: "This walkthrough changed. Reload the page before asking again.",
     pending: "The agent is working on this question…",
     failed: "The agent could not answer this question. You can ask another follow-up.",
     unavailable: "Clarifications are temporarily unavailable.",
@@ -265,6 +267,8 @@ const fr: Strings = {
       "L’agent doit être configuré. Après l’envoi, poursuivez dans le terminal où Balade est lancé ; votre question sera ensuite envoyée automatiquement.",
     setupFailed:
       "La configuration de l’agent n’a pas abouti. Votre question est toujours ici ; réessayez.",
+    generationChanged:
+      "Cette présentation a changé. Rechargez la page avant de poser une autre question.",
     pending: "L’agent travaille sur cette question…",
     failed: "L’agent n’a pas pu répondre. Vous pouvez poser une autre question.",
     unavailable: "Les éclaircissements sont temporairement indisponibles.",

@@ -164,7 +164,11 @@ export function QaPanel() {
         <div className="space-y-5 p-5">
           {qa.failure._tag !== "None" && (
             <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-[12.5px] text-destructive">
-              {qa.failure._tag === "SetupFailed" ? strings.qa.setupFailed : strings.qa.unavailable}
+              {qa.failure._tag === "SetupFailed"
+                ? strings.qa.setupFailed
+                : qa.failure._tag === "GenerationChanged"
+                  ? strings.qa.generationChanged
+                  : strings.qa.unavailable}
             </p>
           )}
           {panel._tag === "Composer" && <QuestionForm anchor={panel.anchor} />}

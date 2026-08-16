@@ -428,11 +428,12 @@ response so another site cannot frame the served review UI. This is a
 response-header control and stays separate from the export's meta CSP, which
 browsers cannot use to enforce `frame-ancestors`.
 
-Only `PUT /api/state` reads a request body. Its JSON read provides Effect's
-`MaxBodySize` with a 4 MiB limit; an oversized body follows the existing invalid
-review-state response and leaves the process alive. The limit is generous for a
-review state while staying far below the Node string-size failure found during
-the security audit.
+The two mutating API routes accept bounded JSON bodies. `PUT /api/state`
+provides Effect's `MaxBodySize` with a 4 MiB limit, while `POST /api/qa` uses a
+64 KiB limit and rejects every content type except `application/json`. An
+oversized body follows the route's existing invalid-request response and leaves
+the process alive. The limits are generous for their payloads while staying far
+below the Node string-size failure found during the security audit.
 
 API failures retain their original cause as `Schema.Defect()` until one shared
 HTTP translation pipeline handles them. That boundary logs internal `500`
@@ -1398,12 +1399,19 @@ injective even for an explicitly opened extensionless walkthrough. This
 pre-alpha format has no legacy basename fallback or migration. Before deriving
 the destination, the store applies the same contained repository-relative path
 rule as source inspection and rejects invalid paths in its typed error channel.
-The sidecar carries the walkthrough path, PR number and stamp; a mismatch makes
-the whole value absent. Questions stay anchored to the selected section id and
-quoted passage, so no locator needs to drift across edits. Pending, answered
-and failed are explicit states. A provider failure persists only the question
-and a generic failure marker, never credentials or provider diagnostics, and a
-later follow-up can retry the conversation.
+It then resolves every existing path component below the canonical repository
+root and rejects symlinks or other aliases that escape the expected location;
+missing directories are created one checked component at a time. The sidecar
+carries the walkthrough path, PR number and stamp; a mismatch makes the whole
+value absent. Each ask also carries the PR number and stamp displayed by the
+browser. The server verifies that generation before setup, after setup, and
+after preparing the agent context; a mismatch rejects the ask and tells the
+reviewer to reload instead of attaching an answer to a different walkthrough.
+Questions stay anchored to the selected section id and quoted passage, so no
+locator needs to drift across edits. Pending, answered and failed are explicit
+states. A provider failure persists only the question and a generic failure
+marker, never credentials or provider diagnostics, and a later follow-up can
+retry the conversation.
 
 Every question and follow-up creates a fresh scoped Pi session. Generation and
 clarification share one pinned, read-only inspection-tool module and one
@@ -1430,7 +1438,10 @@ temporary-file rename so polling never observes partial JSON. Committing the
 pending state and starting its supervised worker are one uninterruptible
 handoff. The worker starts synchronously enough to install its exit finalizer
 before the handoff returns, so a closing server settles an in-flight question
-as failed instead of leaving a permanent pending record.
+as failed instead of leaving a permanent pending record. A process crash cannot
+run that finalizer, so the first sidecar read after restart reconciles abandoned
+pending entries to the same generic failed state once per walkthrough
+generation.
 
 Static exports deliberately omit Q&A: asking requires the local repository,
 an agent model under `~/.balade/pi/`, and the live loopback server. Opening a

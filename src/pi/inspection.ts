@@ -120,8 +120,8 @@ export async function createInspectionTools(
           `Source search budget reached after ${budget.searches} searches. Use the evidence already collected to complete the task.`,
         );
       }
-      const scope = await runSessionEffect(snapshot.resolvePath(params.path ?? "."));
       searches++;
+      const scope = await runSessionEffect(snapshot.resolvePath(params.path ?? "."));
       const result = await grep.execute(
         id,
         {
@@ -192,6 +192,12 @@ export async function createInspectionTools(
       to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
     }),
     execute: async (_id, params) => {
+      if (sourceReads >= budget.sourceReads) {
+        return toolText(
+          `Source inspection budget reached after ${budget.sourceReads} reads. Use the verified ranges already collected to complete the task.`,
+        );
+      }
+      sourceReads++;
       const sourcePath = await runSessionEffect(
         Effect.fromResult(parseAuthorSourcePath(params.path)),
       );
@@ -206,12 +212,6 @@ export async function createInspectionTools(
           ),
         );
       }
-      if (sourceReads >= budget.sourceReads) {
-        return toolText(
-          `Source inspection budget reached after ${budget.sourceReads} reads. Use the verified ranges already collected to complete the task.`,
-        );
-      }
-      sourceReads++;
       const content = await runSessionEffect(snapshot.readFile(sourcePath));
       return toolText(numberedLines(sourcePath, content, params.from, params.to));
     },
@@ -228,15 +228,15 @@ export async function createInspectionTools(
       to: pi.ai.Type.Optional(pi.ai.Type.Integer({ minimum: 1, description: "Last line" })),
     }),
     execute: async (_id, params) => {
-      const sourcePath = await runSessionEffect(
-        Effect.fromResult(parseAuthorSourcePath(params.path)),
-      );
       if (sourceReads >= budget.sourceReads) {
         return toolText(
           `Source inspection budget reached after ${budget.sourceReads} reads. Use the verified ranges already collected to complete the task.`,
         );
       }
       sourceReads++;
+      const sourcePath = await runSessionEffect(
+        Effect.fromResult(parseAuthorSourcePath(params.path)),
+      );
       const content = await runSessionEffect(
         gitOut(["show", `${request.base}:${sourcePath}`], request.root),
       );

@@ -15,6 +15,7 @@ const state: QaState = {
 };
 const question = {
   kind: "new" as const,
+  generation: { pr: state.pr, stamp: state.stamp },
   anchor: { sectionId: "overview", excerpt: "selected passage" },
   question: "Why?",
 };
@@ -56,6 +57,7 @@ describe("the browser clarification API", () => {
             method: "POST",
             body: JSON.stringify({
               kind: "new",
+              generation: { pr: state.pr, stamp: state.stamp },
               anchor: { sectionId: "overview", excerpt: "selected passage" },
               question: "Why?",
             }),
@@ -120,6 +122,17 @@ describe("the browser clarification API", () => {
         ),
       );
       expect(error._tag).toBe("QaHttpFailed");
+    }),
+  );
+
+  it.effect("classifies a generation precondition refusal for a reload", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        withFetch(askQa(state.walkthrough, question), () =>
+          Promise.resolve(new Response("", { status: 412 })),
+        ),
+      );
+      expect(error._tag).toBe("QaGenerationChanged");
     }),
   );
 });

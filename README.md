@@ -245,7 +245,8 @@ Live clarification threads use the matching `.qa.json` sidecar beside the
 marks. They belong to one walkthrough commit and are discarded when its PR or
 stamp changes. Answers are compiled through the same validated block format as
 the walkthrough, but never modify the walkthrough file or appear in a static
-export.
+export. If the walkthrough changes while it is open, a new question is rejected
+with a prompt to reload so it cannot attach to a different generation.
 
 Static exports store review state in browser `localStorage`. An export contains:
 
