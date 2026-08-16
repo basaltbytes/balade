@@ -1373,13 +1373,21 @@ shared contract.
 ## Clarifications are generation-bound sidecars, not walkthrough content
 
 Reviewer Q&A for issue #131 lives in one
-`.balade/<walkthrough>.qa.json` sidecar beside review marks. The sidecar carries
-the walkthrough path, PR number and stamp; a mismatch makes the whole value
-absent. Questions stay anchored to the selected section id and quoted passage,
-so no locator needs to drift across edits. Pending, answered and failed are
-explicit states. A provider failure persists only the question and a generic
-failure marker, never credentials or provider diagnostics, and a later
-follow-up can retry the conversation.
+`.balade/<walkthrough>.qa.json` sidecar beside review marks. Both sidecar kinds
+mirror the complete repository-relative walkthrough path below `.balade/`;
+keeping only the basename was rejected because two served walkthroughs in
+different directories would overwrite each other. The kind suffix is appended
+to the complete source path instead of replacing `.md`, keeping the mapping
+injective even for an explicitly opened extensionless walkthrough. This
+pre-alpha format has no legacy basename fallback or migration. Before deriving
+the destination, the store applies the same contained repository-relative path
+rule as source inspection and rejects invalid paths in its typed error channel.
+The sidecar carries the walkthrough path, PR number and stamp; a mismatch makes
+the whole value absent. Questions stay anchored to the selected section id and
+quoted passage, so no locator needs to drift across edits. Pending, answered
+and failed are explicit states. A provider failure persists only the question
+and a generic failure marker, never credentials or provider diagnostics, and a
+later follow-up can retry the conversation.
 
 Every question and follow-up creates a fresh scoped Pi session. Generation and
 clarification share one pinned, read-only inspection-tool module and one
@@ -1419,3 +1427,7 @@ pending, answered or failed state; pending entries animate and every entry opens
 its section drawer with that thread highlighted first. Closing the drawer
 therefore never hides the only route back to an in-flight question, and several
 concurrent questions stay visible at once.
+The drawer's mutually exclusive closed, section, thread and composer locations
+are one tagged UI state rather than independently nullable coordinates. If the
+server refuses a follow-up before accepting it as pending, the drawer stays
+open and preserves the draft for retry.

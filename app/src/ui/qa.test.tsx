@@ -185,6 +185,64 @@ describe("clarification threads in the walkthrough", () => {
     }),
   );
 
+  it.effect("keeps a follow-up draft when submission is refused", () =>
+    Effect.gen(function* () {
+      installFetch((_url, init) =>
+        Promise.resolve(
+          init?.method === "POST" ? new Response("", { status: 503 }) : Response.json(state),
+        ),
+      );
+      yield* Effect.promise(() =>
+        act(async () => {
+          root.render(
+            <StringsProvider lang="en">
+              <QaProvider payload={payload} served>
+                <QaIndicator sectionId="overview" />
+                <QaPanel />
+              </QaProvider>
+            </StringsProvider>,
+          );
+        }),
+      );
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(container.querySelector('button[aria-label="1 exchange"]')).not.toBeNull(),
+        ),
+      );
+      const indicator = container.querySelector('button[aria-label="1 exchange"]');
+      if (!(indicator instanceof HTMLButtonElement)) {
+        return yield* Effect.die("clarification indicator missing");
+      }
+      yield* Effect.promise(() => act(async () => indicator.click()));
+
+      const textarea = container.querySelector(`#qa-follow-up-${threadId}`);
+      if (!(textarea instanceof HTMLTextAreaElement)) {
+        return yield* Effect.die("follow-up textarea missing");
+      }
+      yield* Effect.promise(() =>
+        act(async () => {
+          const valueSetter = Object.getOwnPropertyDescriptor(
+            HTMLTextAreaElement.prototype,
+            "value",
+          )?.set;
+          if (valueSetter === undefined) throw new Error("textarea value setter missing");
+          valueSetter.call(textarea, "Please keep this draft");
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        }),
+      );
+      const form = textarea.closest("form");
+      if (!(form instanceof HTMLFormElement)) return yield* Effect.die("follow-up form missing");
+      yield* Effect.promise(() => act(async () => form.requestSubmit()));
+
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(container.textContent).toContain("Clarifications are temporarily unavailable."),
+        ),
+      );
+      expect(textarea.value).toBe("Please keep this draft");
+    }),
+  );
+
   it.effect("discards an in-flight answer when the walkthrough changes", () =>
     Effect.gen(function* () {
       let resolveOldQuestion: ((response: Response) => void) | undefined;

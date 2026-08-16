@@ -13,7 +13,7 @@ import {
 } from "../src/pi/clarifier.js";
 import type { Api } from "../src/server/api.js";
 import { prepareSession } from "../src/server/session.js";
-import { qaFileName } from "../src/state.js";
+import { qaFilePath } from "../src/state.js";
 import { shellLayer } from "./support/effect.js";
 import { createFixtureRepo } from "./support/repo.js";
 
@@ -191,12 +191,12 @@ describe("the clarification workflow", () => {
 
         /* SAFETY: the assertion intentionally forgets JSON.parse's `any` result to unknown. */
         const stored = JSON.parse(
-          readFileSync(join(repo.dir, ".balade", qaFileName(path)), "utf8"),
+          readFileSync(join(repo.dir, ".balade", qaFilePath(path)), "utf8"),
         ) as unknown;
         expect(stored).toEqual(failed);
 
         writeFileSync(
-          join(repo.dir, ".balade", qaFileName(path)),
+          join(repo.dir, ".balade", qaFilePath(path)),
           JSON.stringify({ ...failed, stamp: "different-generation" }),
           "utf8",
         );
@@ -251,7 +251,7 @@ describe("the clarification workflow", () => {
 
         /* SAFETY: the assertion intentionally forgets JSON.parse's `any` result to unknown. */
         const stored = JSON.parse(
-          readFileSync(join(repo.dir, ".balade", qaFileName(path)), "utf8"),
+          readFileSync(join(repo.dir, ".balade", qaFilePath(path)), "utf8"),
         ) as unknown;
         expect(stored).toMatchObject({
           threads: [

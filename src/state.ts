@@ -1,8 +1,9 @@
 /**
  * Balade-owned state on disk: the predictable `~/.balade` home directories,
  * and the review/Q&A stores — one JSON file of each kind per walkthrough under
- * `.balade/` at the repository root, named after the walkthrough file
- * (`pr-96-loan-refactor.md` → `pr-96-loan-refactor.review.json` / `.qa.json`).
+ * `.balade/` at the repository root, mirroring the walkthrough's repo-relative
+ * path (`docs/walkthroughs/pr-96.md` →
+ * `.balade/docs/walkthroughs/pr-96.md.review.json` / `.qa.json`).
  *
  * The state directory is excluded through the clone's `info/exclude` (in the
  * git common directory) rather than the committed `.gitignore`, so a
@@ -17,6 +18,7 @@ import { join } from "node:path";
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { parseQaJson, type QaParseError } from "./contract/qa-parser.js";
 import { parseReviewJson, type ReviewParseError } from "./contract/review-parser.js";
+import { isContainedRepoRelativePath } from "./contract/paths.js";
 import type { QaState, ReviewState } from "./contract/types.js";
 
 /* ------------------------------------------------------------------ */
@@ -43,7 +45,7 @@ const EXCLUDE_LINE = `${STATE_DIR}/`;
 export interface ReviewStateStorePort {
   /** The stored state, or `None` when there is none this walkthrough can use. */
   readonly read: (sourcePath: string) => Effect.Effect<Option.Option<ReviewState>, StateReadError>;
-  readonly write: (sourcePath: string, state: ReviewState) => Effect.Effect<void, StateWriteFailed>;
+  readonly write: (sourcePath: string, state: ReviewState) => Effect.Effect<void, StateWriteError>;
 }
 
 export class ReviewStateStore extends Context.Service<ReviewStateStore, ReviewStateStorePort>()(
@@ -61,21 +63,24 @@ export class ReviewStateStore extends Context.Service<ReviewStateStore, ReviewSt
   }
 }
 
-/** `walkthroughs/pr-96-loan-refactor.md` → `pr-96-loan-refactor.review.json`. */
-export function stateFileName(sourcePath: string): string {
-  return sidecarFileName(sourcePath, "review");
+/** `walkthroughs/pr-96.md` → `walkthroughs/pr-96.md.review.json`. */
+export function stateFilePath(sourcePath: string): string {
+  return sidecarFilePath(sourcePath, "review");
 }
 
-/** `walkthroughs/pr-96-loan-refactor.md` → `pr-96-loan-refactor.qa.json`. */
-export function qaFileName(sourcePath: string): string {
-  return sidecarFileName(sourcePath, "qa");
+/** `walkthroughs/pr-96.md` → `walkthroughs/pr-96.md.qa.json`. */
+export function qaFilePath(sourcePath: string): string {
+  return sidecarFilePath(sourcePath, "qa");
 }
 
-function sidecarFileName(sourcePath: string, kind: "review" | "qa"): string {
-  const name = sourcePath.slice(sourcePath.lastIndexOf("/") + 1);
-  const stem = name.endsWith(".md") ? name.slice(0, -".md".length) : name;
-  return `${stem}.${kind}.json`;
+function sidecarFilePath(sourcePath: string, kind: "review" | "qa"): string {
+  return `${sourcePath}.${kind}.json`;
 }
+
+export class StatePathRejected extends Schema.TaggedErrorClass<StatePathRejected>()(
+  "StatePathRejected",
+  { path: Schema.String },
+) {}
 
 export class StateReadFailed extends Schema.TaggedErrorClass<StateReadFailed>()("StateReadFailed", {
   path: Schema.String,
@@ -97,11 +102,12 @@ export class StateExcludeFailed extends Schema.TaggedErrorClass<StateExcludeFail
   { path: Schema.String, cause: Schema.Defect() },
 ) {}
 
-export type StateReadError = StateReadFailed | StateInvalid;
+export type StateReadError = StatePathRejected | StateReadFailed | StateInvalid;
+export type StateWriteError = StatePathRejected | StateWriteFailed;
 
 export interface QaStateStorePort {
   readonly read: (sourcePath: string) => Effect.Effect<Option.Option<QaState>, StateReadError>;
-  readonly write: (sourcePath: string, state: QaState) => Effect.Effect<void, StateWriteFailed>;
+  readonly write: (sourcePath: string, state: QaState) => Effect.Effect<void, StateWriteError>;
 }
 
 export class QaStateStore extends Context.Service<QaStateStore, QaStateStorePort>()(
@@ -137,7 +143,7 @@ function makeReviewStateStore(
 ): ReviewStateStorePort {
   return makeSidecarStore<ReviewState, ReviewParseError>(options, fs, path, {
     service: "ReviewStateStore",
-    fileName: stateFileName,
+    filePath: stateFilePath,
     parse: parseReviewJson,
     excludeWarning: "review state",
   });
@@ -150,7 +156,7 @@ function makeQaStateStore(
 ): QaStateStorePort {
   return makeSidecarStore<QaState, QaParseError>(options, fs, path, {
     service: "QaStateStore",
-    fileName: qaFileName,
+    filePath: qaFilePath,
     parse: parseQaJson,
     excludeWarning: "Q&A state",
   });
@@ -158,12 +164,12 @@ function makeQaStateStore(
 
 interface SidecarStore<State> {
   readonly read: (sourcePath: string) => Effect.Effect<Option.Option<State>, StateReadError>;
-  readonly write: (sourcePath: string, state: State) => Effect.Effect<void, StateWriteFailed>;
+  readonly write: (sourcePath: string, state: State) => Effect.Effect<void, StateWriteError>;
 }
 
 interface SidecarPolicy<State, ParseError> {
   readonly service: string;
-  readonly fileName: (sourcePath: string) => string;
+  readonly filePath: (sourcePath: string) => string;
   readonly parse: (raw: string) => Effect.Effect<State, ParseError>;
   readonly excludeWarning: string;
 }
@@ -175,11 +181,14 @@ function makeSidecarStore<State extends { readonly walkthrough: string }, ParseE
   policy: SidecarPolicy<State, ParseError>,
 ): SidecarStore<State> {
   const dir = path.join(options.repoRoot, STATE_DIR);
-  const fileFor = (sourcePath: string): string => path.join(dir, policy.fileName(sourcePath));
+  const fileFor = (sourcePath: string): Effect.Effect<string, StatePathRejected> =>
+    isContainedRepoRelativePath(sourcePath) && !path.isAbsolute(sourcePath)
+      ? Effect.succeed(path.join(dir, policy.filePath(sourcePath)))
+      : new StatePathRejected({ path: sourcePath });
 
   return {
     read: Effect.fn(`${policy.service}.read`)(function* (sourcePath) {
-      const file = fileFor(sourcePath);
+      const file = yield* fileFor(sourcePath);
       const raw = yield* fs.readFileString(file).pipe(
         Effect.map(Option.some),
         Effect.catch((cause) =>
@@ -193,19 +202,20 @@ function makeSidecarStore<State extends { readonly walkthrough: string }, ParseE
       const stored = yield* policy
         .parse(raw.value)
         .pipe(Effect.mapError((cause) => new StateInvalid({ path: file, cause })));
-      /* Two walkthroughs of the same filename share a sidecar name. The
-         serialized owner prevents one from inheriting the other's state. */
+      /* The serialized owner still guards against a moved or manually copied
+         sidecar being read under a different walkthrough path. */
       return stored.walkthrough === sourcePath ? Option.some(stored) : Option.none();
     }),
 
     write: Effect.fn(`${policy.service}.write`)(function* (sourcePath, state) {
-      const file = fileFor(sourcePath);
+      const file = yield* fileFor(sourcePath);
+      const fileDirectory = path.dirname(file);
       yield* fs
-        .makeDirectory(dir, { recursive: true })
+        .makeDirectory(fileDirectory, { recursive: true })
         .pipe(Effect.mapError((cause) => new StateWriteFailed({ path: file, cause })));
       yield* Effect.gen(function* () {
         const temporary = yield* fs.makeTempFileScoped({
-          directory: dir,
+          directory: fileDirectory,
           prefix: ".balade-sidecar-write-",
         });
         yield* fs.writeFileString(temporary, `${JSON.stringify(state, null, 2)}\n`);

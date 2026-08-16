@@ -41,6 +41,17 @@ export function fileName(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
 }
 
+/** Whether a git-spelled path is a non-empty lexical descendant of its repository. */
+export function isContainedRepoRelativePath(value: string): boolean {
+  const segments = value.split("/");
+  return !(
+    value === "" ||
+    value.startsWith("/") ||
+    value.includes("\\") ||
+    segments.some((segment) => segment === "" || segment === "." || segment === "..")
+  );
+}
+
 /** The platform adapter returns the operating system's final path spelling. */
 const real = (fs: FileSystem.FileSystem, path: string) =>
   fs.realPath(path).pipe(Effect.mapError((cause) => new PathResolutionFailed({ path, cause })));

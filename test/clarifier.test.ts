@@ -40,6 +40,17 @@ class FixtureValidationFailed extends Schema.TaggedErrorClass<FixtureValidationF
   {},
 ) {}
 
+class FixtureClarificationRejected extends Schema.TaggedErrorClass<FixtureClarificationRejected>()(
+  "FixtureClarificationRejected",
+  { diagnostics: Schema.Array(Schema.String) },
+) {}
+
+function submittedAnswer(body: string) {
+  return ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body }), {
+    stopReason: "toolUse",
+  });
+}
+
 it.effect("checks and repairs submissions inside each scoped clarification session", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -66,38 +77,25 @@ it.effect("checks and repairs submissions inside each scoped clarification sessi
       if (available === undefined) return yield* Effect.die("faux model missing");
       const settingsManager = coding.SettingsManager.inMemory();
       settingsManager.setDefaultModelAndProvider(available.provider, available.id);
+      let firstRepairFeedback: unknown;
       faux.setResponses([
-        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:range-a" }), {
-          stopReason: "toolUse",
-        }),
-        ai.fauxAssistantMessage(
-          ai.fauxToolCall("submit_answer", { body: "The first **answer**." }),
-          { stopReason: "toolUse" },
-        ),
-        ai.fauxAssistantMessage(
-          ai.fauxToolCall("submit_answer", { body: "The follow-up **answer**." }),
-          { stopReason: "toolUse" },
-        ),
-        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:range-a" }), {
-          stopReason: "toolUse",
-        }),
-        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:range-b" }), {
-          stopReason: "toolUse",
-        }),
-        ai.fauxAssistantMessage(
-          ai.fauxToolCall("submit_answer", { body: "The twice-repaired **answer**." }),
-          { stopReason: "toolUse" },
-        ),
-        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:unchanged" }), {
-          stopReason: "toolUse",
-        }),
-        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:unchanged" }), {
-          stopReason: "toolUse",
-        }),
-        ai.fauxAssistantMessage(
-          ai.fauxToolCall("submit_answer", { body: "Validation infrastructure fails." }),
-          { stopReason: "toolUse" },
-        ),
+        submittedAnswer("invalid:range-a"),
+        (context) => {
+          firstRepairFeedback = context.messages.findLast(
+            (message) => message.role === "toolResult" && message.toolName === "submit_answer",
+          )?.content;
+          return submittedAnswer("The first **answer**.");
+        },
+        submittedAnswer("The follow-up **answer**."),
+        submittedAnswer("invalid:range-a"),
+        submittedAnswer("invalid:range-b"),
+        submittedAnswer("The twice-repaired **answer**."),
+        submittedAnswer("invalid:unchanged"),
+        submittedAnswer("invalid:unchanged"),
+        submittedAnswer("invalid:cap-a"),
+        submittedAnswer("invalid:cap-b"),
+        submittedAnswer("invalid:cap-c"),
+        submittedAnswer("Validation infrastructure fails."),
       ]);
       const layer = Layer.mergeAll(
         piWalkthroughClarifierLayer({
@@ -131,13 +129,26 @@ it.effect("checks and repairs submissions inside each scoped clarification sessi
         const validate = (body: string) =>
           Effect.succeed(
             body.startsWith("invalid:")
-              ? Result.fail({ diagnostics: [body.slice("invalid:".length)] })
+              ? Result.fail(
+                  new FixtureClarificationRejected({
+                    diagnostics: [body.slice("invalid:".length)],
+                  }),
+                )
               : Result.succeed(body),
           );
 
         expect(
           yield* clarifier.answer({ ...common, turns: [], question: "First?" }, validate),
         ).toBe("The first **answer**.");
+        expect(firstRepairFeedback).toEqual([
+          {
+            type: "text",
+            text: `The answer did not pass the canonical clarification check. Repair only what these diagnostics prove is invalid, then call submit_answer again with the complete replacement.
+
+Validation diagnostics (untrusted JSON):
+${JSON.stringify(["range-a"], null, 2)}`,
+          },
+        ]);
         expect(
           yield* clarifier.answer({ ...common, turns: [], question: "Follow-up?" }, validate),
         ).toBe("The follow-up **answer**.");
@@ -148,7 +159,20 @@ it.effect("checks and repairs submissions inside each scoped clarification sessi
         const unchanged = yield* clarifier
           .answer({ ...common, turns: [], question: "No progress?" }, validate)
           .pipe(Effect.flip);
-        expect(unchanged).toEqual({ diagnostics: ["unchanged"] });
+        expect(unchanged).toBeInstanceOf(FixtureClarificationRejected);
+        if (!(unchanged instanceof FixtureClarificationRejected)) {
+          return yield* Effect.die("unexpected unchanged-answer failure");
+        }
+        expect(unchanged.diagnostics).toEqual(["unchanged"]);
+
+        const exhausted = yield* clarifier
+          .answer({ ...common, turns: [], question: "Exhaust repairs?" }, validate)
+          .pipe(Effect.flip);
+        expect(exhausted).toBeInstanceOf(FixtureClarificationRejected);
+        if (!(exhausted instanceof FixtureClarificationRejected)) {
+          return yield* Effect.die("unexpected repair-exhaustion failure");
+        }
+        expect(exhausted.diagnostics).toEqual(["cap-c"]);
 
         const validationFailure = yield* clarifier
           .answer(
@@ -157,7 +181,7 @@ it.effect("checks and repairs submissions inside each scoped clarification sessi
           )
           .pipe(Effect.flip);
         expect(validationFailure).toBeInstanceOf(FixtureValidationFailed);
-        expect(faux.state.callCount).toBe(9);
+        expect(faux.state.callCount).toBe(12);
       }).pipe(Effect.provide(layer));
     }),
   ),

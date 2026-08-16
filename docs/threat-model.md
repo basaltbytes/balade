@@ -324,10 +324,12 @@ they describe.
 - Frontmatter key line lookup uses literal string operations. An unknown key
   cannot become regular-expression source or escape the diagnostic channel
   (`src/walkthrough/frontmatter.ts`).
-- `?path=` never reaches the filesystem: it is allowlist membership against the
-  served set (`src/server/api.ts:124-137`). State filenames keep only the
-  basename (`src/state.ts:64-68`). Two independent barriers; **no arbitrary file
-  write exists.**
+- `?path=` never reaches the filesystem directly: it is allowlist membership
+  against the served set (`src/server/api.ts`). The state store independently
+  rejects empty, absolute, backslash-containing and dot-segment source paths
+  before mirroring the complete repository-relative path below `.balade/`
+  (`src/state.ts`, `src/contract/paths.ts`). Two independent barriers; **no
+  arbitrary file write exists.**
 - The `.balade/` line appended to the clone's `info/exclude` is a module
   constant (`src/state.ts:40`) — **no injection into that file is possible.**
   Its destination directory is `git rev-parse --git-common-dir` output for the

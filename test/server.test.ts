@@ -6,10 +6,10 @@
 
 import { Effect, Layer, Option, Schema } from "effect";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { LoadResult } from "../src/walkthrough/pipeline.js";
 import type { IndexPayload, Payload, ReviewState } from "../src/contract/types.js";
@@ -24,7 +24,7 @@ import { reviewSessionStartedText, startReviewSession } from "../src/server/revi
 import { findAppBundle, serve } from "../src/server/http.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { gitCommonDir } from "../src/shell.js";
-import { ReviewStateStore, stateFileName } from "../src/state.js";
+import { qaFilePath, ReviewStateStore, stateFilePath } from "../src/state.js";
 import { provideLive } from "./support/effect.js";
 import { addSubmodule, addWorktree, createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
@@ -583,7 +583,7 @@ describe("the index", () => {
   it.effect("keeps an unreadable index state in the API error channel", () =>
     Effect.gen(function* () {
       writeFileSync(
-        join(repo.dir, ".balade", stateFileName("walkthroughs/second.md")),
+        join(repo.dir, ".balade", stateFilePath("walkthroughs/second.md")),
         "{ not json",
         "utf8",
       );
@@ -636,8 +636,14 @@ describe("review-state files", () => {
       yield* store.write("walkthroughs/valid.md", state);
       const stored = yield* store.read("walkthroughs/valid.md");
       expect(Option.isSome(stored) ? stored.value : undefined).toEqual(state);
-      expect(stateFileName("walkthroughs/pr-96-loan-refactor.md")).toBe(
-        "pr-96-loan-refactor.review.json",
+      expect(stateFilePath("walkthroughs/pr-96-loan-refactor.md")).toBe(
+        "walkthroughs/pr-96-loan-refactor.md.review.json",
+      );
+      expect(qaFilePath("walkthroughs/pr-96-loan-refactor.md")).toBe(
+        "walkthroughs/pr-96-loan-refactor.md.qa.json",
+      );
+      expect(stateFilePath("walkthroughs/review")).not.toBe(
+        stateFilePath("walkthroughs/review.md"),
       );
 
       const exclude = readFileSync(join(repo.dir, ".git/info/exclude"), "utf8");
@@ -650,26 +656,59 @@ describe("review-state files", () => {
     }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
+  it.effect("keeps same-basename walkthrough sidecars independent", () =>
+    Effect.gen(function* () {
+      const store = yield* ReviewStateStore;
+      const first = { ...state, walkthrough: "walkthroughs/one/review.md" };
+      const second = { ...state, walkthrough: "docs/two/review.md" };
+
+      yield* store.write(first.walkthrough, first);
+      yield* store.write(second.walkthrough, second);
+
+      const storedFirst = yield* store.read(first.walkthrough);
+      const storedSecond = yield* store.read(second.walkthrough);
+      expect(Option.isSome(storedFirst) ? storedFirst.value : undefined).toEqual(first);
+      expect(Option.isSome(storedSecond) ? storedSecond.value : undefined).toEqual(second);
+      expect(stateFilePath(first.walkthrough)).not.toBe(stateFilePath(second.walkthrough));
+      expect(qaFilePath(first.walkthrough)).not.toBe(qaFilePath(second.walkthrough));
+    }).pipe(Effect.provide(storeLayer()), provideLive),
+  );
+
+  it.effect("rejects a sidecar path outside the repository state directory", () =>
+    Effect.gen(function* () {
+      const store = yield* ReviewStateStore;
+      const sourcePath = "../escaped.md";
+      const rejectedRead = yield* store.read(sourcePath).pipe(Effect.flip);
+      const rejectedWrite = yield* store
+        .write(sourcePath, { ...state, walkthrough: sourcePath })
+        .pipe(Effect.flip);
+
+      expect(rejectedRead).toMatchObject({ _tag: "StatePathRejected", path: sourcePath });
+      expect(rejectedWrite).toMatchObject({ _tag: "StatePathRejected", path: sourcePath });
+      expect(existsSync(join(repo.dir, "escaped.md.review.json"))).toBe(false);
+    }).pipe(Effect.provide(storeLayer()), provideLive),
+  );
+
   it.effect("returns a typed error for corrupt JSON", () =>
     Effect.gen(function* () {
       const store = yield* ReviewStateStore;
-      writeFileSync(
-        join(repo.dir, ".balade", stateFileName("walkthroughs/broken.md")),
-        "{ not json",
-        "utf8",
-      );
+      const file = join(repo.dir, ".balade", stateFilePath("walkthroughs/broken.md"));
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, "{ not json", "utf8");
 
       const error = yield* Effect.flip(store.read("walkthroughs/broken.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
-      expect(error.path).toContain("broken.review.json");
+      expect(error.path).toContain("broken.md.review.json");
     }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
   it.effect("returns a typed error for schema-invalid state", () =>
     Effect.gen(function* () {
       const store = yield* ReviewStateStore;
+      const file = join(repo.dir, ".balade", stateFilePath("walkthroughs/invalid.md"));
+      mkdirSync(dirname(file), { recursive: true });
       writeFileSync(
-        join(repo.dir, ".balade", stateFileName("walkthroughs/invalid.md")),
+        file,
         JSON.stringify({
           ...state,
           walkthrough: "walkthroughs/invalid.md",
@@ -680,7 +719,7 @@ describe("review-state files", () => {
 
       const error = yield* Effect.flip(store.read("walkthroughs/invalid.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
-      expect(error.path).toContain("invalid.review.json");
+      expect(error.path).toContain("invalid.md.review.json");
     }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 

@@ -228,13 +228,16 @@ file disappears from the browser.
 Live review marks are stored under `.balade/` at the repository root. On the
 first write, balade adds that directory to `.git/info/exclude`. Marks are local
 to the clone and reviewer. Unchanged sections retain their marks after a
-re-stamp; changed sections reset.
+re-stamp; changed sections reset. The directory mirrors each walkthrough's full
+repository-relative path, so `.agents/walkthroughs/pr-133.md` stores marks in
+`.balade/.agents/walkthroughs/pr-133.md.review.json` and cannot collide with a
+same-named walkthrough elsewhere.
 
-Live clarification threads are stored beside the marks as
-`.balade/<walkthrough>.qa.json`. They belong to one walkthrough commit and are
-discarded when its PR or stamp changes. Answers are compiled through the same
-validated block format as the walkthrough, but never modify the walkthrough
-file or appear in a static export.
+Live clarification threads use the matching `.qa.json` sidecar beside the
+marks. They belong to one walkthrough commit and are discarded when its PR or
+stamp changes. Answers are compiled through the same validated block format as
+the walkthrough, but never modify the walkthrough file or appear in a static
+export.
 
 Static exports store review state in browser `localStorage`. An export contains:
 

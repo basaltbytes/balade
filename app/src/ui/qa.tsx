@@ -123,17 +123,19 @@ function latestQuestion(thread: QaThread | undefined): string {
 export function QaPanel() {
   const qa = useQa();
   const strings = useStrings();
-  const sectionId = qa.activeSectionId;
-  const anchoredThreads = sectionId === null ? [] : qa.threadsFor(sectionId);
+  const panel = qa.panel;
+  useAnswerLanguages(qa.state.threads);
+  if (panel._tag === "Closed") return null;
+
+  const sectionId = panel._tag === "Composer" ? panel.anchor.sectionId : panel.sectionId;
+  const activeThreadId = panel._tag === "Thread" ? panel.threadId : null;
+  const anchoredThreads = qa.threadsFor(sectionId);
   const threads =
-    qa.activeThreadId === null
+    activeThreadId === null
       ? anchoredThreads
       : [...anchoredThreads].sort(
-          (left, right) =>
-            Number(right.id === qa.activeThreadId) - Number(left.id === qa.activeThreadId),
+          (left, right) => Number(right.id === activeThreadId) - Number(left.id === activeThreadId),
         );
-  useAnswerLanguages(qa.state.threads);
-  if (sectionId === null) return null;
 
   return (
     <div className="fixed inset-0 z-50" data-qa-panel>
@@ -165,9 +167,9 @@ export function QaPanel() {
               {strings.qa.unavailable}
             </p>
           )}
-          {qa.composer !== null && <QuestionForm anchor={qa.composer} />}
+          {panel._tag === "Composer" && <QuestionForm anchor={panel.anchor} />}
           {threads.map((thread) => (
-            <Thread key={thread.id} thread={thread} active={thread.id === qa.activeThreadId} />
+            <Thread key={thread.id} thread={thread} active={thread.id === activeThreadId} />
           ))}
         </div>
       </aside>
@@ -264,7 +266,6 @@ function FollowUp({ thread }: { thread: Exclude<QaThread, { status: "pending" }>
     const value = question.trim();
     if (value === "") return;
     qa.ask({ kind: "follow-up", threadId: thread.id, question: value });
-    setQuestion("");
   };
   return (
     <form onSubmit={submit} className="mt-5 border-t border-border pt-4">

@@ -20,9 +20,7 @@ interface QaApi {
   readonly state: QaState;
   readonly submitting: boolean;
   readonly failed: boolean;
-  readonly activeSectionId: string | null;
-  readonly activeThreadId: QaThread["id"] | null;
-  readonly composer: QaAnchor | null;
+  readonly panel: QaPanelState;
   readonly threadsFor: (sectionId: string) => readonly QaThread[];
   readonly openSection: (sectionId: string) => void;
   readonly openThread: (sectionId: string, threadId: QaThread["id"]) => void;
@@ -30,6 +28,18 @@ interface QaApi {
   readonly close: () => void;
   readonly ask: (request: QaAskRequest) => void;
 }
+
+type QaPanelState =
+  | { readonly _tag: "Closed" }
+  | { readonly _tag: "Section"; readonly sectionId: string }
+  | {
+      readonly _tag: "Thread";
+      readonly sectionId: string;
+      readonly threadId: QaThread["id"];
+    }
+  | { readonly _tag: "Composer"; readonly anchor: QaAnchor };
+
+const CLOSED_PANEL: QaPanelState = { _tag: "Closed" };
 
 const QaContext = createContext<QaApi | null>(null);
 
@@ -55,18 +65,14 @@ export function QaProvider({
   const [state, setState] = useState<QaState>(() => emptyState(payload));
   const [failed, setFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-  const [activeThreadId, setActiveThreadId] = useState<QaThread["id"] | null>(null);
-  const [composer, setComposer] = useState<QaAnchor | null>(null);
+  const [panel, setPanel] = useState<QaPanelState>(CLOSED_PANEL);
   const lifecycle = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setState(emptyState(payload));
     setFailed(false);
     setSubmitting(false);
-    setActiveSectionId(null);
-    setActiveThreadId(null);
-    setComposer(null);
+    setPanel(CLOSED_PANEL);
     lifecycle.current = null;
     if (!served) return;
 
@@ -120,7 +126,13 @@ export function QaProvider({
           setSubmitting(false);
           if (outcome.ok) {
             setState(outcome.next);
-            setComposer(null);
+            setPanel((current) =>
+              request.kind === "new" &&
+              current._tag === "Composer" &&
+              current.anchor === request.anchor
+                ? { _tag: "Section", sectionId: request.anchor.sectionId }
+                : current,
+            );
           } else {
             setFailed(true);
           }
@@ -137,34 +149,16 @@ export function QaProvider({
       state,
       submitting,
       failed,
-      activeSectionId,
-      activeThreadId,
-      composer,
+      panel,
       threadsFor: (sectionId) =>
         state.threads.filter((thread) => thread.anchor.sectionId === sectionId),
-      openSection: (sectionId) => {
-        setActiveSectionId(sectionId);
-        setActiveThreadId(null);
-        setComposer(null);
-      },
-      openThread: (sectionId, threadId) => {
-        setActiveSectionId(sectionId);
-        setActiveThreadId(threadId);
-        setComposer(null);
-      },
-      openComposer: (anchor) => {
-        setActiveSectionId(anchor.sectionId);
-        setActiveThreadId(null);
-        setComposer(anchor);
-      },
-      close: () => {
-        setActiveSectionId(null);
-        setActiveThreadId(null);
-        setComposer(null);
-      },
+      openSection: (sectionId) => setPanel({ _tag: "Section", sectionId }),
+      openThread: (sectionId, threadId) => setPanel({ _tag: "Thread", sectionId, threadId }),
+      openComposer: (anchor) => setPanel({ _tag: "Composer", anchor }),
+      close: () => setPanel(CLOSED_PANEL),
       ask,
     }),
-    [activeSectionId, activeThreadId, ask, composer, failed, served, state, submitting],
+    [ask, failed, panel, served, state, submitting],
   );
 
   return <QaContext.Provider value={value}>{children}</QaContext.Provider>;
