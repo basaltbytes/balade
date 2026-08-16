@@ -19,7 +19,7 @@ import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
 import { authoringSystemPrompt } from "../src/pi/authoring.js";
 import { inspectionBudget } from "../src/authoring/package.js";
 import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
-import { slugifyTitle } from "../src/commands/generate/output.js";
+import { slugifyTitle, type ExistingWalkthrough } from "../src/commands/generate/output.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -812,8 +812,7 @@ describe("generation", () => {
           source,
           model,
           directory: "walkthroughs",
-          collisionPolicy: "exclusive",
-          onExistingWalkthroughs: () => {},
+          supersede: [],
           headInstructionPolicy: "omit-changed",
           progressMode: "compact",
           progress: () => {},
@@ -863,8 +862,7 @@ describe("generation", () => {
           source,
           model,
           directory: "walkthroughs",
-          collisionPolicy: "exclusive",
-          onExistingWalkthroughs: () => {},
+          supersede: [],
           headInstructionPolicy: "trust-changed",
           progressMode: "compact",
           progress: (event) => {
@@ -915,8 +913,7 @@ describe("generation", () => {
           source: prepared(repo.dir, repo.pin),
           model,
           directory: "drafts",
-          collisionPolicy: "exclusive",
-          onExistingWalkthroughs: () => {},
+          supersede: [],
           headInstructionPolicy: "omit-changed",
           progressMode: "compact",
           progress: () => {},
@@ -949,8 +946,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "linked/walkthroughs",
-            collisionPolicy: "exclusive",
-            onExistingWalkthroughs: () => {},
+            supersede: [],
             headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
@@ -961,8 +957,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: ".git/walkthroughs",
-            collisionPolicy: "exclusive",
-            onExistingWalkthroughs: () => {},
+            supersede: [],
             headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: () => {},
@@ -977,62 +972,57 @@ describe("generation", () => {
     }),
   );
 
-  it.effect("retains an unforced collision and replaces only that filename with force", () =>
+  it.effect("supersedes the resolved files after the paid turn and still checks the draft", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
-      const existing = "walkthroughs/pr-42-live-planning-pool.md";
-      repo.write(existing, "keep me\n");
-      let existingBeforeAuthoring: readonly string[] = [];
-      let preflightSeenByModel = false;
-      harness.faux.setResponses([
-        () => {
-          preflightSeenByModel = existingBeforeAuthoring.includes(existing);
-          return submitted(validBody);
+      /* The model's title re-lands on the first file's slug; the second is a re-rolled slug. */
+      const target = "walkthroughs/pr-42-live-planning-pool.md";
+      const stale = "walkthroughs/pr-42-earlier-title.md";
+      repo.write(stale, "committed stale walkthrough\n");
+      repo.commit("docs: stale walkthrough");
+      repo.write(target, "hand-edited, uncommitted\n");
+      const supersede: ExistingWalkthrough[] = [
+        {
+          file: join(repo.dir, target),
+          relativeFile: target,
+          stamp: { _tag: "Unstamped" },
         },
-        submitted(validBody),
-      ]);
-      const { error, originalAfterCollision, forced } = yield* Effect.gen(function* () {
+        {
+          file: join(repo.dir, stale),
+          relativeFile: stale,
+          stamp: { _tag: "Stamped", pin: "older-head", lang: "en" },
+        },
+      ];
+      harness.faux.setResponses([submitted(validBody)]);
+
+      const result = yield* Effect.gen(function* () {
         const model = yield* fauxModel();
-        const error = yield* Effect.flip(
-          runGeneration({
-            source: prepared(repo.dir, repo.pin),
-            model,
-            directory: "walkthroughs",
-            collisionPolicy: "exclusive",
-            onExistingWalkthroughs: (files) => {
-              existingBeforeAuthoring = files;
-            },
-            headInstructionPolicy: "omit-changed",
-            progressMode: "compact",
-            progress: () => {},
-          }),
-        );
-        const originalAfterCollision = readFileSync(join(repo.dir, existing), "utf8");
-        const forced = yield* runGeneration({
+        return yield* runGeneration({
           source: prepared(repo.dir, repo.pin),
           model,
           directory: "walkthroughs",
-          collisionPolicy: "replace",
-          onExistingWalkthroughs: () => {},
+          supersede,
           headInstructionPolicy: "omit-changed",
           progressMode: "compact",
           progress: () => {},
         });
-        return { error, originalAfterCollision, forced };
       }).pipe(Effect.provide(harness.layer));
 
-      expect(error._tag).toBe("OutputAlreadyExists");
-      if (error._tag !== "OutputAlreadyExists") return;
-      expect(preflightSeenByModel).toBe(true);
-      expect(error.existing._tag).toBe("ExistingStampInvalid");
-      expect(originalAfterCollision).toBe("keep me\n");
-      expect(readFileSync(error.retainedFile, "utf8")).toContain("title: Live planning pool");
-      expect(forced._tag).toBe("Generated");
-      expect(readFileSync(join(repo.dir, existing), "utf8")).toContain("title: Live planning pool");
-      expect(forced.siblings.some((file) => file.endsWith(basename(error.retainedFile)))).toBe(
-        true,
+      /* The write no longer fails on a collision, so the check loop always runs. */
+      expect(result._tag).toBe("Generated");
+      expect(basename(result.file)).toBe("pr-42-live-planning-pool.md");
+      expect(readFileSync(result.file, "utf8")).toContain("title: Live planning pool");
+      expect(existsSync(join(repo.dir, stale))).toBe(false);
+      expect(readFileSync(join(repo.dir, `${target}.superseded`), "utf8")).toBe(
+        "hand-edited, uncommitted\n",
       );
+      expect(existsSync(join(repo.dir, `${stale}.superseded`))).toBe(false);
+      expect(result.superseded).toEqual([
+        { file: target, retainedAt: `${target}.superseded` },
+        { file: stale },
+      ]);
+      expect(result.siblings).toEqual([]);
     }),
   );
 
@@ -1055,8 +1045,7 @@ describe("generation", () => {
             source: prepared(repo.dir, repo.pin),
             model,
             directory: "drafts",
-            collisionPolicy: "exclusive",
-            onExistingWalkthroughs: () => {},
+            supersede: [],
             headInstructionPolicy: "omit-changed",
             progressMode: "compact",
             progress: (event) => {

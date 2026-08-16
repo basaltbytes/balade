@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { Context, Effect, Option, Schema, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
+import { langOfMeta } from "../../contract/schema.js";
 import type { Lang } from "../../contract/types.js";
 import { parsePrTarget } from "../../git/pr.js";
 import { getPreset, presetNames } from "../../preset/registry.js";
@@ -38,6 +39,13 @@ import {
   type LoginSecretPrompt,
 } from "../../pi/author.js";
 import { generateErrorMessage, runGeneration, type GenerateError } from "./pipeline.js";
+import {
+  inspectExistingWalkthroughs,
+  planSupersession,
+  type ExistingWalkthrough,
+  type RefreshingWalkthrough,
+  type SupersededWalkthrough,
+} from "./output.js";
 import {
   matchingModels,
   modelSelectionFromFlags,
@@ -106,7 +114,9 @@ const budget = Flag.choice("budget", ["low", "medium", "high"]).pipe(
 );
 
 const force = Flag.boolean("force").pipe(
-  Flag.withDescription("Replace an existing walkthrough with the same filename"),
+  Flag.withDescription(
+    "Replace an existing same-head walkthrough without confirmation (non-interactive runs)",
+  ),
 );
 
 const verbose = Flag.boolean("verbose").pipe(
@@ -181,6 +191,33 @@ export const generateCommand = Command.make(
         writeStdout(warningText(notice, stdoutTheme));
       }
 
+      /* The overwrite decision resolves here, before any paid turn. */
+      const existing = yield* inspectExistingWalkthroughs({
+        root: source.root,
+        directory: config.directory,
+        pullNumber: source.pull.number,
+      });
+      const plan = planSupersession(
+        existing,
+        source.pin,
+        langOfMeta(Option.getOrUndefined(config.lang)),
+      );
+      if (plan.undecided.length > 0 && !config.force) {
+        if (process.stdin.isTTY === true) {
+          const replace = yield* reportWaitingDuring(
+            Prompt.run(Prompt.confirm({ message: generationReplaceQuestion(plan.undecided) })),
+          );
+          if (!replace) {
+            stopMessage("Generation cancelled.");
+            return;
+          }
+        } else {
+          stopMessage(generationBlockedMessage(plan.undecided));
+          return;
+        }
+      }
+      writeStdout(generationRefreshText(plan.refreshing, source.pin, stdoutTheme));
+
       const selected = yield* selectAuthorModel(selection);
       const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
       const progress = makeGenerationProgress(writeStdout, progressMode, stdoutTheme);
@@ -196,18 +233,14 @@ export const generateCommand = Command.make(
         ...generationFacets,
         budget: config.budget,
         directory: config.directory,
-        collisionPolicy: config.force ? "replace" : "exclusive",
-        onExistingWalkthroughs: (files) => {
-          if (!config.force) {
-            writeStdout(generationPreflightText(source.pull.number, files, stdoutTheme));
-          }
-        },
+        supersede: [...plan.refreshing, ...plan.undecided],
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
         progressMode,
         progress,
       });
       /* Authoring is over on both branches; the serve loop below is the reviewer's time. */
       yield* reportPresence("settled");
+      writeStdout(generationSupersededText(result.superseded, result.report.file, stdoutTheme));
       if (result.siblings.length > 0) {
         writeStdout(generationSiblingText(source.pull.number, result.siblings, stdoutTheme));
       }
@@ -549,20 +582,68 @@ export function generationSummaryText(
   );
 }
 
-export function generationPreflightText(
-  pullNumber: number,
-  files: readonly string[],
+/** Why one existing file needs an explicit decision before it is replaced. */
+const undecidedState = (candidate: ExistingWalkthrough): string =>
+  candidate.stamp._tag === "Stamped"
+    ? "already stamped at the current head"
+    : "missing a readable walkthrough stamp";
+
+const undecidedFiles = (undecided: readonly ExistingWalkthrough[]): string =>
+  undecided.map((candidate) => sanitizeTerminalText(candidate.relativeFile)).join(", ");
+
+/** The TTY confirmation for a same-head or unreadably stamped walkthrough. */
+export function generationReplaceQuestion(undecided: readonly ExistingWalkthrough[]): string {
+  const first = undecided[0];
+  const state = undecided.length === 1 && first !== undefined ? ` (${undecidedState(first)})` : "";
+  return `Replace ${undecidedFiles(undecided)}${state}? Pass --dir instead to keep both.`;
+}
+
+/** The non-interactive refusal, at t=0 where it costs nothing. */
+export function generationBlockedMessage(undecided: readonly ExistingWalkthrough[]): string {
+  const first = undecided[0];
+  const state =
+    undecided.length === 1 && first !== undefined
+      ? `is ${undecidedState(first)}. Re-run with --force to replace it`
+      : "already exist for this pull request. Re-run with --force to replace them";
+  return `${undecidedFiles(undecided)} ${state}, or use --dir to redirect the output.`;
+}
+
+/** Refreshing a stale-stamped walkthrough is unambiguous intent: announce, never ask. */
+export function generationRefreshText(
+  refreshing: readonly RefreshingWalkthrough[],
+  currentHead: string,
   theme: Theme = plainTheme,
 ): string {
-  return warningText(
-    {
-      code: "walkthrough-exists",
-      message: `PR ${pullNumber} already has ${listFiles(files)}; this run may choose the same filename.`,
-      hint: "Pass --force to replace a matching filename, or --dir to redirect the output.",
-    },
-    theme,
-  );
+  return refreshing
+    .map(
+      (candidate) =>
+        /* The pins are schema-validated hex; only the filename needs sanitizing. */
+        `Refreshing ${theme.emphasis(sanitizeTerminalText(candidate.relativeFile))} (${shortCommit(candidate.stamp.pin)} → ${shortCommit(currentHead)}).\n`,
+    )
+    .join("");
 }
+
+/** One line per superseded file; only uncommitted content leaves a copy behind. */
+export function generationSupersededText(
+  superseded: readonly SupersededWalkthrough[],
+  writtenFile: string,
+  theme: Theme = plainTheme,
+): string {
+  return superseded
+    .flatMap((entry) => {
+      if (entry.retainedAt !== undefined) {
+        return [
+          `Superseded ${sanitizeTerminalText(entry.file)}; its uncommitted content is kept at ${theme.emphasis(sanitizeTerminalText(entry.retainedAt))}.\n`,
+        ];
+      }
+      return entry.file === writtenFile
+        ? []
+        : [`Superseded ${sanitizeTerminalText(entry.file)}.\n`];
+    })
+    .join("");
+}
+
+const shortCommit = (commit: string): string => commit.slice(0, 7);
 
 export function generationSiblingText(
   pullNumber: number,
@@ -578,9 +659,6 @@ export function generationSiblingText(
     theme,
   );
 }
-
-const listFiles = (files: readonly string[]): string =>
-  `${files.length === 1 ? "a walkthrough" : "walkthroughs"}: ${files.join(", ")}`;
 
 type GenerationCliError =
   | GenerateError

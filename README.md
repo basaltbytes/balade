@@ -131,12 +131,15 @@ paging and adjacent files, while `low` allows one read of each kind per
 changed file — a constrained spend that still yields a walkthrough. `high`
 removes the caps entirely.
 
-The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Without
-`--force`, balade warns before the model run when that directory already contains
-a walkthrough for the same PR. It won't overwrite a matching filename; a
-collision keeps the completed new draft under a unique sibling name and reports
-both paths. `--force` atomically replaces only the matching filename, leaving
-other walkthroughs for that PR untouched.
+The default output is `.agents/walkthroughs/pr-<number>-<title>.md`. Balade
+decides what happens to an existing walkthrough for the same PR and language
+before the model runs. One stamped at an older head is refreshed: the run
+replaces it, even when the new title picks a different filename. One stamped at
+the current head prompts before replacing; scripts and CI stop instead, and
+`--force` skips the question. If a replaced file had uncommitted changes, a
+copy is kept beside it as `<file>.superseded` — committed content needs no
+copy, git already has it. Walkthroughs in another language are left untouched,
+and `--dir` writes elsewhere to keep both.
 
 Balade validates the draft and allows up to two model repair turns. If a turn
 leaves the same diagnostic codes on the same lines, balade stops early. If
