@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import type { QaState } from "../contract";
 import { fetchLayer, type BrowserFetch, type FetchLike } from "./browser";
-import { askQa, fetchQa } from "./qa";
+import { askQa, fetchQa, fetchQaAgentStatus } from "./qa";
 
 const state: QaState = {
   version: 1,
@@ -26,10 +26,13 @@ describe("the browser clarification API", () => {
         method: init?.method ?? "GET",
         body: String(init?.body ?? ""),
       });
-      return Promise.resolve(Response.json(state));
+      return Promise.resolve(
+        Response.json(url === "/api/agent" ? { status: "setup-required" } : state),
+      );
     };
     return withFetch(
       Effect.gen(function* () {
+        expect(yield* fetchQaAgentStatus()).toEqual({ status: "setup-required" });
         expect(yield* fetchQa(state.walkthrough)).toEqual(state);
         expect(
           yield* askQa(state.walkthrough, {
@@ -39,6 +42,11 @@ describe("the browser clarification API", () => {
           }),
         ).toEqual(state);
         expect(calls).toEqual([
+          {
+            url: "/api/agent",
+            method: "GET",
+            body: "",
+          },
           {
             url: "/api/qa?path=walkthroughs%2Fone.md",
             method: "GET",
@@ -65,6 +73,11 @@ describe("the browser clarification API", () => {
         withFetch(fetchQa(state.walkthrough), () => Promise.resolve(Response.json({ version: 1 }))),
       );
       expect(malformed._tag).toBe("QaResponseInvalid");
+
+      const malformedStatus = yield* Effect.flip(
+        withFetch(fetchQaAgentStatus(), () => Promise.resolve(Response.json({ status: "maybe" }))),
+      );
+      expect(malformedStatus._tag).toBe("QaResponseInvalid");
 
       const refused = yield* Effect.flip(
         withFetch(fetchQa(state.walkthrough), () =>

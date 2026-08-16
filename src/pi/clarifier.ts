@@ -12,7 +12,6 @@ import { baladeSnapshotCacheDirectory } from "../state.js";
 import {
   AuthorModel,
   AuthorModelId,
-  AuthorModelPreference,
   AuthorProviderId,
   type AuthoringPreset,
   type AuthorSearchConfigurationFailed,
@@ -59,16 +58,6 @@ export class ClarifierRuntimeLoadFailed extends Schema.TaggedErrorClass<Clarifie
   { cause: Schema.Defect() },
 ) {}
 
-export class ClarifierPreferenceReadFailed extends Schema.TaggedErrorClass<ClarifierPreferenceReadFailed>()(
-  "ClarifierPreferenceReadFailed",
-  { cause: Schema.Defect() },
-) {}
-
-export class ClarifierModelNotConfigured extends Schema.TaggedErrorClass<ClarifierModelNotConfigured>()(
-  "ClarifierModelNotConfigured",
-  {},
-) {}
-
 export class ClarifierModelUnavailable extends Schema.TaggedErrorClass<ClarifierModelUnavailable>()(
   "ClarifierModelUnavailable",
   { provider: AuthorProviderId, model: AuthorModelId },
@@ -89,12 +78,6 @@ export class ClarifierAnswerMalformed extends Schema.TaggedErrorClass<ClarifierA
   { detail: Schema.String },
 ) {}
 
-export type ClarifierSetupError =
-  | ClarifierRuntimeLoadFailed
-  | ClarifierPreferenceReadFailed
-  | ClarifierModelNotConfigured
-  | ClarifierModelUnavailable;
-
 export type ClarifierRunError =
   | ClarifierRuntimeLoadFailed
   | ClarifierModelUnavailable
@@ -107,7 +90,6 @@ export type ClarifierRunError =
   | SnapshotReadFailed;
 
 export interface WalkthroughClarifierPort {
-  readonly selectedModel: Effect.Effect<AuthorModel, ClarifierSetupError>;
   readonly answer: <Accepted, Rejected extends ClarificationRejection, ValidationError>(
     request: ClarificationRequest,
     validate: ClarificationValidator<Accepted, Rejected, ValidationError>,
@@ -134,11 +116,6 @@ type ClarificationSubmission<Accepted, Rejected, ValidationError> =
 
 const MAX_CLARIFICATION_REPAIR_ATTEMPTS = 2;
 
-const decodeModel = Schema.decodeUnknownEffect(AuthorModel, { onExcessProperty: "error" });
-const decodePreference = Schema.decodeUnknownEffect(AuthorModelPreference, {
-  onExcessProperty: "error",
-});
-
 export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptions = {}) {
   return Layer.effect(
     WalkthroughClarifier,
@@ -153,44 +130,6 @@ export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptio
       let loaded: Promise<PiAdapterDependencies> | undefined;
       const load = options.load ?? loadLiveDependencies;
       const dependencies = () => (loaded ??= load());
-
-      const selectedModel = Effect.gen(function* () {
-        const pi = yield* Effect.tryPromise({
-          try: dependencies,
-          catch: (cause) => new ClarifierRuntimeLoadFailed({ cause }),
-        });
-        const rawPreference = yield* Effect.tryPromise({
-          try: async () => {
-            await pi.settingsManager.flush();
-            const failure = pi.settingsManager.drainErrors()[0]?.error;
-            if (failure !== undefined) throw failure;
-            const providerId = pi.settingsManager.getDefaultProvider();
-            const modelId = pi.settingsManager.getDefaultModel();
-            return providerId === undefined || modelId === undefined
-              ? undefined
-              : { providerId, modelId };
-          },
-          catch: (cause) => new ClarifierPreferenceReadFailed({ cause }),
-        });
-        if (rawPreference === undefined) return yield* new ClarifierModelNotConfigured();
-        const preference = yield* decodePreference(rawPreference).pipe(
-          Effect.mapError((cause) => new ClarifierPreferenceReadFailed({ cause })),
-        );
-        const model = pi.modelRuntime.getModel(preference.providerId, preference.modelId);
-        if (model === undefined) {
-          return yield* new ClarifierModelUnavailable({
-            provider: preference.providerId,
-            model: preference.modelId,
-          });
-        }
-        const provider = pi.modelRuntime.getProvider(model.provider);
-        return yield* decodeModel({
-          providerId: model.provider,
-          providerName: provider?.name ?? model.provider,
-          modelId: model.id,
-          modelName: model.name,
-        }).pipe(Effect.mapError((cause) => new ClarifierPreferenceReadFailed({ cause })));
-      }).pipe(Effect.withSpan("WalkthroughClarifier.selectedModel"));
 
       const answer = Effect.fn("WalkthroughClarifier.answer")(function* <
         Accepted,
@@ -270,7 +209,7 @@ export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptio
         );
       });
 
-      return { selectedModel, answer } satisfies WalkthroughClarifierPort;
+      return { answer } satisfies WalkthroughClarifierPort;
     }),
   );
 }

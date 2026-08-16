@@ -326,6 +326,7 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
   for (const [route, request] of [
     ["/", { kind: "read" }],
     ["/api/walkthrough", { kind: "read" }],
+    ["/api/agent", { kind: "read" }],
     [`/api/state${query}`, { kind: "read" }],
     [`/api/state${query}`, { kind: "write", body: "{}" }],
     [`/api/qa${query}`, { kind: "read" }],
@@ -357,6 +358,10 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
     stamp: payload.commit,
     threads: [],
   });
+
+  const agent = await send("/api/agent");
+  expect(agent.status).toBe(200);
+  expect(await agent.json()).toEqual({ status: "setup-required" });
 
   const invalidQuestion = await send(`/api/qa${query}`, {
     method: "POST",

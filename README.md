@@ -60,6 +60,7 @@ npx balade build .agents/walkthroughs/pr-96-loan-refactor.md
 | `open [target]` | Start a live review. The target may be a file or PR; omit it to discover all walkthroughs. |
 | `check [file]` | Validate one walkthrough, or all discovered walkthroughs. Use `--json` for JSON output. |
 | `build <file>` | Write a self-contained HTML file beside the walkthrough. Use `--out` to change the path. |
+| `agent setup` | Authenticate and choose the model used by generation and live Q&A. |
 | `skills install` | Install the bundled authoring skill for coding agents. |
 
 Run `npx balade <command> --help` for all flags.
@@ -74,8 +75,11 @@ During a live review, select text inside a walkthrough section and choose
 **Ask agent**. Balade anchors the question to that section and passage, runs a
 fresh agent against the walkthrough and pinned pull-request diff, and shows the
 answer in a local thread. Section badges reopen earlier exchanges and each
-thread accepts follow-up questions. Clarifications require the model selected
-by `balade generate`; they are unavailable in static exports.
+thread accepts follow-up questions. If no Balade agent model is configured, the
+first question opens one-time provider and model prompts in the terminal that
+started `balade open`, then submits the original question automatically. Run
+`balade agent setup` to configure it ahead of time. Clarifications are
+unavailable in static exports.
 
 A PR target uses the checked-out walkthrough when available. Otherwise, balade
 fetches `pull/<number>/head` and reads the walkthrough from that commit. This
@@ -103,9 +107,10 @@ Repository instructions come from the pinned commit. If the PR changes an
 `--trust-head-instructions` after reviewing the change. Files containing a
 project-context closing tag are rejected.
 
-The first run opens a provider and model picker. Balade stores its Pi credentials
-and model default under `~/.balade/pi/`; it doesn't read or modify
-`~/.pi/agent/`.
+The first agent-powered run opens a provider and model picker. Balade stores its
+Pi credentials and model default under `~/.balade/pi/`; it doesn't read or
+modify `~/.pi/agent/`. Generation, `agent setup`, and live Q&A share this one
+configuration.
 
 Anthropic subscription login in third-party tools uses billed extra token
 usage. It doesn't consume Claude plan limits.

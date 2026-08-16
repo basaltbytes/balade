@@ -40,6 +40,7 @@ export type Payload = typeof Contract.Payload.Type;
 export type ReviewMark = typeof Contract.ReviewMark.Type;
 export type ReviewState = typeof Contract.ReviewState.Type;
 
+export type QaAgentStatus = typeof Contract.QaAgentStatus.Type;
 export type QaThreadId = typeof Contract.QaThreadId.Type;
 export type QaTurnId = typeof Contract.QaTurnId.Type;
 export type QaAnchor = typeof Contract.QaAnchor.Type;

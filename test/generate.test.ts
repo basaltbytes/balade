@@ -21,11 +21,13 @@ import { inspectionBudget } from "../src/authoring/package.js";
 import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
 import { slugifyTitle, type ExistingWalkthrough } from "../src/commands/generate/output.js";
 import {
+  makeAgentModelManager,
   matchingModels,
   modelSelectionFromFlags,
   modelsForPicker,
   preferredModel,
-} from "../src/commands/generate/selection.js";
+  type AgentModelNotice,
+} from "../src/agent/model.js";
 import { shellLayer } from "./support/effect.js";
 import { contextResolverLive } from "../src/git/git.js";
 import type { PullSnapshot } from "../src/git/pr.js";
@@ -498,18 +500,45 @@ describe("the Pi adapter", () => {
     }),
   );
 
-  it.effect("reads and updates Pi's global model preference", () =>
+  it.effect("configures one shared agent model for concurrent first requests", () =>
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() => piHarness());
-      const stored = yield* Effect.gen(function* () {
+      const result = yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         expect(Option.isNone(yield* author.modelPreference)).toBe(true);
-        const model = yield* fauxModel();
-        yield* author.rememberModel(model);
-        return yield* author.modelPreference;
+        const selected: AuthorModel[] = [];
+        const notices: AgentModelNotice[] = [];
+        const manager = yield* makeAgentModelManager(author, {
+          chooseLogin: () => Effect.die("unexpected login picker"),
+          chooseModel: (models) => {
+            const model = models[0];
+            return model === undefined
+              ? Effect.die("model picker was empty")
+              : Effect.succeed(model);
+          },
+          login: {
+            prompt: async () => "",
+            secret: async () => Redacted.make(""),
+            notify: () => {},
+          },
+          waiting: (effect) => effect,
+          notice: (notice) => Effect.sync(() => notices.push(notice)),
+          selected: (model) => Effect.sync(() => selected.push(model)),
+        });
+        expect((yield* manager.status)._tag).toBe("AgentModelSetupRequired");
+        const concurrent = yield* Effect.all([manager.ensure, manager.ensure], {
+          concurrency: "unbounded",
+        });
+        const configured = concurrent[0];
+        if (configured === undefined) return yield* Effect.die("model setup returned no model");
+        expect(concurrent).toEqual([configured, configured]);
+        expect(notices).toContainEqual({ _tag: "SetupRequired" });
+        expect((yield* manager.status)._tag).toBe("AgentModelReady");
+        return { configured, selected, stored: yield* author.modelPreference };
       }).pipe(Effect.provide(harness.layer));
 
-      expect(Option.getOrUndefined(stored)).toEqual({
+      expect(result.selected).toEqual([result.configured]);
+      expect(Option.getOrUndefined(result.stored)).toEqual({
         providerId: "faux",
         modelId: "faux-1",
       });

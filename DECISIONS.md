@@ -10,15 +10,16 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 (the document, bytes to contract), `git/` (facts from the repository and forge),
 `contract/` (shared vocabulary: shapes that cross module boundaries), `preset/`,
 `authoring/` (the versioned authoring package: typed data plus its renderings),
-`pi/` (the generation engine), `server/` (live session runtime) — and the root
-files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
-`submission.ts`.
+`pi/` (the Pi adapter and agent sessions), `agent/` (shared provider/model
+configuration), `server/` (live session runtime) — and the root files `cli.ts`,
+`shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`, `submission.ts`.
 
 All imports flow one direction; peers never import each other:
 
 ```
 cli.ts                      entry + layer wiring
-commands/    server/        orchestrators — the ONLY places concepts compose
+commands/    server/        orchestrators — the ONLY places product concepts compose
+agent/                      → pi, presence, terminal
 pi/                         → authoring, git (type imports), contract, shell
 walkthrough/                → preset, contract, shell        (never git/)
 git/                        → contract, shell                (never walkthrough/)
@@ -38,7 +39,8 @@ shell.ts  state.ts  terminal.ts  failure.ts  presence.ts  submission.ts
 3. `walkthrough/`, `git/`, `preset/` are autonomous: they import only
    `contract/` and root ports (`walkthrough/` may additionally import
    `preset/` — the tag catalog is an extension of the format). Concepts compose
-   only in `commands/` and `server/`, plus layer wiring in `cli.ts`.
+   only in `commands/` and `server/`, plus the deliberately shared `agent/`
+   workflow and layer wiring in `cli.ts`.
 4. Outside `commands/`, a concept with one file is a root file, not a folder.
 5. Module files are nouns; verbs live in exports. The thing, not the action:
    `compiler.ts` exports `compileDocument`, `pipeline.ts` exports
@@ -542,7 +544,7 @@ anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
 Anthropic subscription path closing, in which case the same seam takes a
 Codex-SDK-plus-API-key pair of adapters instead.
 
-The adapter itself is split at the session boundary: `pi/client.ts` owns
+The Pi adapter itself is split at the session boundary: `pi/client.ts` owns
 account, authentication and global settings, while `pi/session.ts` owns the
 scoped authoring session, its read-only tool policy and provider-event
 forwarding. `pi/project-context.ts` owns repository-instruction selection and
@@ -556,7 +558,12 @@ The immutable snapshot memoizes
 its source-file listing as an Effect and shares it with Pi's Promise-based tool
 callbacks, where the runtime boundary belongs.
 This keeps preference durability independent from the security-sensitive tool
-sandbox and session lifecycle.
+sandbox and session lifecycle. `agent/model.ts` owns the higher-level
+provider/model configuration workflow shared by generation, clarification and
+`balade agent setup`; `agent/terminal.ts` is its sole interactive adapter.
+Selection rules, login ordering, typed configuration failures and preference
+warnings therefore have one implementation instead of drifting between CLI
+verbs.
 
 Balade points Pi at its own agent directory, `~/.balade/pi/` — `auth.json`,
 `settings.json`, `models.json` and Pi's derived `models-store.json` all live
@@ -569,14 +576,14 @@ the earlier choice of Pi's global settings file silently changed that CLI's
 default model (revised 2026-08-04, issue #27). The accepted cost is one extra
 login for users who already authenticated the pi CLI. Project settings are not
 trusted or loaded for this choice. Picking a model in the picker is itself the
-confirmation: generation starts directly, with no second confirm prompt
-(revised 2026-08-04, issue #25). An interactive selection updates balade's
-saved default; a matching default is reused without another picker. Every
-explicit or interactive selection updates that default. An exact
+confirmation: the requesting agent workflow starts directly, with no second
+confirm prompt (revised 2026-08-04, issue #25). An interactive selection
+updates balade's saved default; a matching default is reused without another
+picker. Every explicit or interactive selection updates that default. An exact
 `--provider` and `--model` pair skips the picker; partial, empty, or
 unavailable values open it, narrowed to matching models when possible.
-Preference read and write failures are typed warnings and do not prevent a
-generation run.
+Preference read and write failures are typed warnings and do not prevent a run
+after the user has selected a model.
 
 The session runs in memory with a resource loader that exposes no Pi extensions,
 skills, prompts, themes, global context, or working-tree context. It exposes
@@ -1417,9 +1424,19 @@ before the handoff returns, so a closing server settles an in-flight question
 as failed instead of leaving a permanent pending record.
 
 Static exports deliberately omit Q&A: asking requires the local repository,
-the selected model under `~/.balade/pi/`, and the live loopback server. What
-would move this is an explicit portable-conversation feature with its own
-privacy and credential model, not an implicit extension of export payloads.
+an agent model under `~/.balade/pi/`, and the live loopback server. Opening a
+walkthrough does not require authentication or eagerly load Pi; opening a Q&A
+panel triggers `GET /api/agent`, which exposes only `ready` or
+`setup-required`, never provider, model or credential details. If the first
+question needs setup, the JSON-only `POST /api/qa` request opens the same
+terminal interaction used by generation and `balade agent setup`, then
+continues the original request after selection. No pending thread is persisted
+until setup succeeds, so cancellation or failure leaves the draft in the
+browser for retry. One semaphore around the shared model manager rechecks the
+preference after acquiring its permit, so simultaneous first questions cannot
+create duplicate login prompts. What would move static exports is an explicit
+portable-conversation feature with its own privacy and credential model, not an
+implicit extension of export payloads.
 
 The walkthrough sidebar lists every clarification thread independently of its
 anchor section. Each entry shows the latest question, anchor title and explicit

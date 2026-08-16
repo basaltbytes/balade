@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "@effect/vitest";
 import { contextResolverLive } from "../src/git/git.js";
+import { AuthorModelId, AuthorProviderId, type AuthorModel } from "../src/pi/author.js";
 import {
   WalkthroughClarifier,
   clarificationSystemPrompt,
@@ -75,6 +76,13 @@ it.effect("checks and repairs submissions inside each scoped clarification sessi
       yield* Effect.promise(() => modelRuntime.refresh({ allowNetwork: false }));
       const available = (yield* Effect.promise(() => modelRuntime.getAvailable()))[0];
       if (available === undefined) return yield* Effect.die("faux model missing");
+      const provider = modelRuntime.getProvider(available.provider);
+      const model: AuthorModel = {
+        providerId: AuthorProviderId.make(available.provider),
+        providerName: provider?.name ?? available.provider,
+        modelId: AuthorModelId.make(available.id),
+        modelName: available.name,
+      };
       const settingsManager = coding.SettingsManager.inMemory();
       settingsManager.setDefaultModelAndProvider(available.provider, available.id);
       let firstRepairFeedback: unknown;
@@ -107,7 +115,6 @@ it.effect("checks and repairs submissions inside each scoped clarification sessi
 
       yield* Effect.gen(function* () {
         const clarifier = yield* WalkthroughClarifier;
-        const model = yield* clarifier.selectedModel;
         const common: Omit<ClarificationRequest, "question" | "turns"> = {
           root: repo.dir,
           pin: repo.pin,

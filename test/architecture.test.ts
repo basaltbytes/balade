@@ -62,6 +62,7 @@ const CONCEPT_EDGES = new Map<string, readonly string[]>(
     git: ["git", "contract", ...ROOT_UTILS],
     walkthrough: ["walkthrough", "preset", "contract", ...ROOT_UTILS],
     pi: ["pi", "authoring", "git", "contract", ...ROOT_UTILS],
+    agent: ["agent", "pi", ...ROOT_UTILS],
     ...Object.fromEntries(ROOT_UTILS.map((util) => [util, [util, "contract"]])),
   }),
 );

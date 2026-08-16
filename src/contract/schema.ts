@@ -414,6 +414,12 @@ export const ReviewState = Schema.Struct({
 /* Generation-bound reviewer Q&A                                      */
 /* ------------------------------------------------------------------ */
 
+/** Provider details stay local to the CLI; the browser learns only whether Q&A can start. */
+export const QaAgentStatus = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("ready") }),
+  Schema.Struct({ status: Schema.Literal("setup-required") }),
+]);
+
 export const QaThreadId = Schema.String.pipe(
   Schema.check(Schema.isUUID(4)),
   Schema.brand("@balade/QaThreadId"),

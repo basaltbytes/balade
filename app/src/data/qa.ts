@@ -1,8 +1,8 @@
 /** Strict browser boundary for the served clarification API. */
 
 import { Effect, Schema } from "effect";
-import { parseQaState } from "../../../src/contract/qa-parser";
-import type { QaAskRequest, QaState } from "../contract";
+import { parseQaAgentStatus, parseQaState } from "../../../src/contract/qa-parser";
+import type { QaAgentStatus, QaAskRequest, QaState } from "../contract";
 import { BrowserFetch } from "./browser";
 
 export class QaFetchFailed extends Schema.TaggedErrorClass<QaFetchFailed>()("QaFetchFailed", {
@@ -20,6 +20,13 @@ export const fetchQa = Effect.fn("App.fetchQa")(function* (sourcePath: string) {
   return yield* requestQa(`/api/qa?path=${encodeURIComponent(sourcePath)}`, { method: "GET" });
 });
 
+export const fetchQaAgentStatus = Effect.fn("App.fetchQaAgentStatus")(function* () {
+  const body = yield* requestJson("/api/agent", { method: "GET" });
+  return yield* parseQaAgentStatus(body).pipe(
+    Effect.mapError((cause) => new QaResponseInvalid({ cause })),
+  );
+});
+
 export const askQa = Effect.fn("App.askQa")(function* (sourcePath: string, request: QaAskRequest) {
   return yield* requestQa(`/api/qa?path=${encodeURIComponent(sourcePath)}`, {
     method: "POST",
@@ -29,6 +36,13 @@ export const askQa = Effect.fn("App.askQa")(function* (sourcePath: string, reque
 });
 
 const requestQa = Effect.fn("App.requestQa")(function* (url: string, init: RequestInit) {
+  const body = yield* requestJson(url, init);
+  return yield* parseQaState(body).pipe(
+    Effect.mapError((cause) => new QaResponseInvalid({ cause })),
+  );
+});
+
+const requestJson = Effect.fn("App.requestQaJson")(function* (url: string, init: RequestInit) {
   const fetch = yield* BrowserFetch;
   const response = yield* Effect.tryPromise({
     try: (signal) => fetch(url, { ...init, signal }),
@@ -39,13 +53,10 @@ const requestQa = Effect.fn("App.requestQa")(function* (url: string, init: Reque
       cause: { status: response.status, statusText: response.statusText },
     });
   }
-  const body: unknown = yield* Effect.tryPromise({
+  return yield* Effect.tryPromise({
     try: () => response.json(),
     catch: (cause) => new QaResponseInvalid({ cause }),
   });
-  return yield* parseQaState(body).pipe(
-    Effect.mapError((cause) => new QaResponseInvalid({ cause })),
-  );
 });
 
-export type { QaState };
+export type { QaAgentStatus, QaState };

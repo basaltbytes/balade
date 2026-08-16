@@ -243,6 +243,87 @@ describe("clarification threads in the walkthrough", () => {
     }),
   );
 
+  it.effect("keeps the first question while terminal agent setup completes", () =>
+    Effect.gen(function* () {
+      let resolveQuestion: ((response: Response) => void) | undefined;
+      let submittedBody = "";
+      let agentChecks = 0;
+      installFetch((url, init) => {
+        if (url === "/api/agent") {
+          agentChecks++;
+          return Promise.resolve(Response.json({ status: "setup-required" }));
+        }
+        if (init?.method === "POST") {
+          submittedBody = String(init.body ?? "");
+          return new Promise((resolve) => {
+            resolveQuestion = resolve;
+          });
+        }
+        return Promise.resolve(Response.json({ ...state, threads: [] }));
+      });
+      yield* Effect.promise(() =>
+        act(async () => {
+          root.render(
+            <StringsProvider lang="en">
+              <QaProvider payload={payload} served>
+                <QaComposerProbe />
+                <QaPanel />
+              </QaProvider>
+            </StringsProvider>,
+          );
+        }),
+      );
+      expect(agentChecks).toBe(0);
+      const open = container.querySelector('button[aria-label="open question composer"]');
+      if (!(open instanceof HTMLButtonElement))
+        return yield* Effect.die("composer trigger missing");
+      yield* Effect.promise(() => act(async () => open.click()));
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(agentChecks).toBe(1);
+          expect(container.textContent).toContain("Agent setup is required.");
+          expect(container.textContent).toContain("Set up & ask");
+        }),
+      );
+
+      const textarea = container.querySelector("#qa-question");
+      if (!(textarea instanceof HTMLTextAreaElement)) {
+        return yield* Effect.die("question textarea missing");
+      }
+      yield* Effect.promise(() =>
+        act(async () => {
+          const valueSetter = Object.getOwnPropertyDescriptor(
+            HTMLTextAreaElement.prototype,
+            "value",
+          )?.set;
+          if (valueSetter === undefined) throw new Error("textarea value setter missing");
+          valueSetter.call(textarea, "How does this work?");
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        }),
+      );
+      const form = textarea.closest("form");
+      if (!(form instanceof HTMLFormElement)) return yield* Effect.die("question form missing");
+      yield* Effect.promise(() => act(async () => form.requestSubmit()));
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(submittedBody).toContain("How does this work?");
+          expect(container.textContent).toContain("Continue setup in the terminal…");
+          expect(textarea.value).toBe("How does this work?");
+        }),
+      );
+
+      const resolve = resolveQuestion;
+      if (resolve === undefined) return yield* Effect.die("question resolver missing");
+      yield* Effect.promise(() =>
+        act(async () => {
+          resolve(Response.json(pendingState));
+          await Promise.resolve();
+        }),
+      );
+      expect(container.textContent).toContain("How does the worker finish?");
+    }),
+  );
+
   it.effect("discards an in-flight answer when the walkthrough changes", () =>
     Effect.gen(function* () {
       let resolveOldQuestion: ((response: Response) => void) | undefined;
@@ -324,5 +405,21 @@ function QaProbe() {
         {qa.state.threads.flatMap((thread) => thread.turns.map((turn) => turn.question)).join("|")}
       </output>
     </div>
+  );
+}
+
+function QaComposerProbe() {
+  const qa = useQa();
+  return (
+    <button
+      type="button"
+      aria-label="open question composer"
+      onClick={() =>
+        qa.openComposer({
+          sectionId: "overview",
+          excerpt: "The planning pool is live.",
+        })
+      }
+    />
   );
 }

@@ -7,13 +7,18 @@ import {
   Effect,
   Exit,
   Layer,
-  Match,
   Option,
   Result,
   Schema,
   Semaphore,
   type Scope,
 } from "effect";
+import {
+  AgentModelManager,
+  type AgentModelConfigurationError,
+  type AgentModelManagerPort,
+  type AgentModelStatusError,
+} from "../agent/model.js";
 import {
   ContextResolver,
   type ContextResolverPort,
@@ -23,6 +28,7 @@ import {
 import { QaThreadId, QaTurnId } from "../contract/schema.js";
 import type {
   Payload,
+  QaAgentStatus,
   QaAskRequest,
   QaQuestion,
   QaState,
@@ -32,7 +38,6 @@ import type {
 import {
   WalkthroughClarifier,
   type ClarificationRequest,
-  type ClarifierSetupError,
   type WalkthroughClarifierPort,
 } from "../pi/clarifier.js";
 import { getPreset } from "../preset/registry.js";
@@ -70,7 +75,7 @@ export class QaThreadBusy extends Schema.TaggedErrorClass<QaThreadBusy>()("QaThr
 
 export class QaAgentUnavailable extends Schema.TaggedErrorClass<QaAgentUnavailable>()(
   "QaAgentUnavailable",
-  { reason: Schema.Literals(["model-not-configured", "model-unavailable", "setup-failed"]) },
+  { reason: Schema.Literals(["setup-cancelled", "setup-failed"]) },
 ) {}
 
 export class QaIdentifierFailed extends Schema.TaggedErrorClass<QaIdentifierFailed>()(
@@ -88,6 +93,7 @@ export type QaWorkflowError =
   | QaIdentifierFailed;
 
 export interface QaWorkflowPort {
+  readonly agentStatus: Effect.Effect<QaAgentStatus, QaAgentUnavailable>;
   readonly read: (path: string) => Effect.Effect<QaState, QaWorkflowError>;
   readonly ask: (path: string, request: QaAskRequest) => Effect.Effect<QaState, QaWorkflowError>;
 }
@@ -152,6 +158,7 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
         const store = yield* QaStateStore;
         const resolver = yield* ContextResolver;
         const clarifier = yield* WalkthroughClarifier;
+        const agentModels = yield* AgentModelManager;
         const crypto = yield* Crypto.Crypto;
         const lock = yield* Semaphore.make(1);
 
@@ -207,6 +214,8 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
           ),
         );
 
+        const agentStatus = readAgentStatus(agentModels);
+
         const ask = Effect.fn("QaWorkflow.ask")(function* (path: string, request: QaAskRequest) {
           const payload = yield* loadPayload(path);
           if (
@@ -215,12 +224,12 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
           ) {
             return yield* new QaSectionNotFound({ sectionId: request.anchor.sectionId });
           }
+          const model = yield* agentModels.ensure.pipe(Effect.mapError(mapAgentSetupError));
           const prepared = yield* Effect.all(
             {
               source: repo
                 .source(path)
                 .pipe(Effect.mapError((cause) => new QaWalkthroughUnavailable({ path, cause }))),
-              model: clarifier.selectedModel.pipe(Effect.mapError(mapSetupError)),
               resolved: resolver
                 .resolve(resolveOptions(options, repo.root, path, payload, []))
                 .pipe(Effect.mapError((cause) => new QaWalkthroughUnavailable({ path, cause }))),
@@ -254,12 +263,12 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
             question,
             root: repo.root,
             source: prepared.source,
-            model: prepared.model,
+            model,
             initialContext: prepared.resolved.ctx,
           });
         });
 
-        return { read, ask } satisfies QaWorkflowPort;
+        return { agentStatus, read, ask } satisfies QaWorkflowPort;
       }),
     );
   }
@@ -516,12 +525,23 @@ function resolveOptions(
   };
 }
 
-function mapSetupError(error: ClarifierSetupError): QaAgentUnavailable {
-  return Match.valueTags(error, {
-    ClarifierModelNotConfigured: () => new QaAgentUnavailable({ reason: "model-not-configured" }),
-    ClarifierModelUnavailable: () => new QaAgentUnavailable({ reason: "model-unavailable" }),
-    ClarifierPreferenceReadFailed: () => new QaAgentUnavailable({ reason: "setup-failed" }),
-    ClarifierRuntimeLoadFailed: () => new QaAgentUnavailable({ reason: "setup-failed" }),
+const readAgentStatus = Effect.fn("QaWorkflow.readAgentStatus")(function* (
+  models: AgentModelManagerPort,
+) {
+  const state = yield* models.status.pipe(Effect.mapError(mapAgentSetupError));
+  return {
+    status: state._tag === "AgentModelReady" ? "ready" : "setup-required",
+  } satisfies QaAgentStatus;
+});
+
+function mapAgentSetupError(
+  error: AgentModelConfigurationError | AgentModelStatusError,
+): QaAgentUnavailable {
+  return new QaAgentUnavailable({
+    reason:
+      error._tag === "LoginCancelled" || error._tag === "AgentModelSelectionCancelled"
+        ? "setup-cancelled"
+        : "setup-failed",
   });
 }
 

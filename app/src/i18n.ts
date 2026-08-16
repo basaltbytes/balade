@@ -51,6 +51,10 @@ export interface Strings {
     questionPlaceholder: string;
     submit: string;
     submitting: string;
+    setupAndAsk: string;
+    setupWaiting: string;
+    setupRequired: string;
+    setupFailed: string;
     pending: string;
     failed: string;
     unavailable: string;
@@ -152,6 +156,11 @@ const en: Strings = {
     questionPlaceholder: "What would you like clarified?",
     submit: "Ask",
     submitting: "Asking…",
+    setupAndAsk: "Set up & ask",
+    setupWaiting: "Continue setup in the terminal…",
+    setupRequired:
+      "Agent setup is required. When you ask, continue in the terminal where Balade is running; your question will be sent automatically afterward.",
+    setupFailed: "Agent setup did not finish. Your question is still here; try again.",
     pending: "The agent is working on this question…",
     failed: "The agent could not answer this question. You can ask another follow-up.",
     unavailable: "Clarifications are temporarily unavailable.",
@@ -250,6 +259,12 @@ const fr: Strings = {
     questionPlaceholder: "Que souhaitez-vous faire préciser ?",
     submit: "Demander",
     submitting: "Envoi…",
+    setupAndAsk: "Configurer et demander",
+    setupWaiting: "Poursuivez la configuration dans le terminal…",
+    setupRequired:
+      "L’agent doit être configuré. Après l’envoi, poursuivez dans le terminal où Balade est lancé ; votre question sera ensuite envoyée automatiquement.",
+    setupFailed:
+      "La configuration de l’agent n’a pas abouti. Votre question est toujours ici ; réessayez.",
     pending: "L’agent travaille sur cette question…",
     failed: "L’agent n’a pas pu répondre. Vous pouvez poser une autre question.",
     unavailable: "Les éclaircissements sont temporairement indisponibles.",

@@ -1,6 +1,6 @@
 /**
  * The HTTP edge of served mode: the prebuilt SPA on `/` with the SPA fallback,
- * six JSON endpoints under `/api`, and a Node server whose lifetime is the
+ * seven JSON endpoints under `/api`, and a Node server whose lifetime is the
  * caller's scope — closing the scope closes the port.
  *
  * This is the translation boundary for typed `ApiError` failures.
@@ -124,6 +124,7 @@ const routes = (options: ServeOptions) =>
       "/api/qa",
       answering((path) => options.api.readQa(path)),
     ),
+    HttpRouter.add("GET", "/api/agent", respond(options.api.agentStatus)),
     HttpRouter.add("POST", "/api/qa", postQuestion(options.api)),
     HttpRouter.add(
       "GET",
@@ -131,7 +132,7 @@ const routes = (options: ServeOptions) =>
       answering((path) => options.api.staleness(path)),
     ),
     /* The SPA takes `GET /*`. The router prefers a literal path over the
-       wildcard, so the six endpoints above win whatever the merge order. */
+       wildcard, so the seven endpoints above win whatever the merge order. */
     HttpStaticServer.layer({ root: options.appDir, spa: true }),
   );
 

@@ -12,14 +12,15 @@ import {
   type ReactNode,
 } from "react";
 import type { Payload, QaAnchor, QaAskRequest, QaState, QaThread } from "../contract";
-import { askQa, fetchQa } from "../data/qa";
+import { askQa, fetchQa, fetchQaAgentStatus } from "../data/qa";
 import { runAppEffect } from "../data/runtime";
 
 interface QaApi {
   readonly available: boolean;
   readonly state: QaState;
-  readonly submitting: boolean;
-  readonly failed: boolean;
+  readonly agent: QaAgentState;
+  readonly submission: QaSubmissionState;
+  readonly failure: QaFailureState;
   readonly panel: QaPanelState;
   readonly threadsFor: (sectionId: string) => readonly QaThread[];
   readonly openSection: (sectionId: string) => void;
@@ -28,6 +29,23 @@ interface QaApi {
   readonly close: () => void;
   readonly ask: (request: QaAskRequest) => void;
 }
+
+type QaAgentState =
+  | { readonly _tag: "Unchecked" }
+  | { readonly _tag: "Checking" }
+  | { readonly _tag: "Ready" }
+  | { readonly _tag: "SetupRequired" }
+  | { readonly _tag: "Unavailable" };
+
+type QaSubmissionState =
+  | { readonly _tag: "Idle" }
+  | { readonly _tag: "Asking" }
+  | { readonly _tag: "SettingUp" };
+
+type QaFailureState =
+  | { readonly _tag: "None" }
+  | { readonly _tag: "RequestFailed" }
+  | { readonly _tag: "SetupFailed" };
 
 type QaPanelState =
   | { readonly _tag: "Closed" }
@@ -40,6 +58,10 @@ type QaPanelState =
   | { readonly _tag: "Composer"; readonly anchor: QaAnchor };
 
 const CLOSED_PANEL: QaPanelState = { _tag: "Closed" };
+const UNCHECKED_AGENT: QaAgentState = { _tag: "Unchecked" };
+const CHECKING_AGENT: QaAgentState = { _tag: "Checking" };
+const IDLE_SUBMISSION: QaSubmissionState = { _tag: "Idle" };
+const NO_FAILURE: QaFailureState = { _tag: "None" };
 
 const QaContext = createContext<QaApi | null>(null);
 
@@ -63,15 +85,17 @@ export function QaProvider({
   children: ReactNode;
 }) {
   const [state, setState] = useState<QaState>(() => emptyState(payload));
-  const [failed, setFailed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [agent, setAgent] = useState<QaAgentState>(UNCHECKED_AGENT);
+  const [submission, setSubmission] = useState<QaSubmissionState>(IDLE_SUBMISSION);
+  const [failure, setFailure] = useState<QaFailureState>(NO_FAILURE);
   const [panel, setPanel] = useState<QaPanelState>(CLOSED_PANEL);
   const lifecycle = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setState(emptyState(payload));
-    setFailed(false);
-    setSubmitting(false);
+    setAgent(UNCHECKED_AGENT);
+    setSubmission(IDLE_SUBMISSION);
+    setFailure(NO_FAILURE);
     setPanel(CLOSED_PANEL);
     lifecycle.current = null;
     if (!served) return;
@@ -91,9 +115,11 @@ export function QaProvider({
           if (scope.signal.aborted) return;
           if (outcome.ok) {
             setState(outcome.next);
-            setFailed(false);
+            setFailure((current) => (current._tag === "RequestFailed" ? NO_FAILURE : current));
           } else {
-            setFailed(true);
+            setFailure((current) =>
+              current._tag === "SetupFailed" ? current : { _tag: "RequestFailed" },
+            );
           }
           timer = window.setTimeout(poll, 1_500);
         },
@@ -108,12 +134,66 @@ export function QaProvider({
     };
   }, [payload, served]);
 
+  const checkAgent = useCallback(() => {
+    const scope = lifecycle.current;
+    if (
+      !served ||
+      scope === null ||
+      agent._tag === "Checking" ||
+      agent._tag === "Ready" ||
+      agent._tag === "SetupRequired"
+    ) {
+      return;
+    }
+    setAgent(CHECKING_AGENT);
+    runAppEffect(
+      fetchQaAgentStatus().pipe(
+        Effect.match({
+          onFailure: () => ({ _tag: "Unavailable" as const }),
+          onSuccess: (status) =>
+            status.status === "ready"
+              ? { _tag: "Ready" as const }
+              : { _tag: "SetupRequired" as const },
+        }),
+      ),
+      (next) => {
+        if (!scope.signal.aborted) setAgent(next);
+      },
+      { signal: scope.signal },
+    );
+  }, [agent._tag, served]);
+
+  const openSection = useCallback(
+    (sectionId: string) => {
+      checkAgent();
+      setPanel({ _tag: "Section", sectionId });
+    },
+    [checkAgent],
+  );
+
+  const openThread = useCallback(
+    (sectionId: string, threadId: QaThread["id"]) => {
+      checkAgent();
+      setPanel({ _tag: "Thread", sectionId, threadId });
+    },
+    [checkAgent],
+  );
+
+  const openComposer = useCallback(
+    (anchor: QaAnchor) => {
+      checkAgent();
+      setPanel({ _tag: "Composer", anchor });
+    },
+    [checkAgent],
+  );
+
   const ask = useCallback(
     (request: QaAskRequest) => {
       const scope = lifecycle.current;
-      if (!served || submitting || scope === null) return;
-      setSubmitting(true);
-      setFailed(false);
+      if (!served || submission._tag !== "Idle" || scope === null) return;
+      const needsSetup = agent._tag === "SetupRequired";
+      setSubmission(needsSetup ? { _tag: "SettingUp" } : { _tag: "Asking" });
+      setFailure(NO_FAILURE);
       runAppEffect(
         askQa(payload.sourcePath, request).pipe(
           Effect.match({
@@ -123,8 +203,9 @@ export function QaProvider({
         ),
         (outcome) => {
           if (scope.signal.aborted) return;
-          setSubmitting(false);
+          setSubmission(IDLE_SUBMISSION);
           if (outcome.ok) {
+            setAgent({ _tag: "Ready" });
             setState(outcome.next);
             setPanel((current) =>
               request.kind === "new" &&
@@ -134,31 +215,32 @@ export function QaProvider({
                 : current,
             );
           } else {
-            setFailed(true);
+            setFailure(needsSetup ? { _tag: "SetupFailed" } : { _tag: "RequestFailed" });
           }
         },
         { signal: scope.signal },
       );
     },
-    [payload.sourcePath, served, submitting],
+    [agent, payload.sourcePath, served, submission],
   );
 
   const value = useMemo<QaApi>(
     () => ({
       available: served,
       state,
-      submitting,
-      failed,
+      agent,
+      submission,
+      failure,
       panel,
       threadsFor: (sectionId) =>
         state.threads.filter((thread) => thread.anchor.sectionId === sectionId),
-      openSection: (sectionId) => setPanel({ _tag: "Section", sectionId }),
-      openThread: (sectionId, threadId) => setPanel({ _tag: "Thread", sectionId, threadId }),
-      openComposer: (anchor) => setPanel({ _tag: "Composer", anchor }),
+      openSection,
+      openThread,
+      openComposer,
       close: () => setPanel(CLOSED_PANEL),
       ask,
     }),
-    [ask, failed, panel, served, state, submitting],
+    [agent, ask, failure, openComposer, openSection, openThread, panel, served, state, submission],
   );
 
   return <QaContext.Provider value={value}>{children}</QaContext.Provider>;

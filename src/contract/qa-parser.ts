@@ -6,12 +6,19 @@
  */
 
 import { Effect, Schema } from "effect";
-import { QaAskRequest as QaAskRequestSchema, QaState as QaStateSchema } from "./schema.js";
+import {
+  QaAgentStatus as QaAgentStatusSchema,
+  QaAskRequest as QaAskRequestSchema,
+  QaState as QaStateSchema,
+} from "./schema.js";
 
 const decodeQaState = Schema.decodeUnknownEffect(QaStateSchema, {
   onExcessProperty: "error",
 });
 const decodeQaAskRequest = Schema.decodeUnknownEffect(QaAskRequestSchema, {
+  onExcessProperty: "error",
+});
+const decodeQaAgentStatus = Schema.decodeUnknownEffect(QaAgentStatusSchema, {
   onExcessProperty: "error",
 });
 
@@ -25,6 +32,11 @@ export class QaStateInvalid extends Schema.TaggedErrorClass<QaStateInvalid>()("Q
 
 export class QaAskRequestInvalid extends Schema.TaggedErrorClass<QaAskRequestInvalid>()(
   "QaAskRequestInvalid",
+  { cause: Schema.Defect() },
+) {}
+
+export class QaAgentStatusInvalid extends Schema.TaggedErrorClass<QaAgentStatusInvalid>()(
+  "QaAgentStatusInvalid",
   { cause: Schema.Defect() },
 ) {}
 
@@ -56,3 +68,7 @@ export const parseQaAskJson = Effect.fn("parseQaAskJson")(function* (raw: string
 /* Single-argument on purpose: callers cannot override the strict excess-property gate. */
 export const parseQaState = (value: Parameters<typeof decodeQaState>[0]) =>
   decodeQaState(value).pipe(Effect.mapError((cause) => new QaStateInvalid({ cause })));
+
+/** The live agent readiness response, strictly decoded before React sees it. */
+export const parseQaAgentStatus = (value: Parameters<typeof decodeQaAgentStatus>[0]) =>
+  decodeQaAgentStatus(value).pipe(Effect.mapError((cause) => new QaAgentStatusInvalid({ cause })));

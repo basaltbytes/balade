@@ -162,9 +162,9 @@ export function QaPanel() {
         </header>
 
         <div className="space-y-5 p-5">
-          {qa.failed && (
+          {qa.failure._tag !== "None" && (
             <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-[12.5px] text-destructive">
-              {strings.qa.unavailable}
+              {qa.failure._tag === "SetupFailed" ? strings.qa.setupFailed : strings.qa.unavailable}
             </p>
           )}
           {panel._tag === "Composer" && <QuestionForm anchor={panel.anchor} />}
@@ -207,6 +207,7 @@ function QuestionForm({ anchor }: { anchor: QaAnchor }) {
         autoFocus
         className="mt-1.5 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus:border-primary"
       />
+      <AgentSetupNotice />
       <div className="mt-3 flex justify-end">
         <SubmitButton disabled={question.trim() === ""} />
       </div>
@@ -280,6 +281,7 @@ function FollowUp({ thread }: { thread: Exclude<QaThread, { status: "pending" }>
         rows={2}
         className="mt-1.5 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-[13px] outline-none focus:border-primary"
       />
+      <AgentSetupNotice />
       <div className="mt-2 flex justify-end">
         <SubmitButton disabled={question.trim() === ""} />
       </div>
@@ -290,14 +292,34 @@ function FollowUp({ thread }: { thread: Exclude<QaThread, { status: "pending" }>
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const qa = useQa();
   const strings = useStrings();
+  const busy = qa.submission._tag !== "Idle";
+  const label =
+    qa.submission._tag === "SettingUp"
+      ? strings.qa.setupWaiting
+      : qa.submission._tag === "Asking"
+        ? strings.qa.submitting
+        : qa.agent._tag === "SetupRequired"
+          ? strings.qa.setupAndAsk
+          : strings.qa.submit;
   return (
     <button
       type="submit"
-      disabled={disabled || qa.submitting}
+      disabled={disabled || busy || qa.agent._tag === "Checking"}
       className="rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 cursor-pointer disabled:cursor-default"
     >
-      {qa.submitting ? strings.qa.submitting : strings.qa.submit}
+      {label}
     </button>
+  );
+}
+
+function AgentSetupNotice() {
+  const qa = useQa();
+  const strings = useStrings();
+  if (qa.agent._tag !== "SetupRequired") return null;
+  return (
+    <p className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[12px] text-secondary-foreground">
+      {strings.qa.setupRequired}
+    </p>
   );
 }
 

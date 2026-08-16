@@ -1,5 +1,5 @@
 /**
- * What the six served endpoints answer. Successes and typed `ApiError`
+ * What the seven served endpoints answer. Successes and typed `ApiError`
  * failures stay independent of HTTP; `http.ts` maps them to JSON and status
  * codes. Tests drive these ports without a socket.
  *
@@ -16,6 +16,7 @@ import type {
   IndexEntry,
   IndexPayload,
   Payload,
+  QaAgentStatus,
   QaState,
   ReviewState,
 } from "../contract/types.js";
@@ -115,6 +116,8 @@ export interface Api {
   staleness(path: string | null): Effect.Effect<{ headDistance: number }, ApiError>;
   /** `GET /api/qa` — generation-bound clarification threads. */
   readQa(path: string | null): Effect.Effect<QaState, ApiError>;
+  /** `GET /api/agent` — whether Q&A can use a configured local model. */
+  readonly agentStatus: Effect.Effect<QaAgentStatus, ApiError>;
   /** `POST /api/qa` — validate and enqueue one new question or follow-up. */
   askQa(path: string | null, body: string): Effect.Effect<QaState, ApiError>;
 }
@@ -152,6 +155,8 @@ function makeApi(ports: ApiPorts): Api {
   };
 
   return {
+    agentStatus: ports.qa.agentStatus,
+
     walkthrough: Effect.fn("Api.walkthrough")(function* (path) {
       const target = targetOf(path);
       if (target.kind === "unknown") return yield* notServed(path);
@@ -336,9 +341,9 @@ export function apiErrorResponse(error: ApiError): ApiErrorResponse {
     QaAgentUnavailable: ({ reason }): ApiErrorResponse => ({
       status: 503,
       message:
-        reason === "model-not-configured"
-          ? "Choose an agent model with `balade generate` before asking a clarification."
-          : "The configured clarification agent is unavailable.",
+        reason === "setup-cancelled"
+          ? "Agent setup did not finish; the clarification was not submitted."
+          : "The clarification agent could not be configured.",
     }),
     QaIdentifierFailed: (): ApiErrorResponse => ({
       status: 500,

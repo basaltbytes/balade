@@ -115,6 +115,14 @@ pinned, read-only repository inspection tools as generation. Changed
 `AGENTS.md` and `CLAUDE.md` files are always omitted from clarification runs;
 no session extension, shell, write, or network tool is available.
 
+Opening a walkthrough does not load Pi or require provider authentication.
+Opening a Q&A panel calls `GET /api/agent`, which exposes only whether setup is
+required, not provider, model or credential details. A first `POST /api/qa` may
+start the shared provider/model setup interaction in the trusted terminal that
+launched `balade open`; the question is enqueued only after setup succeeds. The
+endpoint still requires an `application/json` body and emits no CORS
+permission, so a cross-origin form cannot initiate that credential flow.
+
 The agent submits a Markdoc fragment, not browser markup. The fragment is
 parsed with the walkthrough grammar, cannot create sections or groups, resolves
 code references at the stamped commit, and compiles to the existing `Block`
@@ -124,8 +132,8 @@ walkthrough path, PR number and stamp. Static exports contain none of it.
 
 ### 4. The local review server
 
-Binds `127.0.0.1` with no host flag (`src/server/http.ts`). Six API routes; two
-mutating endpoints, `PUT /api/state` and `POST /api/qa`.
+Binds `127.0.0.1` with no host flag (`src/server/http.ts`). Seven API routes;
+two mutating endpoints, `PUT /api/state` and `POST /api/qa`.
 
 A global middleware accepts only the loopback authorities `127.0.0.1`,
 `localhost` and `[::1]`, ignoring a numeric port. This rejects DNS-rebinding
@@ -370,9 +378,14 @@ they describe.
 - The process installs the balade-owned `RIPGREP_CONFIG_PATH` once before Pi can
   dispatch searches in parallel. No search restores process-global state, so
   every ripgrep spawn retains `--no-ignore` and `--no-follow`.
-- Pi credential isolation holds: balade uses its own agent directory
-  `~/.balade/pi/` and never reads or writes `~/.pi/agent/`
-  (`src/pi/client.ts:81-105`, `test/pi-agent-dir.test.ts`, issue #27).
+- Pi credential isolation holds: generation, live clarification and
+  `balade agent setup` use one shared model manager over balade's own agent
+  directory `~/.balade/pi/` and never reads or writes `~/.pi/agent/`
+  (`src/agent/model.ts`, `src/pi/client.ts`, `test/pi-agent-dir.test.ts`, issue #27).
+- The model manager serializes setup and rechecks saved state inside the permit.
+  Concurrent first questions can wait for one terminal flow but cannot open
+  competing login prompts. The browser receives only `ready` or
+  `setup-required` from `GET /api/agent`.
 - A clarification starts a fresh in-memory session for every question and
   follow-up. Its prompt labels the selected passage, walkthrough, prior
   exchanges and question as untrusted JSON data. Only a successful

@@ -4,6 +4,7 @@ import { Effect, Layer, Result } from "effect";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
+import { AgentModelManager, AgentModelReady, AgentModelSetupRequired } from "../src/agent/model.js";
 import { contextResolverLive } from "../src/git/git.js";
 import { AuthorModelId, AuthorProviderId, type AuthorModel } from "../src/pi/author.js";
 import {
@@ -24,6 +25,12 @@ const model: AuthorModel = {
   modelName: "Clarifier",
 };
 
+const agentModels = Layer.succeed(AgentModelManager, {
+  status: Effect.succeed(new AgentModelReady({ model })),
+  ensure: Effect.succeed(model),
+  configure: () => Effect.succeed(model),
+});
+
 describe("the clarification workflow", () => {
   it.live("keeps canonical validation inside one clarification call", () =>
     Effect.scoped(
@@ -33,9 +40,19 @@ describe("the clarification workflow", () => {
         repo.addWalkthrough("valid.md", "valid.md");
         const requests: ClarificationRequest[] = [];
         const rejections: (readonly string[])[] = [];
+        let configured = false;
+        const firstQuestionAgentModels = Layer.succeed(AgentModelManager, {
+          status: Effect.sync(() =>
+            configured ? new AgentModelReady({ model }) : new AgentModelSetupRequired(),
+          ),
+          ensure: Effect.sync(() => {
+            configured = true;
+            return model;
+          }),
+          configure: () => Effect.succeed(model),
+        });
         const rejected = '{% section id="nested" title="Nested" %}Nope{% /section %}';
         const clarifier = Layer.succeed(WalkthroughClarifier, {
-          selectedModel: Effect.succeed(model),
           answer: (request, validate) =>
             Effect.gen(function* () {
               requests.push(request);
@@ -49,7 +66,7 @@ describe("the clarification workflow", () => {
               return yield* Effect.fromResult(yield* validate(replacement));
             }),
         });
-        const layer = Layer.merge(contextResolverLive, clarifier).pipe(
+        const layer = Layer.mergeAll(contextResolverLive, clarifier, firstQuestionAgentModels).pipe(
           Layer.provideMerge(shellLayer),
         );
         const prepared = yield* prepareSession({
@@ -60,6 +77,7 @@ describe("the clarification workflow", () => {
         if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
         const path = prepared.session.paths[0];
         if (path === undefined) return yield* Effect.die("fixture path missing");
+        expect(yield* prepared.session.api.agentStatus).toEqual({ status: "setup-required" });
 
         yield* prepared.session.api.askQa(
           path,
@@ -71,6 +89,8 @@ describe("the clarification workflow", () => {
         );
 
         const answered = yield* awaitThread(prepared.session.api, path, "answered");
+        expect(configured).toBe(true);
+        expect(yield* prepared.session.api.agentStatus).toEqual({ status: "ready" });
         expect(answered.threads[0]?.turns[0]?.answer).toMatchObject([
           { b: "md", nodes: expect.any(Array) },
         ]);
@@ -110,7 +130,6 @@ describe("the clarification workflow", () => {
         const requests: ClarificationRequest[] = [];
         let failNext = false;
         const clarifier = Layer.succeed(WalkthroughClarifier, {
-          selectedModel: Effect.succeed(model),
           answer: (request, validate) => {
             requests.push(request);
             return failNext
@@ -124,7 +143,7 @@ describe("the clarification workflow", () => {
                 );
           },
         });
-        const layer = Layer.merge(contextResolverLive, clarifier).pipe(
+        const layer = Layer.mergeAll(contextResolverLive, clarifier, agentModels).pipe(
           Layer.provideMerge(shellLayer),
         );
         const prepared = yield* prepareSession({
@@ -218,10 +237,9 @@ describe("the clarification workflow", () => {
         yield* Effect.addFinalizer(() => Effect.sync(repo.cleanup));
         repo.addWalkthrough("valid.md", "valid.md");
         const clarifier = Layer.succeed(WalkthroughClarifier, {
-          selectedModel: Effect.succeed(model),
           answer: () => Effect.never,
         });
-        const layer = Layer.merge(contextResolverLive, clarifier).pipe(
+        const layer = Layer.mergeAll(contextResolverLive, clarifier, agentModels).pipe(
           Layer.provideMerge(shellLayer),
         );
 

@@ -5,6 +5,8 @@ import { createRequire } from "node:module";
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
+import { terminalAgentModelManagerLive } from "./agent/terminal.js";
+import { agentCommand } from "./commands/agent/index.js";
 import { buildCommand } from "./commands/build/index.js";
 import { checkCommand } from "./commands/check/index.js";
 import { generateCommand } from "./commands/generate/index.js";
@@ -26,12 +28,16 @@ const packageVersion = Schema.decodeUnknownSync(PackageManifest)(packageManifest
 const shellLayer = Layer.mergeAll(NodeServices.layer, CommandExecutor.layer, BrowserLauncher.layer);
 
 /** The complete command-line layer, provided once. */
+const agentLayer = terminalAgentModelManagerLive.pipe(
+  Layer.provideMerge(piWalkthroughAuthorLive),
+  Layer.provideMerge(agentPresenceLive),
+);
+
 const cliLayer = Layer.mergeAll(
   PrLocator.layer,
-  piWalkthroughAuthorLive,
+  agentLayer,
   piWalkthroughClarifierLive,
   contextResolverLive,
-  agentPresenceLive,
 ).pipe(Layer.provideMerge(shellLayer));
 
 const balade = Command.make("balade").pipe(
@@ -41,6 +47,7 @@ const balade = Command.make("balade").pipe(
     openCommand,
     buildCommand,
     generateCommand,
+    agentCommand,
     skillsCommand,
   ]),
 );

@@ -2,6 +2,11 @@
 
 import { NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
+import {
+  AgentModelManager,
+  AgentModelSetupRequired,
+  NoProviderAuthenticated,
+} from "../../src/agent/model.js";
 import { contextResolverLive } from "../../src/git/git.js";
 import { piWalkthroughAuthorLive } from "../../src/pi/client.js";
 import { piWalkthroughClarifierLive } from "../../src/pi/clarifier.js";
@@ -17,11 +22,18 @@ export const shellLayer = Layer.mergeAll(
   BrowserLauncher.layer,
 );
 
+const agentModelManagerTest = Layer.succeed(AgentModelManager, {
+  status: Effect.succeed(new AgentModelSetupRequired()),
+  ensure: new NoProviderAuthenticated({ requested: "any provider/any model" }),
+  configure: () => new NoProviderAuthenticated({ requested: "any provider/any model" }),
+});
+
 /** As `src/cli.ts` provides it, except presence: the suite never reports to a live multiplexer. */
 export const cliLayer = Layer.mergeAll(
   PrLocator.layer,
   piWalkthroughAuthorLive,
   piWalkthroughClarifierLive,
+  agentModelManagerTest,
   contextResolverLive,
   AgentPresence.noop,
 ).pipe(Layer.provideMerge(shellLayer));
