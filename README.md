@@ -61,6 +61,7 @@ npx balade build .agents/walkthroughs/pr-96-loan-refactor.md
 | `check [file]` | Validate one walkthrough, or all discovered walkthroughs. Use `--json` for JSON output. |
 | `build <file>` | Write a self-contained HTML file beside the walkthrough. Use `--out` to change the path. |
 | `agent setup` | Authenticate and choose the model used by generation and live Q&A. |
+| `agent logout` | Remove every provider credential stored by Balade. |
 | `skills install` | Install the bundled authoring skill for coding agents. |
 
 Run `npx balade <command> --help` for all flags.
@@ -79,7 +80,9 @@ thread accepts follow-up questions. If no Balade agent model is configured, the
 first question opens one-time provider and model prompts in the terminal that
 started `balade open`, then submits the original question automatically. Run
 `balade agent setup` to configure it ahead of time. Clarifications are
-unavailable in static exports.
+unavailable in static exports. Run `balade agent logout` to remove stored
+Balade logins and exercise first-run setup again. Credentials supplied through
+the environment remain available.
 
 A PR target uses the checked-out walkthrough when available. Otherwise, balade
 fetches `pull/<number>/head` and reads the walkthrough from that commit. This
@@ -109,8 +112,8 @@ project-context closing tag are rejected.
 
 The first agent-powered run opens a provider and model picker. Balade stores its
 Pi credentials and model default under `~/.balade/pi/`; it doesn't read or
-modify `~/.pi/agent/`. Generation, `agent setup`, and live Q&A share this one
-configuration.
+modify `~/.pi/agent/`. Generation, `agent setup`, `agent logout`, and live Q&A
+share this one configuration.
 
 Anthropic subscription login in third-party tools uses billed extra token
 usage. It doesn't consume Claude plan limits.

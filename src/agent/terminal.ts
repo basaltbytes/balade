@@ -201,9 +201,7 @@ export function loginErrorMessage(error: import("../pi/author.js").LoginFailed):
   }
 }
 
-export function agentModelErrorMessage(
-  error: import("./model.js").AgentModelConfigurationError,
-): string {
+export function agentModelErrorMessage(error: import("./model.js").AgentModelError): string {
   switch (error._tag) {
     case "AuthorDiscoveryFailed":
       return "Agent providers and models could not be loaded. Check the installation and try again.";
@@ -214,6 +212,10 @@ export function agentModelErrorMessage(
       return "Agent setup cancelled.";
     case "NoProviderAuthenticated":
       return noProviderMessage(error.requested);
+    case "AuthorCredentialReadFailed":
+      return "Stored agent logins could not be read. Check ~/.balade/pi/auth.json and try again.";
+    case "AuthorLogoutFailed":
+      return `The stored ${sanitizeTerminalText(error.provider)} login could not be removed. Check ~/.balade/pi/auth.json and try again.`;
   }
 }
 

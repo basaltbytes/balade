@@ -79,6 +79,7 @@ grep -Fqi "Not inside a git repository" "$GENERATE_STDERR"
 "$BIN" skills install --help | grep -qi -- "--out"
 "$BIN" agent --help | grep -qi "provider"
 "$BIN" agent setup --help | grep -qi -- "--provider"
+"$BIN" agent logout --help | grep -qi "stored"
 
 # Zero-arg check outside a git repository reports and exits 0.
 "$BIN" check | grep -qi "nothing to check"

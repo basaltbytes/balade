@@ -26,6 +26,7 @@ const agentModelManagerTest = Layer.succeed(AgentModelManager, {
   status: Effect.succeed(new AgentModelSetupRequired()),
   ensure: new NoProviderAuthenticated({ requested: "any provider/any model" }),
   configure: () => new NoProviderAuthenticated({ requested: "any provider/any model" }),
+  logout: Effect.void,
 });
 
 /** Production adapters plus inert test seams for model setup and agent presence. */

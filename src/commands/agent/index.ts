@@ -24,7 +24,15 @@ const setupCommand = Command.make("setup", { provider, model }, (config) =>
   }).pipe(Effect.catch((error) => Effect.sync(() => stopMessage(agentModelErrorMessage(error))))),
 ).pipe(Command.withDescription("Authenticate and choose the model used by generation and Q&A"));
 
+const logoutCommand = Command.make("logout", {}, () =>
+  Effect.gen(function* () {
+    const manager = yield* AgentModelManager;
+    yield* manager.logout;
+    writeStdout(`${stdoutTheme.ok("Agent logout complete.")}\n`);
+  }).pipe(Effect.catch((error) => Effect.sync(() => stopMessage(agentModelErrorMessage(error))))),
+).pipe(Command.withDescription("Remove every stored Balade agent login"));
+
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription("Manage the local agent provider and model"),
-  Command.withSubcommands([setupCommand]),
+  Command.withSubcommands([setupCommand, logoutCommand]),
 );

@@ -15,7 +15,9 @@ import {
   type AgentModelNotice,
 } from "../src/agent/model.js";
 import {
+  AuthorCredentialReadFailed,
   AuthorLoginMethod as AuthorLoginMethodSchema,
+  AuthorLogoutFailed,
   AuthorModel as AuthorModelSchema,
   AuthorPreferenceReadFailed,
   AuthorPreferenceWriteFailed,
@@ -54,6 +56,7 @@ interface AuthorFixtureOptions {
   readonly rememberModel?: WalkthroughAuthorPort["rememberModel"];
   readonly loginMethods?: WalkthroughAuthorPort["loginMethods"];
   readonly login?: WalkthroughAuthorPort["login"];
+  readonly logout?: WalkthroughAuthorPort["logout"];
 }
 
 function makeAuthor(options: AuthorFixtureOptions): WalkthroughAuthorPort {
@@ -64,6 +67,7 @@ function makeAuthor(options: AuthorFixtureOptions): WalkthroughAuthorPort {
     rememberModel: options.rememberModel ?? (() => Effect.void),
     loginMethods: options.loginMethods ?? Effect.succeed([]),
     login: options.login ?? (() => Effect.void),
+    logout: options.logout ?? Effect.void,
     start: () => Effect.die("authoring is outside this fixture"),
   };
 }
@@ -331,6 +335,55 @@ describe("agent model selection", () => {
       expect(yield* Effect.flip(loginManager.configure({ _tag: "UsePreference" }))).toEqual(
         new LoginCancelled(),
       );
+    }),
+  );
+
+  it.effect("returns to setup-required after logging out the saved provider", () =>
+    Effect.gen(function* () {
+      let authenticated = true;
+      const manager = yield* makeAgentModelManager(
+        makeAuthor({
+          availableModels: () => (authenticated ? [first] : []),
+          modelPreference: Effect.succeed(
+            Option.some({ providerId: first.providerId, modelId: first.modelId }),
+          ),
+          logout: Effect.sync(() => {
+            authenticated = false;
+          }),
+        }),
+        makeInteraction().interaction,
+      );
+
+      expect((yield* manager.status)._tag).toBe("AgentModelReady");
+      yield* manager.logout;
+      expect((yield* manager.status)._tag).toBe("AgentModelSetupRequired");
+    }),
+  );
+
+  it.effect("preserves a typed credential-read failure during logout", () =>
+    Effect.gen(function* () {
+      const expected = new AuthorCredentialReadFailed({ cause: "read failed" });
+      const manager = yield* makeAgentModelManager(
+        makeAuthor({ availableModels: () => [], logout: expected }),
+        makeInteraction().interaction,
+      );
+
+      expect(yield* Effect.flip(manager.logout)).toBe(expected);
+    }),
+  );
+
+  it.effect("preserves a typed provider logout failure", () =>
+    Effect.gen(function* () {
+      const expected = new AuthorLogoutFailed({
+        provider: first.providerId,
+        cause: "write failed",
+      });
+      const manager = yield* makeAgentModelManager(
+        makeAuthor({ availableModels: () => [], logout: expected }),
+        makeInteraction().interaction,
+      );
+
+      expect(yield* Effect.flip(manager.logout)).toBe(expected);
     }),
   );
 });

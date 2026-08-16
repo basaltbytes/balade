@@ -34,6 +34,7 @@ const agentModels = Layer.succeed(AgentModelManager, {
   status: Effect.succeed(new AgentModelReady({ model })),
   ensure: Effect.succeed(model),
   configure: () => Effect.succeed(model),
+  logout: Effect.void,
 });
 
 describe("the clarification workflow", () => {
@@ -47,6 +48,7 @@ describe("the clarification workflow", () => {
           status: Effect.succeed(new AgentModelSetupRequired()),
           ensure: new AgentModelSelectionCancelled(),
           configure: () => Effect.die("explicit setup is outside this fixture"),
+          logout: Effect.void,
         });
         const clarifier = Layer.succeed(WalkthroughClarifier, {
           answer: () => Effect.die("clarification must not start before setup finishes"),
@@ -102,6 +104,7 @@ describe("the clarification workflow", () => {
             return model;
           }),
           configure: () => Effect.succeed(model),
+          logout: Effect.void,
         });
         const rejected = '{% section id="nested" title="Nested" %}Nope{% /section %}';
         const clarifier = Layer.succeed(WalkthroughClarifier, {

@@ -196,6 +196,19 @@ export class AuthorPreferenceWriteFailed extends Schema.TaggedErrorClass<AuthorP
   { cause: Schema.Defect() },
 ) {}
 
+export class AuthorCredentialReadFailed extends Schema.TaggedErrorClass<AuthorCredentialReadFailed>()(
+  "AuthorCredentialReadFailed",
+  { cause: Schema.Defect() },
+) {}
+
+export class AuthorLogoutFailed extends Schema.TaggedErrorClass<AuthorLogoutFailed>()(
+  "AuthorLogoutFailed",
+  {
+    provider: AuthorProviderId,
+    cause: Schema.Defect(),
+  },
+) {}
+
 export class LoginFailed extends Schema.TaggedErrorClass<LoginFailed>()("LoginFailed", {
   provider: AuthorProviderId,
   method: Schema.Literals(["oauth", "api_key"]),
@@ -278,6 +291,7 @@ export interface WalkthroughAuthorPort {
     method: AuthorLoginMethod,
     interaction: LoginInteraction,
   ) => Effect.Effect<void, LoginFailed | LoginCancelled>;
+  readonly logout: Effect.Effect<void, AuthorCredentialReadFailed | AuthorLogoutFailed>;
   readonly start: (
     request: AuthoringRequest,
   ) => Effect.Effect<AuthoringSession, AuthorStartupError | AuthorTurnError, Scope.Scope>;

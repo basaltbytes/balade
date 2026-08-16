@@ -23,10 +23,13 @@ import { baladePiAgentDirectory, baladeSnapshotCacheDirectory } from "../state.j
 import {
   AuthorDiscoveryFailed,
   AuthorDraft,
+  AuthorCredentialReadFailed,
   AuthorLoginMethod,
+  AuthorLogoutFailed,
   AuthorModel,
   AuthorModelUnavailable,
   AuthorModelPreference,
+  AuthorProviderId,
   AuthorPreferenceReadFailed,
   AuthorPreferenceWriteFailed,
   AuthorRuntimeLoadFailed,
@@ -71,6 +74,9 @@ const decodeModels = Schema.decodeUnknownEffect(Schema.Array(AuthorModel), {
   onExcessProperty: "error",
 });
 const decodeLoginMethods = Schema.decodeUnknownEffect(Schema.Array(AuthorLoginMethod), {
+  onExcessProperty: "error",
+});
+const decodeProviderIds = Schema.decodeUnknownEffect(Schema.Array(AuthorProviderId), {
   onExcessProperty: "error",
 });
 const decodeModelPreference = Schema.decodeUnknownEffect(AuthorModelPreference, {
@@ -275,6 +281,28 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
         });
       });
 
+      const logout = Effect.gen(function* () {
+        const { modelRuntime, credentials } = yield* Effect.tryPromise({
+          try: async () => {
+            const { modelRuntime } = await dependencies();
+            return { modelRuntime, credentials: await modelRuntime.listCredentials() };
+          },
+          catch: (cause) => new AuthorCredentialReadFailed({ cause }),
+        });
+        const providers = yield* decodeProviderIds(
+          credentials.map((credential) => credential.providerId),
+        ).pipe(Effect.mapError((cause) => new AuthorCredentialReadFailed({ cause })));
+        yield* Effect.forEach(
+          providers,
+          (provider) =>
+            Effect.tryPromise({
+              try: () => modelRuntime.logout(provider),
+              catch: (cause) => new AuthorLogoutFailed({ provider, cause }),
+            }),
+          { discard: true },
+        );
+      }).pipe(Effect.withSpan("WalkthroughAuthor.logout"));
+
       const start = Effect.fn("WalkthroughAuthor.start")(function* (request: AuthoringRequest) {
         const pi = yield* Effect.tryPromise({
           try: dependencies,
@@ -373,7 +401,15 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
         } satisfies AuthoringSession;
       });
 
-      return { availableModels, modelPreference, rememberModel, loginMethods, login, start };
+      return {
+        availableModels,
+        modelPreference,
+        rememberModel,
+        loginMethods,
+        login,
+        logout,
+        start,
+      };
     }),
   );
 }

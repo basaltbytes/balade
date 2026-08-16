@@ -378,10 +378,14 @@ they describe.
 - The process installs the balade-owned `RIPGREP_CONFIG_PATH` once before Pi can
   dispatch searches in parallel. No search restores process-global state, so
   every ripgrep spawn retains `--no-ignore` and `--no-follow`.
-- Pi credential isolation holds: generation, live clarification and
-  `balade agent setup` use one shared model manager over balade's own agent
-  directory `~/.balade/pi/` and never reads or writes `~/.pi/agent/`
+- Pi credential isolation holds: generation, live clarification,
+  `balade agent setup` and `balade agent logout` use one shared model manager
+  over balade's own agent directory `~/.balade/pi/` and never read or write
+  `~/.pi/agent/`
   (`src/agent/model.ts`, `src/pi/client.ts`, `test/pi-agent-dir.test.ts`, issue #27).
+- Logout asks Pi for non-secret credential metadata and delegates each deletion
+  to Pi's credential store. Credential values never enter Balade's domain
+  model, errors, logs or terminal output.
 - The model manager serializes setup and rechecks saved state inside the permit.
   Concurrent first questions can wait for one terminal flow but cannot open
   competing login prompts. The browser receives only `ready` or

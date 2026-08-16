@@ -585,6 +585,15 @@ unavailable values open it, narrowed to matching models when possible.
 Preference read and write failures are typed warnings and do not prevent a run
 after the user has selected a model.
 
+`balade agent logout` enumerates non-secret credential metadata through Pi and
+removes every credential stored in Balade's agent directory. It runs under the
+same model-manager semaphore as setup, is idempotent when the store is empty,
+and reports credential-store read and provider-specific deletion failures as
+typed errors. It does not delete `~/.balade/pi/` or inspect credential values.
+Pi exposes no clear-default operation, so the saved provider/model preference
+remains inert after logout and the next successful setup overwrites it.
+Environment-provided credentials remain outside this stored-login operation.
+
 The session runs in memory with a resource loader that exposes no Pi extensions,
 skills, prompts, themes, global context, or working-tree context. It exposes
 repository instructions from the pinned PR commit before the first turn. For

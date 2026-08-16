@@ -6,6 +6,8 @@ import {
   type AuthorLoginMethod,
   type AuthorModel,
   type AuthorModelPreference,
+  type AuthorCredentialReadFailed,
+  type AuthorLogoutFailed,
   type AuthorPreferenceReadFailed,
   type LoginInteraction,
   type AuthorDiscoveryFailed,
@@ -72,12 +74,16 @@ export type AgentModelConfigurationError =
   | NoProviderAuthenticated
   | AgentModelSelectionCancelled;
 
+export type AgentLogoutError = AuthorCredentialReadFailed | AuthorLogoutFailed;
+export type AgentModelError = AgentModelConfigurationError | AgentLogoutError;
+
 export interface AgentModelManagerPort {
   readonly status: Effect.Effect<AgentModelState, AgentModelStatusError>;
   readonly ensure: Effect.Effect<AuthorModel, AgentModelConfigurationError>;
   readonly configure: (
     selection: ModelSelection,
   ) => Effect.Effect<AuthorModel, AgentModelConfigurationError>;
+  readonly logout: Effect.Effect<void, AgentLogoutError>;
 }
 
 export class AgentModelManager extends Context.Service<AgentModelManager, AgentModelManagerPort>()(
@@ -191,6 +197,7 @@ export const makeAgentModelManager = Effect.fn("makeAgentModelManager")(function
       ),
     ),
     configure: (selection) => lock.withPermit(configure(selection)),
+    logout: lock.withPermit(author.logout),
   } satisfies AgentModelManagerPort;
 });
 
