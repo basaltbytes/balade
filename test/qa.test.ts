@@ -25,6 +25,79 @@ const model: AuthorModel = {
 };
 
 describe("the clarification workflow", () => {
+  it.live("repairs one answer rejected by the canonical fragment compiler", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const repo = createFixtureRepo();
+        yield* Effect.addFinalizer(() => Effect.sync(repo.cleanup));
+        repo.addWalkthrough("valid.md", "valid.md");
+        const requests: ClarificationRequest[] = [];
+        const rejected = '{% section id="nested" title="Nested" %}Nope{% /section %}';
+        const clarifier = Layer.succeed(WalkthroughClarifier, {
+          selectedModel: Effect.succeed(model),
+          answer: (request) => {
+            requests.push(request);
+            return Effect.succeed(
+              request.repair === undefined || request.question === "Can repair stay invalid?"
+                ? rejected
+                : "The repaired **answer**.",
+            );
+          },
+        });
+        const layer = Layer.merge(contextResolverLive, clarifier).pipe(
+          Layer.provideMerge(shellLayer),
+        );
+        const prepared = yield* prepareSession({
+          cwd: repo.dir,
+          selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
+          useGh: false,
+        }).pipe(Effect.provide(layer));
+        if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
+        const path = prepared.session.paths[0];
+        if (path === undefined) return yield* Effect.die("fixture path missing");
+
+        yield* prepared.session.api.askQa(
+          path,
+          JSON.stringify({
+            kind: "new",
+            anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
+            question: "Can this repair itself?",
+          }),
+        );
+
+        const answered = yield* awaitThread(prepared.session.api, path, "answered");
+        expect(answered.threads[0]?.turns[0]?.answer).toMatchObject([
+          { b: "md", nodes: expect.any(Array) },
+        ]);
+        expect(requests).toHaveLength(2);
+        expect(requests[1]?.repair).toMatchObject({
+          rejectedAnswer: rejected,
+          diagnostics: expect.arrayContaining([
+            expect.stringContaining("cannot create walkthrough sections or groups"),
+          ]),
+        });
+
+        const threadId = answered.threads[0]?.id;
+        if (threadId === undefined) return yield* Effect.die("answered thread missing");
+        yield* prepared.session.api.askQa(
+          path,
+          JSON.stringify({
+            kind: "follow-up",
+            threadId,
+            question: "Can repair stay invalid?",
+          }),
+        );
+        const failed = yield* awaitThread(prepared.session.api, path, "failed");
+        expect(failed.threads[0]).toMatchObject({
+          status: "failed",
+          failed: { question: "Can repair stay invalid?" },
+        });
+        expect(requests).toHaveLength(4);
+        expect(requests[3]?.repair).toBeDefined();
+      }),
+    ),
+  );
+
   it.live("persists pending, answered, follow-up and failed states at the walkthrough stamp", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -109,6 +182,7 @@ describe("the clarification workflow", () => {
             expect.objectContaining({ question: "What changed?" }),
           ]),
         });
+        expect(requests).toHaveLength(3);
 
         /* SAFETY: the assertion intentionally forgets JSON.parse's `any` result to unknown. */
         const stored = JSON.parse(

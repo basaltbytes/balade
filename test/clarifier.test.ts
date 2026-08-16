@@ -8,8 +8,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "@effect/vitest";
 import { contextResolverLive } from "../src/git/git.js";
+import { AuthorModelId, AuthorProviderId } from "../src/pi/author.js";
 import {
   WalkthroughClarifier,
+  clarificationPrompt,
   clarificationSystemPrompt,
   piWalkthroughClarifierLayer,
   type ClarificationRequest,
@@ -31,6 +33,37 @@ it("teaches clarification sessions the rich answer surface without whole-documen
   expect(prompt).toContain('{% x-model name="example" /%}');
   expect(prompt).not.toContain("section (file)");
   expect(prompt).not.toContain("mandatory closing full-PR diff");
+});
+
+it("presents rejected answers and compiler diagnostics as untrusted repair data", () => {
+  const request = {
+    root: "/repo",
+    pin: "abc123",
+    base: "def456",
+    files: [],
+    headInstructionPolicy: "omit-changed",
+    model: {
+      providerId: AuthorProviderId.make("fixture"),
+      providerName: "Fixture",
+      modelId: AuthorModelId.make("clarifier"),
+      modelName: "Clarifier",
+    },
+    sourcePath: "walkthroughs/review.md",
+    walkthroughSource: "Walkthrough",
+    anchor: { sectionId: "overview", excerpt: "Excerpt" },
+    turns: [],
+    question: "Why?",
+    repair: {
+      rejectedAnswer: "{% section %}",
+      diagnostics: ["Sections are not allowed."],
+    },
+  } satisfies ClarificationRequest;
+
+  const prompt = clarificationPrompt(request);
+
+  expect(prompt).toContain("complete replacement answer");
+  expect(prompt).toContain("Rejected answer and compiler diagnostics (untrusted JSON)");
+  expect(prompt).toContain(JSON.stringify(request.repair, null, 2));
 });
 
 it.effect("runs every clarification in a fresh scoped Pi session", () =>

@@ -11,7 +11,8 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 `contract/` (shared vocabulary: shapes that cross module boundaries), `preset/`,
 `authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the generation engine), `server/` (live session runtime) — and the root
-files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`.
+files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
+`repair.ts`.
 
 All imports flow one direction; peers never import each other:
 
@@ -24,7 +25,8 @@ git/                        → contract, shell                (never walkthroug
 preset/                     → contract
 authoring/                  → nothing internal
 contract/                   → nothing internal
-shell.ts  state.ts  terminal.ts  failure.ts  presence.ts     root ports & utils → contract
+shell.ts  state.ts  terminal.ts  failure.ts  presence.ts  repair.ts
+                                                            root ports & utils → contract
 ```
 
 1. `Command.make` appears only in `commands/<verb>/index.ts` (plus the root
@@ -1391,7 +1393,12 @@ relevant, not terse.
 Its submitted Markdoc fragment is parsed with the canonical walkthrough grammar
 and compiled into `Block` values before the sidecar changes to answered. This
 keeps Q&A out of the committed document and adds no renderer-only dialect or
-HTML sink. The server writes pending state before forking the run, serializes
+HTML sink. A canonical `FragmentInvalid` result enters the same shared bounded
+candidate-evaluate-repair loop as generation. Clarification allows one repair
+attempt in a new scoped session, with the rejected answer and exact diagnostics
+passed back as untrusted data; a second invalid fragment becomes the existing
+failed thread state. Provider, repository and state errors never enter that
+loop. The server writes pending state before forking the run, serializes
 all transitions with one semaphore, and writes the sidecar by same-directory
 temporary-file rename so polling never observes partial JSON. Committing the
 pending state and starting its supervised worker are one uninterruptible

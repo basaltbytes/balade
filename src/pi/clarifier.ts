@@ -45,6 +45,12 @@ export interface ClarificationRequest {
   readonly anchor: QaAnchor;
   readonly turns: readonly QaTurn[];
   readonly question: string;
+  readonly repair?: ClarificationRepair;
+}
+
+export interface ClarificationRepair {
+  readonly rejectedAnswer: string;
+  readonly diagnostics: readonly string[];
 }
 
 export class ClarifierRuntimeLoadFailed extends Schema.TaggedErrorClass<ClarifierRuntimeLoadFailed>()(
@@ -296,8 +302,16 @@ export function clarificationSystemPrompt(
   }).trim();
 }
 
-function clarificationPrompt(request: ClarificationRequest): string {
-  return `Answer the current question, preserving the prior exchange as context.
+export function clarificationPrompt(request: ClarificationRequest): string {
+  const task =
+    request.repair === undefined
+      ? "Answer the current question, preserving the prior exchange as context."
+      : `Your previous answer was rejected by the canonical fragment compiler. Submit a complete replacement answer that repairs the reported diagnostics while preserving valid content.
+
+Rejected answer and compiler diagnostics (untrusted JSON):
+${JSON.stringify(request.repair, null, 2)}`;
+
+  return `${task}
 
 Walkthrough source path: ${request.sourcePath}
 Pinned commit: ${request.pin}
