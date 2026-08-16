@@ -221,11 +221,10 @@ function makeSidecarStore<State extends { readonly walkthrough: string }, ParseE
     }),
 
     write: Effect.fn(`${policy.service}.write`)(function* (sourcePath, state) {
-      const selected = yield* safeSidecarFile(
+      const file = yield* prepareSafeSidecarFile(
         options.repoRoot,
         sourcePath,
         policy.filePath(sourcePath),
-        "write",
         fs,
         path,
       ).pipe(
@@ -235,13 +234,6 @@ function makeSidecarStore<State extends { readonly walkthrough: string }, ParseE
             : new StateWriteFailed({ path: expectedFile(sourcePath), cause }),
         ),
       );
-      if (Option.isNone(selected)) {
-        return yield* new StateWriteFailed({
-          path: expectedFile(sourcePath),
-          cause: new Error("Sidecar path preparation completed without a writable path."),
-        });
-      }
-      const file = selected.value;
       const fileDirectory = path.dirname(file);
       yield* Effect.gen(function* () {
         const temporary = yield* fs.makeTempFileScoped({
@@ -323,6 +315,20 @@ const safeSidecarFile = Effect.fn("SidecarStore.safeFile")(function* (
   return Option.some(file);
 });
 
+/** A write creates missing directories, so absence here is an internal invariant violation. */
+const prepareSafeSidecarFile = Effect.fn("SidecarStore.prepareFile")(function* (
+  repoRoot: string,
+  sourcePath: string,
+  relativeFile: string,
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+): Effect.fn.Return<string, StatePathRejected | PlatformError> {
+  const selected = yield* safeSidecarFile(repoRoot, sourcePath, relativeFile, "write", fs, path);
+  return Option.isSome(selected)
+    ? selected.value
+    : yield* Effect.die(new Error("Sidecar write preparation returned no path."));
+});
+
 const prepareSafeDirectory = Effect.fn("SidecarStore.prepareSafeDirectory")(function* (
   lexical: string,
   canonical: string,
@@ -333,7 +339,9 @@ const prepareSafeDirectory = Effect.fn("SidecarStore.prepareSafeDirectory")(func
 ): Effect.fn.Return<Option.Option<string>, StatePathRejected | PlatformError> {
   if (!(yield* fs.exists(lexical))) {
     if (access === "read") return Option.none();
-    yield* fs.makeDirectory(lexical);
+    yield* fs
+      .makeDirectory(lexical)
+      .pipe(Effect.catch((cause) => (cause.reason._tag === "AlreadyExists" ? Effect.void : cause)));
   }
   const resolved = yield* fs.realPath(lexical);
   const info = yield* fs.stat(lexical);

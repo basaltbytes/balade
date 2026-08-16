@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { LoadResult } from "../src/walkthrough/pipeline.js";
-import type { IndexPayload, Payload, ReviewState } from "../src/contract/types.js";
+import type { IndexPayload, Payload, QaState, ReviewState } from "../src/contract/types.js";
 import {
   ApiReviewStateUnavailable,
   ApiWalkthroughUnavailable,
@@ -32,7 +32,7 @@ import { reviewSessionStartedText, startReviewSession } from "../src/server/revi
 import { findAppBundle, serve } from "../src/server/http.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { gitCommonDir } from "../src/shell.js";
-import { qaFilePath, ReviewStateStore, stateFilePath } from "../src/state.js";
+import { qaFilePath, QaStateStore, ReviewStateStore, stateFilePath } from "../src/state.js";
 import { provideLive } from "./support/effect.js";
 import { addSubmodule, addWorktree, createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
@@ -796,6 +796,38 @@ describe("review-state files", () => {
 
         expect(error).toMatchObject({ _tag: "StatePathRejected", path: "walkthroughs/valid.md" });
         expect(existsSync(join(outside, "valid.md.review.json"))).toBe(false);
+      }).pipe(provideLive),
+    ),
+  );
+
+  it.effect("allows concurrent first review and Q&A sidecar writes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const isolated = createFixtureRepo();
+        yield* Effect.addFinalizer(() => Effect.sync(isolated.cleanup));
+        const options = { repoRoot: isolated.dir, gitCommonDir: join(isolated.dir, ".git") };
+        const qaState: QaState = {
+          version: 1,
+          walkthrough: state.walkthrough,
+          pr: state.pr,
+          stamp: state.stamp,
+          threads: [],
+        };
+        const writeReview = Effect.gen(function* () {
+          const store = yield* ReviewStateStore;
+          yield* store.write(state.walkthrough, state);
+        }).pipe(Effect.provide(ReviewStateStore.layer(options)));
+        const writeQa = Effect.gen(function* () {
+          const store = yield* QaStateStore;
+          yield* store.write(qaState.walkthrough, qaState);
+        }).pipe(Effect.provide(QaStateStore.layer(options)));
+
+        yield* Effect.all([writeReview, writeQa], { concurrency: "unbounded" });
+
+        expect(existsSync(join(isolated.dir, ".balade", stateFilePath(state.walkthrough)))).toBe(
+          true,
+        );
+        expect(existsSync(join(isolated.dir, ".balade", qaFilePath(state.walkthrough)))).toBe(true);
       }).pipe(provideLive),
     ),
   );

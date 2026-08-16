@@ -355,9 +355,20 @@ const enqueueQuestion = Effect.fn("QaWorkflow.enqueueQuestion")(function* (
         threadId: pending.thread.id,
         question: work.question,
       } satisfies QuestionKey;
+      const failureContext = JSON.stringify({
+        path: work.path,
+        threadId: pending.thread.id,
+        questionId: work.question.id,
+        providerId: work.model.providerId,
+        modelId: work.model.modelId,
+      });
       const worker = completeQuestion(runtime, pendingWork).pipe(
         Effect.tapError((error) =>
-          Effect.logError(`balade: clarification failed (${error._tag}).`),
+          Effect.logError(
+            sanitizeTerminalText(
+              `balade: clarification failed (${error._tag}; ${failureContext}).`,
+            ),
+          ),
         ),
         Effect.tapDefect((defect) =>
           Effect.logError(
@@ -373,7 +384,9 @@ const enqueueQuestion = Effect.fn("QaWorkflow.enqueueQuestion")(function* (
               markFailed(runtime, questionKey).pipe(
                 Effect.catch((writeError) =>
                   Effect.logError(
-                    `balade: clarification failure state could not be saved (${writeError._tag}).`,
+                    sanitizeTerminalText(
+                      `balade: clarification failure state could not be saved (${writeError._tag}; ${failureContext}).`,
+                    ),
                   ),
                 ),
               ),
