@@ -2,16 +2,14 @@
 
 import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Result, Schema } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "@effect/vitest";
 import { contextResolverLive } from "../src/git/git.js";
-import { AuthorModelId, AuthorProviderId } from "../src/pi/author.js";
 import {
   WalkthroughClarifier,
-  clarificationPrompt,
   clarificationSystemPrompt,
   piWalkthroughClarifierLayer,
   type ClarificationRequest,
@@ -31,42 +29,18 @@ it("teaches clarification sessions the rich answer surface without whole-documen
   expect(prompt).toContain("mermaid fence");
   expect(prompt).toContain("diagram");
   expect(prompt).toContain('{% x-model name="example" /%}');
+  expect(prompt).toContain("runs the canonical clarification check");
+  expect(prompt).toContain("returns diagnostics");
   expect(prompt).not.toContain("section (file)");
   expect(prompt).not.toContain("mandatory closing full-PR diff");
 });
 
-it("presents rejected answers and compiler diagnostics as untrusted repair data", () => {
-  const request = {
-    root: "/repo",
-    pin: "abc123",
-    base: "def456",
-    files: [],
-    headInstructionPolicy: "omit-changed",
-    model: {
-      providerId: AuthorProviderId.make("fixture"),
-      providerName: "Fixture",
-      modelId: AuthorModelId.make("clarifier"),
-      modelName: "Clarifier",
-    },
-    sourcePath: "walkthroughs/review.md",
-    walkthroughSource: "Walkthrough",
-    anchor: { sectionId: "overview", excerpt: "Excerpt" },
-    turns: [],
-    question: "Why?",
-    repair: {
-      rejectedAnswer: "{% section %}",
-      diagnostics: ["Sections are not allowed."],
-    },
-  } satisfies ClarificationRequest;
+class FixtureValidationFailed extends Schema.TaggedErrorClass<FixtureValidationFailed>()(
+  "FixtureValidationFailed",
+  {},
+) {}
 
-  const prompt = clarificationPrompt(request);
-
-  expect(prompt).toContain("complete replacement answer");
-  expect(prompt).toContain("Rejected answer and compiler diagnostics (untrusted JSON)");
-  expect(prompt).toContain(JSON.stringify(request.repair, null, 2));
-});
-
-it.effect("runs every clarification in a fresh scoped Pi session", () =>
+it.effect("checks and repairs submissions inside each scoped clarification session", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const repo = createFixtureRepo();
@@ -93,12 +67,35 @@ it.effect("runs every clarification in a fresh scoped Pi session", () =>
       const settingsManager = coding.SettingsManager.inMemory();
       settingsManager.setDefaultModelAndProvider(available.provider, available.id);
       faux.setResponses([
+        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:range-a" }), {
+          stopReason: "toolUse",
+        }),
         ai.fauxAssistantMessage(
           ai.fauxToolCall("submit_answer", { body: "The first **answer**." }),
           { stopReason: "toolUse" },
         ),
         ai.fauxAssistantMessage(
           ai.fauxToolCall("submit_answer", { body: "The follow-up **answer**." }),
+          { stopReason: "toolUse" },
+        ),
+        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:range-a" }), {
+          stopReason: "toolUse",
+        }),
+        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:range-b" }), {
+          stopReason: "toolUse",
+        }),
+        ai.fauxAssistantMessage(
+          ai.fauxToolCall("submit_answer", { body: "The twice-repaired **answer**." }),
+          { stopReason: "toolUse" },
+        ),
+        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:unchanged" }), {
+          stopReason: "toolUse",
+        }),
+        ai.fauxAssistantMessage(ai.fauxToolCall("submit_answer", { body: "invalid:unchanged" }), {
+          stopReason: "toolUse",
+        }),
+        ai.fauxAssistantMessage(
+          ai.fauxToolCall("submit_answer", { body: "Validation infrastructure fails." }),
           { stopReason: "toolUse" },
         ),
       ]);
@@ -131,12 +128,36 @@ it.effect("runs every clarification in a fresh scoped Pi session", () =>
           walkthroughSource: '{% section id="overview" title="Overview" %}Text{% /section %}',
           anchor: { sectionId: "overview", excerpt: "Text" },
         };
-        expect(yield* clarifier.answer({ ...common, turns: [], question: "First?" })).toBe(
-          "The first **answer**.",
-        );
-        expect(yield* clarifier.answer({ ...common, turns: [], question: "Follow-up?" })).toBe(
-          "The follow-up **answer**.",
-        );
+        const validate = (body: string) =>
+          Effect.succeed(
+            body.startsWith("invalid:")
+              ? Result.fail({ diagnostics: [body.slice("invalid:".length)] })
+              : Result.succeed(body),
+          );
+
+        expect(
+          yield* clarifier.answer({ ...common, turns: [], question: "First?" }, validate),
+        ).toBe("The first **answer**.");
+        expect(
+          yield* clarifier.answer({ ...common, turns: [], question: "Follow-up?" }, validate),
+        ).toBe("The follow-up **answer**.");
+        expect(
+          yield* clarifier.answer({ ...common, turns: [], question: "Two repairs?" }, validate),
+        ).toBe("The twice-repaired **answer**.");
+
+        const unchanged = yield* clarifier
+          .answer({ ...common, turns: [], question: "No progress?" }, validate)
+          .pipe(Effect.flip);
+        expect(unchanged).toEqual({ diagnostics: ["unchanged"] });
+
+        const validationFailure = yield* clarifier
+          .answer(
+            { ...common, turns: [], question: "Validation failure?" },
+            () => new FixtureValidationFailed(),
+          )
+          .pipe(Effect.flip);
+        expect(validationFailure).toBeInstanceOf(FixtureValidationFailed);
+        expect(faux.state.callCount).toBe(9);
       }).pipe(Effect.provide(layer));
     }),
   ),

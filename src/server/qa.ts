@@ -36,7 +36,6 @@ import {
   type WalkthroughClarifierPort,
 } from "../pi/clarifier.js";
 import { getPreset } from "../preset/registry.js";
-import { repairInvalid } from "../repair.js";
 import { QaStateStore } from "../state.js";
 import { compileFragment, parseFragment } from "../walkthrough/fragment.js";
 import { PayloadCache } from "./cache.js";
@@ -44,7 +43,6 @@ import { ServerRepo } from "./repo.js";
 
 const decodeThreadId = Schema.decodeUnknownEffect(QaThreadId);
 const decodeTurnId = Schema.decodeUnknownEffect(QaTurnId);
-const MAX_CLARIFICATION_REPAIR_ATTEMPTS = 1;
 
 export class QaWalkthroughUnavailable extends Schema.TaggedErrorClass<QaWalkthroughUnavailable>()(
   "QaWalkthroughUnavailable",
@@ -373,25 +371,12 @@ const completeQuestion = Effect.fn("QaWorkflow.completeQuestion")(function* (
   work: PendingWork,
 ) {
   const { path, payload, pending, question, request } = work;
-  const raw = yield* runtime.clarifier.answer(request);
-  const repaired = yield* repairInvalid({
-    initial: raw,
-    evaluate: (candidate) =>
-      compileAnswer(runtime, work, candidate).pipe(
-        Effect.map(Result.succeed),
-        Effect.catchTag("FragmentInvalid", (error) => Effect.succeed(Result.fail(error))),
-      ),
-    repair: (candidate, failure) =>
-      runtime.clarifier.answer({
-        ...request,
-        repair: {
-          rejectedAnswer: candidate,
-          diagnostics: failure.diagnostics,
-        },
-      }),
-    maxAttempts: MAX_CLARIFICATION_REPAIR_ATTEMPTS,
-  });
-  const blocks = yield* Effect.fromResult(repaired.outcome);
+  const blocks = yield* runtime.clarifier.answer(request, (candidate) =>
+    compileAnswer(runtime, work, candidate).pipe(
+      Effect.map(Result.succeed),
+      Effect.catchTag("FragmentInvalid", (error) => Effect.succeed(Result.fail(error))),
+    ),
+  );
   const answeredAt = yield* isoNow();
   const turn: QaTurn = { ...question, answeredAt, answer: [...blocks] };
 

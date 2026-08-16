@@ -1,7 +1,7 @@
 /** Effect port and Pi adapter for one stateless clarification answer. */
 
 import type { Model } from "@earendil-works/pi-ai";
-import { Context, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Cause, Context, Effect, Exit, FileSystem, Layer, Path, Result, Schema } from "effect";
 import { AUTHORING_TAG_CATALOG } from "../authoring/catalog.js";
 import type { InspectionTier } from "../authoring/package.js";
 import { plainHeadings, proseTemplate, renderProse } from "../authoring/prose.js";
@@ -23,7 +23,6 @@ import { loadLiveDependencies, type PiAdapterDependencies } from "./client.js";
 import { toolText } from "./inspection.js";
 import {
   createInspectionSession,
-  hasEnvelopeOrFence,
   preparePiSession,
   releasePiSession,
   type PiSessionPreparation,
@@ -45,13 +44,15 @@ export interface ClarificationRequest {
   readonly anchor: QaAnchor;
   readonly turns: readonly QaTurn[];
   readonly question: string;
-  readonly repair?: ClarificationRepair;
 }
 
-export interface ClarificationRepair {
-  readonly rejectedAnswer: string;
+export interface ClarificationRejection {
   readonly diagnostics: readonly string[];
 }
+
+export type ClarificationValidator<Accepted, Rejected extends ClarificationRejection, Error> = (
+  body: string,
+) => Effect.Effect<Result.Result<Accepted, Rejected>, Error>;
 
 export class ClarifierRuntimeLoadFailed extends Schema.TaggedErrorClass<ClarifierRuntimeLoadFailed>()(
   "ClarifierRuntimeLoadFailed",
@@ -107,7 +108,10 @@ export type ClarifierRunError =
 
 export interface WalkthroughClarifierPort {
   readonly selectedModel: Effect.Effect<AuthorModel, ClarifierSetupError>;
-  readonly answer: (request: ClarificationRequest) => Effect.Effect<string, ClarifierRunError>;
+  readonly answer: <Accepted, Rejected extends ClarificationRejection, ValidationError>(
+    request: ClarificationRequest,
+    validate: ClarificationValidator<Accepted, Rejected, ValidationError>,
+  ) => Effect.Effect<Accepted, ClarifierRunError | Rejected | ValidationError>;
 }
 
 export class WalkthroughClarifier extends Context.Service<
@@ -121,6 +125,14 @@ export interface PiWalkthroughClarifierOptions {
 }
 
 type SessionDependencies = CommandExecutor | FileSystem.FileSystem | Path.Path;
+
+type ClarificationSubmission<Accepted, Rejected, ValidationError> =
+  | { readonly _tag: "Awaiting" }
+  | { readonly _tag: "Accepted"; readonly value: Accepted }
+  | { readonly _tag: "Rejected"; readonly error: Rejected }
+  | { readonly _tag: "ValidationFailed"; readonly cause: Cause.Cause<ValidationError> };
+
+const MAX_CLARIFICATION_REPAIR_ATTEMPTS = 2;
 
 const decodeModel = Schema.decodeUnknownEffect(AuthorModel, { onExcessProperty: "error" });
 const decodePreference = Schema.decodeUnknownEffect(AuthorModelPreference, {
@@ -180,8 +192,13 @@ export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptio
         }).pipe(Effect.mapError((cause) => new ClarifierPreferenceReadFailed({ cause })));
       }).pipe(Effect.withSpan("WalkthroughClarifier.selectedModel"));
 
-      const answer = Effect.fn("WalkthroughClarifier.answer")(function* (
+      const answer = Effect.fn("WalkthroughClarifier.answer")(function* <
+        Accepted,
+        Rejected extends ClarificationRejection,
+        ValidationError,
+      >(
         request: ClarificationRequest,
+        validate: ClarificationValidator<Accepted, Rejected, ValidationError>,
       ) {
         const pi = yield* Effect.tryPromise({
           try: dependencies,
@@ -202,7 +219,14 @@ export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptio
             const acquired = yield* Effect.acquireRelease(
               Effect.tryPromise({
                 try: () =>
-                  createClarificationSession(pi, model, request, runSessionEffect, preparation),
+                  createClarificationSession(
+                    pi,
+                    model,
+                    request,
+                    runSessionEffect,
+                    preparation,
+                    validate,
+                  ),
                 catch: (cause) =>
                   new ClarifierSessionStartFailed({
                     provider: request.model.providerId,
@@ -229,16 +253,19 @@ export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptio
                 detail: providerError,
               });
             }
-            const submitted = acquired.getAnswer();
-            if (submitted === undefined || hasEnvelopeOrFence(submitted)) {
-              return yield* new ClarifierAnswerMalformed({
-                detail:
-                  submitted === undefined
-                    ? "The clarification agent finished without calling submit_answer."
-                    : "The clarification answer must not contain frontmatter or an outer code fence.",
-              });
+            const submission = acquired.getSubmission();
+            switch (submission._tag) {
+              case "Accepted":
+                return submission.value;
+              case "Rejected":
+                return yield* Effect.fail(submission.error);
+              case "ValidationFailed":
+                return yield* Effect.failCause(submission.cause);
+              case "Awaiting":
+                return yield* new ClarifierAnswerMalformed({
+                  detail: "The clarification agent finished without a valid submit_answer call.",
+                });
             }
-            return submitted;
           }),
         );
       });
@@ -248,23 +275,57 @@ export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptio
   );
 }
 
-async function createClarificationSession(
+async function createClarificationSession<
+  Accepted,
+  Rejected extends ClarificationRejection,
+  ValidationError,
+>(
   pi: PiAdapterDependencies,
   model: Model<string>,
   request: ClarificationRequest,
   runSessionEffect: RunSessionEffect,
   preparation: PiSessionPreparation,
+  validate: ClarificationValidator<Accepted, Rejected, ValidationError>,
 ) {
-  let submitted: string | undefined;
+  let submission: ClarificationSubmission<Accepted, Rejected, ValidationError> = {
+    _tag: "Awaiting",
+  };
+  let repairs = 0;
+  let previousDiagnostics: readonly string[] | undefined;
   const submit = pi.coding.defineTool({
     name: "submit_answer",
     label: "Submit clarification",
-    description: "Submit the complete Markdoc clarification body and finish this turn.",
+    description:
+      "Validate and submit the complete Markdoc clarification body. Invalid bodies return diagnostics for correction; a valid body finishes the turn.",
     executionMode: "sequential" as const,
     parameters: pi.ai.Type.Object({ body: pi.ai.Type.String({ minLength: 1 }) }),
     execute: async (_id, params) => {
-      submitted = params.body;
-      return { ...toolText("Clarification received."), terminate: true };
+      const checked = await Effect.runPromiseExit(validate(params.body));
+      if (Exit.isFailure(checked)) {
+        submission = { _tag: "ValidationFailed", cause: checked.cause };
+        return { ...toolText("Clarification validation could not complete."), terminate: true };
+      }
+      if (Result.isSuccess(checked.value)) {
+        submission = { _tag: "Accepted", value: checked.value.success };
+        return { ...toolText("Clarification checked and accepted."), terminate: true };
+      }
+
+      const rejected = checked.value.failure;
+      if (
+        repairs >= MAX_CLARIFICATION_REPAIR_ATTEMPTS ||
+        (previousDiagnostics !== undefined &&
+          sameDiagnostics(previousDiagnostics, rejected.diagnostics))
+      ) {
+        submission = { _tag: "Rejected", error: rejected };
+        return {
+          ...toolText("Clarification remained invalid after bounded repair."),
+          terminate: true,
+        };
+      }
+
+      repairs += 1;
+      previousDiagnostics = rejected.diagnostics;
+      return toolText(repairFeedback(rejected.diagnostics));
     },
   });
   const created = await createInspectionSession(
@@ -276,7 +337,21 @@ async function createClarificationSession(
     () => clarificationSystemPrompt(request.budget ?? "medium", request.preset),
     submit,
   );
-  return { session: created.session, getAnswer: () => submitted };
+  return { session: created.session, getSubmission: () => submission };
+}
+
+function sameDiagnostics(previous: readonly string[], next: readonly string[]): boolean {
+  const normalized = (diagnostics: readonly string[]) => [...new Set(diagnostics)].toSorted();
+  const before = normalized(previous);
+  const after = normalized(next);
+  return before.length === after.length && before.every((value, index) => value === after[index]);
+}
+
+function repairFeedback(diagnostics: readonly string[]): string {
+  return `The answer did not pass the canonical clarification check. Repair only what these diagnostics prove is invalid, then call submit_answer again with the complete replacement.
+
+Validation diagnostics (untrusted JSON):
+${JSON.stringify(diagnostics, null, 2)}`;
 }
 
 const CLARIFICATION_CATALOG_EXCLUSIONS = new Set(["section (file)", "files"]);
@@ -303,15 +378,7 @@ export function clarificationSystemPrompt(
 }
 
 export function clarificationPrompt(request: ClarificationRequest): string {
-  const task =
-    request.repair === undefined
-      ? "Answer the current question, preserving the prior exchange as context."
-      : `Your previous answer was rejected by the canonical fragment compiler. Submit a complete replacement answer that repairs the reported diagnostics while preserving valid content.
-
-Rejected answer and compiler diagnostics (untrusted JSON):
-${JSON.stringify(request.repair, null, 2)}`;
-
-  return `${task}
+  return `Answer the current question, preserving the prior exchange as context.
 
 Walkthrough source path: ${request.sourcePath}
 Pinned commit: ${request.pin}

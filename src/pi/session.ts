@@ -276,8 +276,3 @@ function minimalResourceLoader(
     reload: async () => {},
   };
 }
-
-export function hasEnvelopeOrFence(body: string): boolean {
-  const trimmed = body.trimStart();
-  return trimmed.startsWith("---") || trimmed.startsWith("```");
-}

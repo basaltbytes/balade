@@ -6,6 +6,7 @@ import type { ResolveContext } from "../contract/context.js";
 import type { Block, CheckDiagnostic } from "../contract/types.js";
 import { getPreset } from "../preset/registry.js";
 import type { Preset } from "../preset/types.js";
+import { hasEnvelopeOrFence } from "../submission.js";
 import { compileBlocks, type CompileEnv } from "./blocks.js";
 import { parseDocument } from "./document.js";
 
@@ -28,6 +29,15 @@ export function parseFragment(
   file: string,
   presetName: string | undefined,
 ): Result.Result<ParsedFragment, FragmentInvalid> {
+  if (hasEnvelopeOrFence(source)) {
+    return Result.fail(
+      new FragmentInvalid({
+        diagnostics: [
+          "A clarification answer must not contain frontmatter or an outer code fence.",
+        ],
+      }),
+    );
+  }
   const preset = presetName === undefined ? undefined : getPreset(presetName);
   if (presetName !== undefined && preset === undefined) {
     return Result.fail(

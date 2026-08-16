@@ -41,4 +41,16 @@ describe("clarification Markdoc fragments", () => {
       expect(parsed.failure.diagnostics).toEqual([expect.stringContaining("cannot be empty")]);
     }
   });
+
+  it("refuses a document envelope or outer code fence", () => {
+    for (const source of ["---\ntitle: Nope\n---\n\nAnswer", "```md\nAnswer\n```"]) {
+      const parsed = parseFragment(source, "walkthroughs/review.md", undefined);
+      expect(Result.isFailure(parsed)).toBe(true);
+      if (Result.isFailure(parsed)) {
+        expect(parsed.failure.diagnostics).toEqual([
+          expect.stringContaining("frontmatter or an outer code fence"),
+        ]);
+      }
+    }
+  });
 });

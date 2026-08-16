@@ -1,6 +1,6 @@
 /** Generate → write → check → repair, with the invalid draft kept for manual recovery. */
 
-import { Effect, Result, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
 import { formatText } from "../../terminal.js";
 import { checkOne } from "../../walkthrough/checker.js";
@@ -8,7 +8,6 @@ import { discoveryErrorMessage } from "../../walkthrough/discovery.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
 import type { Lang, CheckReport } from "../../contract/types.js";
 import type { PullHeadError, PullSnapshot } from "../../git/pr.js";
-import { repairInvalid } from "../../repair.js";
 import {
   DraftMalformed,
   ProviderRequestFailed,
@@ -137,27 +136,22 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
     });
     const file = output.file;
 
-    const repaired = yield* repairInvalid({
-      initial,
-      evaluate: () =>
-        checkGeneratedDraft(options.source, file).pipe(
-          Effect.map((report) => (report.ok ? Result.succeed(report) : Result.fail(report))),
-        ),
-      repair: (_turn, report) =>
-        session.repair(formatText({ reports: [report] })).pipe(
-          Effect.mapError((cause) => new RepairFailed({ file, report, cause })),
-          Effect.tap((turn) =>
-            replaceGeneratedDraft(
-              file,
-              renderDraft(options.source, turn.draft, options.preset, options.lang),
-            ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause }))),
-          ),
-        ),
-      maxAttempts: MAX_REPAIR_ATTEMPTS,
-      stopAfter: sameDiagnosticLocations,
-    });
-    const { candidate: turn, repairs } = repaired;
-    const report = Result.merge(repaired.outcome);
+    let turn = initial;
+    let repairs = 0;
+    let report = yield* checkGeneratedDraft(options.source, file);
+    while (!report.ok && repairs < MAX_REPAIR_ATTEMPTS) {
+      const previousReport = report;
+      repairs++;
+      turn = yield* session
+        .repair(formatText({ reports: [report] }))
+        .pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
+      yield* replaceGeneratedDraft(
+        file,
+        renderDraft(options.source, turn.draft, options.preset, options.lang),
+      ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
+      report = yield* checkGeneratedDraft(options.source, file);
+      if (sameDiagnosticLocations(previousReport, report)) break;
+    }
 
     const summary: GenerationSummary = {
       file,

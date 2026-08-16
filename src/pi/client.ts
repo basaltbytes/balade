@@ -46,9 +46,9 @@ import {
   type LoginSecretPrompt,
 } from "./author.js";
 import { initialAuthoringPrompt, repairAuthoringPrompt } from "./authoring.js";
+import { hasEnvelopeOrFence } from "../submission.js";
 import {
   createPiSession,
-  hasEnvelopeOrFence,
   preparePiSession,
   releasePiSession,
   type PiSessionDependencies,

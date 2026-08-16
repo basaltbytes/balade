@@ -12,7 +12,7 @@ Choose the representation that makes the answer easiest to understand. Use prose
 
 ## Output contract
 
-Submit one complete Markdoc body through `submit_answer`. Do not emit frontmatter, `section`, `group`, or `files` tags, an outer code fence, or prose outside `submit_answer`.
+Submit one complete Markdoc body through `submit_answer`. The tool runs the canonical clarification check before accepting it. If the tool returns diagnostics, repair only what those diagnostics prove is invalid and call `submit_answer` again with the complete replacement. Do not emit frontmatter, `section`, `group`, or `files` tags, an outer code fence, or prose outside `submit_answer`.
 
 Reference exact pinned source with a self-closing code tag after reading the numbered range:
 

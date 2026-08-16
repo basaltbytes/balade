@@ -1,6 +1,6 @@
 /** Clarification workflow through real git resolution and file sidecars, with Pi at its port. */
 
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Result } from "effect";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
@@ -25,24 +25,29 @@ const model: AuthorModel = {
 };
 
 describe("the clarification workflow", () => {
-  it.live("repairs one answer rejected by the canonical fragment compiler", () =>
+  it.live("keeps canonical validation inside one clarification call", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const repo = createFixtureRepo();
         yield* Effect.addFinalizer(() => Effect.sync(repo.cleanup));
         repo.addWalkthrough("valid.md", "valid.md");
         const requests: ClarificationRequest[] = [];
+        const rejections: (readonly string[])[] = [];
         const rejected = '{% section id="nested" title="Nested" %}Nope{% /section %}';
         const clarifier = Layer.succeed(WalkthroughClarifier, {
           selectedModel: Effect.succeed(model),
-          answer: (request) => {
-            requests.push(request);
-            return Effect.succeed(
-              request.repair === undefined || request.question === "Can repair stay invalid?"
-                ? rejected
-                : "The repaired **answer**.",
-            );
-          },
+          answer: (request, validate) =>
+            Effect.gen(function* () {
+              requests.push(request);
+              const first = yield* validate(rejected);
+              if (Result.isSuccess(first)) return yield* Effect.die("invalid fixture was accepted");
+              rejections.push(first.failure.diagnostics);
+              const replacement =
+                request.question === "Can repair stay invalid?"
+                  ? rejected
+                  : "The repaired **answer**.";
+              return yield* Effect.fromResult(yield* validate(replacement));
+            }),
         });
         const layer = Layer.merge(contextResolverLive, clarifier).pipe(
           Layer.provideMerge(shellLayer),
@@ -69,13 +74,12 @@ describe("the clarification workflow", () => {
         expect(answered.threads[0]?.turns[0]?.answer).toMatchObject([
           { b: "md", nodes: expect.any(Array) },
         ]);
-        expect(requests).toHaveLength(2);
-        expect(requests[1]?.repair).toMatchObject({
-          rejectedAnswer: rejected,
-          diagnostics: expect.arrayContaining([
+        expect(requests).toHaveLength(1);
+        expect(rejections[0]).toEqual(
+          expect.arrayContaining([
             expect.stringContaining("cannot create walkthrough sections or groups"),
           ]),
-        });
+        );
 
         const threadId = answered.threads[0]?.id;
         if (threadId === undefined) return yield* Effect.die("answered thread missing");
@@ -92,8 +96,7 @@ describe("the clarification workflow", () => {
           status: "failed",
           failed: { question: "Can repair stay invalid?" },
         });
-        expect(requests).toHaveLength(4);
-        expect(requests[3]?.repair).toBeDefined();
+        expect(requests).toHaveLength(2);
       }),
     ),
   );
@@ -108,7 +111,7 @@ describe("the clarification workflow", () => {
         let failNext = false;
         const clarifier = Layer.succeed(WalkthroughClarifier, {
           selectedModel: Effect.succeed(model),
-          answer: (request) => {
+          answer: (request, validate) => {
             requests.push(request);
             return failNext
               ? new ClarifierRequestFailed({
@@ -116,7 +119,9 @@ describe("the clarification workflow", () => {
                   model: model.modelId,
                   detail: "fixture provider failure",
                 })
-              : Effect.succeed(`The answer to **${request.question}** is pinned.`);
+              : validate(`The answer to **${request.question}** is pinned.`).pipe(
+                  Effect.flatMap(Effect.fromResult),
+                );
           },
         });
         const layer = Layer.merge(contextResolverLive, clarifier).pipe(
