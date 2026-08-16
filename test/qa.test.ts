@@ -1,10 +1,15 @@
 /** Clarification workflow through real git resolution and file sidecars, with Pi at its port. */
 
 import { Effect, Layer, Result } from "effect";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
-import { AgentModelManager, AgentModelReady, AgentModelSetupRequired } from "../src/agent/model.js";
+import {
+  AgentModelManager,
+  AgentModelReady,
+  AgentModelSelectionCancelled,
+  AgentModelSetupRequired,
+} from "../src/agent/model.js";
 import { contextResolverLive } from "../src/git/git.js";
 import { AuthorModelId, AuthorProviderId, type AuthorModel } from "../src/pi/author.js";
 import {
@@ -32,6 +37,53 @@ const agentModels = Layer.succeed(AgentModelManager, {
 });
 
 describe("the clarification workflow", () => {
+  it.live("does not persist a pending question when agent setup is cancelled", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const repo = createFixtureRepo();
+        yield* Effect.addFinalizer(() => Effect.sync(repo.cleanup));
+        repo.addWalkthrough("valid.md", "valid.md");
+        const setupCancelled = Layer.succeed(AgentModelManager, {
+          status: Effect.succeed(new AgentModelSetupRequired()),
+          ensure: new AgentModelSelectionCancelled(),
+          configure: () => Effect.die("explicit setup is outside this fixture"),
+        });
+        const clarifier = Layer.succeed(WalkthroughClarifier, {
+          answer: () => Effect.die("clarification must not start before setup finishes"),
+        });
+        const layer = Layer.mergeAll(contextResolverLive, clarifier, setupCancelled).pipe(
+          Layer.provideMerge(shellLayer),
+        );
+        const prepared = yield* prepareSession({
+          cwd: repo.dir,
+          selection: { kind: "files", paths: ["walkthroughs/valid.md"] },
+          useGh: false,
+        }).pipe(Effect.provide(layer));
+        if (prepared._tag !== "SessionReady") return yield* Effect.die(prepared._tag);
+        const path = prepared.session.paths[0];
+        if (path === undefined) return yield* Effect.die("fixture path missing");
+
+        const error = yield* Effect.flip(
+          prepared.session.api.askQa(
+            path,
+            JSON.stringify({
+              kind: "new",
+              anchor: { sectionId: "overview", excerpt: "The planning pool is now live." },
+              question: "Can setup be cancelled?",
+            }),
+          ),
+        );
+
+        expect(error).toMatchObject({
+          _tag: "QaAgentUnavailable",
+          reason: "setup-cancelled",
+        });
+        expect((yield* prepared.session.api.readQa(path)).threads).toEqual([]);
+        expect(existsSync(join(repo.dir, ".balade", qaFilePath(path)))).toBe(false);
+      }),
+    ),
+  );
+
   it.live("keeps canonical validation inside one clarification call", () =>
     Effect.scoped(
       Effect.gen(function* () {

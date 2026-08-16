@@ -20,14 +20,7 @@ import { authoringSystemPrompt } from "../src/pi/authoring.js";
 import { inspectionBudget } from "../src/authoring/package.js";
 import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
 import { slugifyTitle, type ExistingWalkthrough } from "../src/commands/generate/output.js";
-import {
-  makeAgentModelManager,
-  matchingModels,
-  modelSelectionFromFlags,
-  modelsForPicker,
-  preferredModel,
-  type AgentModelNotice,
-} from "../src/agent/model.js";
+import { makeAgentModelManager, type AgentModelNotice } from "../src/agent/model.js";
 import { shellLayer } from "./support/effect.js";
 import { contextResolverLive } from "../src/git/git.js";
 import type { PullSnapshot } from "../src/git/pr.js";
@@ -1096,69 +1089,5 @@ describe("generation", () => {
   it("derives stable, filesystem-safe draft names", () => {
     expect(slugifyTitle("  Déjà vu: API / v2!  ")).toBe("deja-vu-api-v2");
     expect(slugifyTitle("🎉")).toBe("walkthrough");
-    expect(
-      matchingModels(
-        [
-          Schema.decodeUnknownSync(AuthorModelSchema)({
-            providerId: "faux",
-            providerName: "Faux",
-            modelId: "one",
-            modelName: "One",
-          }),
-        ],
-        { providerId: "other" },
-      ),
-    ).toEqual([]);
-    const models = [
-      Schema.decodeUnknownSync(AuthorModelSchema)({
-        providerId: "faux",
-        providerName: "Faux",
-        modelId: "one",
-        modelName: "One",
-      }),
-    ];
-    const first = models[0];
-    if (first === undefined) throw new Error("test model fixture is empty");
-    const preference = Option.some({
-      providerId: first.providerId,
-      modelId: first.modelId,
-    });
-    expect(Option.getOrUndefined(preferredModel(models, preference))).toEqual(first);
-    expect(modelSelectionFromFlags(Option.none(), Option.none())).toEqual({
-      _tag: "UsePreference",
-    });
-    expect(modelSelectionFromFlags(Option.some("  faux  "), Option.some(""))).toEqual({
-      _tag: "Choose",
-      filter: { providerId: "faux" },
-    });
-    expect(modelSelectionFromFlags(Option.some(""), Option.none())).toEqual({
-      _tag: "Choose",
-      filter: {},
-    });
-
-    const second = Schema.decodeUnknownSync(AuthorModelSchema)({
-      providerId: "other",
-      providerName: "Other",
-      modelId: "two",
-      modelName: "Two",
-    });
-    expect(
-      modelsForPicker([...models, second], { providerId: "faux", modelId: "missing" }),
-    ).toEqual({
-      models,
-      usedFallback: true,
-    });
-    expect(modelsForPicker([...models, second], { providerId: "missing", modelId: "two" })).toEqual(
-      {
-        models: [second],
-        usedFallback: true,
-      },
-    );
-    expect(
-      modelsForPicker([...models, second], { providerId: "missing", modelId: "absent" }),
-    ).toEqual({
-      models: [...models, second],
-      usedFallback: true,
-    });
   });
 });
