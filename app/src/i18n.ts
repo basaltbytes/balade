@@ -41,6 +41,30 @@ export interface Strings {
   saveFallback: string;
   saveFailed: string;
 
+  /* clarification Q&A */
+  qa: {
+    askAgent: string;
+    title: string;
+    close: string;
+    selectedPassage: string;
+    questionLabel: string;
+    questionPlaceholder: string;
+    submit: string;
+    submitting: string;
+    setupAndAsk: string;
+    setupWaiting: string;
+    setupRequired: string;
+    setupFailed: string;
+    generationChanged: string;
+    pending: string;
+    failed: string;
+    unavailable: string;
+    followUp: string;
+    followUpPlaceholder: string;
+    exchanges: (n: number) => string;
+    status: Record<"pending" | "answered" | "failed", string>;
+  };
+
   /* code */
   view: Record<"plain" | "change" | "diff", string>;
   collapse: string;
@@ -124,6 +148,30 @@ const en: Strings = {
   saveFallback: "The CLI did not take your marks — this browser keeps them.",
   saveFailed: "Your marks could not be saved.",
 
+  qa: {
+    askAgent: "Ask agent",
+    title: "Clarifications",
+    close: "Close clarifications",
+    selectedPassage: "Selected passage",
+    questionLabel: "Your question",
+    questionPlaceholder: "What would you like clarified?",
+    submit: "Ask",
+    submitting: "Asking…",
+    setupAndAsk: "Set up & ask",
+    setupWaiting: "Continue setup in the terminal…",
+    setupRequired:
+      "Agent setup is required. When you ask, continue in the terminal where Balade is running; your question will be sent automatically afterward.",
+    setupFailed: "Agent setup did not finish. Your question is still here; try again.",
+    generationChanged: "This walkthrough changed. Reload the page before asking again.",
+    pending: "The agent is working on this question…",
+    failed: "The agent could not answer this question. You can ask another follow-up.",
+    unavailable: "Clarifications are temporarily unavailable.",
+    followUp: "Ask a follow-up",
+    followUpPlaceholder: "What else should the agent clarify?",
+    exchanges: (n) => `${n} ${n === 1 ? "exchange" : "exchanges"}`,
+    status: { pending: "Working", answered: "Answered", failed: "Failed" },
+  },
+
   view: { plain: "plain", change: "change", diff: "diff" },
   collapse: "Collapse",
   expand: "Expand",
@@ -203,6 +251,32 @@ const fr: Strings = {
   dismiss: "Fermer",
   saveFallback: "La CLI n’a pas pris vos marques — ce navigateur les conserve.",
   saveFailed: "Vos marques n’ont pas pu être enregistrées.",
+
+  qa: {
+    askAgent: "Interroger l’agent",
+    title: "Éclaircissements",
+    close: "Fermer les éclaircissements",
+    selectedPassage: "Passage sélectionné",
+    questionLabel: "Votre question",
+    questionPlaceholder: "Que souhaitez-vous faire préciser ?",
+    submit: "Demander",
+    submitting: "Envoi…",
+    setupAndAsk: "Configurer et demander",
+    setupWaiting: "Poursuivez la configuration dans le terminal…",
+    setupRequired:
+      "L’agent doit être configuré. Après l’envoi, poursuivez dans le terminal où Balade est lancé ; votre question sera ensuite envoyée automatiquement.",
+    setupFailed:
+      "La configuration de l’agent n’a pas abouti. Votre question est toujours ici ; réessayez.",
+    generationChanged:
+      "Cette présentation a changé. Rechargez la page avant de poser une autre question.",
+    pending: "L’agent travaille sur cette question…",
+    failed: "L’agent n’a pas pu répondre. Vous pouvez poser une autre question.",
+    unavailable: "Les éclaircissements sont temporairement indisponibles.",
+    followUp: "Poser une question complémentaire",
+    followUpPlaceholder: "Que doit encore préciser l’agent ?",
+    exchanges: (n) => `${n} échange${n === 1 ? "" : "s"}`,
+    status: { pending: "En cours", answered: "Répondu", failed: "Échec" },
+  },
 
   view: { plain: "brut", change: "changements", diff: "diff" },
   collapse: "Replier",

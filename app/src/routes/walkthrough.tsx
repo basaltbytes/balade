@@ -18,6 +18,8 @@ import {
 import { JumpLink, Nav } from "../ui/nav";
 import { Octicon } from "../ui/octicon";
 import { PayloadProvider } from "../ui/payload-context";
+import { QaProvider } from "../ui/qa-context";
+import { QaIndicator, QaPanel, SelectionAsk } from "../ui/qa";
 import {
   ReviewProvider,
   SectionProvider,
@@ -75,6 +77,7 @@ function SectionView({
                 {strings.filesViewed(files.done, files.total)}
               </span>
             )}
+            <QaIndicator sectionId={section.id} />
             {reviewed && <Octicon name="check-circle-fill" size={15} className="text-added" />}
           </span>
         </div>
@@ -227,7 +230,11 @@ export function WalkthroughRoute({
   return (
     <PayloadProvider value={payload}>
       <ReviewProvider value={review}>
-        <Document payload={payload} devStale={devStale} onToggleDevStale={onToggleDevStale} />
+        <QaProvider payload={payload} served={served}>
+          <Document payload={payload} devStale={devStale} onToggleDevStale={onToggleDevStale} />
+          <SelectionAsk />
+          <QaPanel />
+        </QaProvider>
       </ReviewProvider>
     </PayloadProvider>
   );

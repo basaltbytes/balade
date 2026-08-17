@@ -1,5 +1,5 @@
 /**
- * What the four served endpoints answer. Successes and typed `ApiError`
+ * What the seven served endpoints answer. Successes and typed `ApiError`
  * failures stay independent of HTTP; `http.ts` maps them to JSON and status
  * codes. Tests drive these ports without a socket.
  *
@@ -9,17 +9,21 @@
  */
 
 import { Effect, Match, Option, Schema } from "effect";
+import { parseQaAskJson } from "../contract/qa-parser.js";
 import { parseReviewJson } from "../contract/review-parser.js";
 import type {
   CheckDiagnostic,
   IndexEntry,
   IndexPayload,
   Payload,
+  QaAgentStatus,
+  QaState,
   ReviewState,
 } from "../contract/types.js";
 import { ReviewStateStore, type ReviewStateStorePort } from "../state.js";
 import { PayloadCache, type PayloadCachePort } from "./cache.js";
 import { ServerRepo, type ServerRepoPort } from "./repo.js";
+import { QaWorkflow, type QaWorkflowError, type QaWorkflowPort } from "./qa.js";
 
 export class ApiPathRequired extends Schema.TaggedErrorClass<ApiPathRequired>()(
   "ApiPathRequired",
@@ -66,6 +70,11 @@ export class ApiStampUnresolvable extends Schema.TaggedErrorClass<ApiStampUnreso
   { pin: Schema.String },
 ) {}
 
+export class ApiQaRequestInvalid extends Schema.TaggedErrorClass<ApiQaRequestInvalid>()(
+  "ApiQaRequestInvalid",
+  { cause: Schema.Defect() },
+) {}
+
 export type ApiError =
   | ApiPathRequired
   | ApiTargetNotServed
@@ -75,7 +84,9 @@ export type ApiError =
   | ApiReviewStateMismatch
   | ApiReviewStateUnavailable
   | ApiStampUnreadable
-  | ApiStampUnresolvable;
+  | ApiStampUnresolvable
+  | ApiQaRequestInvalid
+  | QaWorkflowError;
 
 /** The slice of the repository adapter the answers read. */
 export interface ApiRepo {
@@ -90,6 +101,7 @@ interface ApiPorts {
   paths: readonly string[];
   payloads: PayloadCachePort;
   state: ReviewStateStorePort;
+  qa: QaWorkflowPort;
   repo: ApiRepo;
 }
 
@@ -102,6 +114,12 @@ export interface Api {
   writeState(path: string | null, body: string): Effect.Effect<ReviewState, ApiError>;
   /** `GET /api/staleness` — how far the head moved past the stamp. */
   staleness(path: string | null): Effect.Effect<{ headDistance: number }, ApiError>;
+  /** `GET /api/qa` — generation-bound clarification threads. */
+  readQa(path: string | null): Effect.Effect<QaState, ApiError>;
+  /** `GET /api/agent` — whether Q&A can use a configured local model. */
+  readonly agentStatus: Effect.Effect<QaAgentStatus, ApiError>;
+  /** `POST /api/qa` — validate and enqueue one new question or follow-up. */
+  askQa(path: string | null, body: string): Effect.Effect<QaState, ApiError>;
 }
 
 /** What `?path=` resolved to. `index` means "no path given, and several served". */
@@ -112,8 +130,9 @@ const NEEDS_PATH = "This run serves several walkthroughs; name one with `?path=`
 export const createApi = Effect.fn("createApi")(function* (paths: readonly string[]) {
   const payloads = yield* PayloadCache;
   const state = yield* ReviewStateStore;
+  const qa = yield* QaWorkflow;
   const repo = yield* ServerRepo;
-  return makeApi({ paths, payloads, state, repo });
+  return makeApi({ paths, payloads, state, qa, repo });
 });
 
 function makeApi(ports: ApiPorts): Api {
@@ -127,7 +146,7 @@ function makeApi(ports: ApiPorts): Api {
 
   const notServed = (path: string | null) => new ApiTargetNotServed({ path: path ?? "" });
 
-  /** The three per-file endpoints all need one walkthrough, never the index. */
+  /** Every per-file endpoint needs one walkthrough, never the index. */
   const oneOf = (path: string | null): Effect.Effect<string, ApiError> => {
     const target = targetOf(path);
     if (target.kind === "one") return Effect.succeed(target.path);
@@ -136,6 +155,8 @@ function makeApi(ports: ApiPorts): Api {
   };
 
   return {
+    agentStatus: ports.qa.agentStatus,
+
     walkthrough: Effect.fn("Api.walkthrough")(function* (path) {
       const target = targetOf(path);
       if (target.kind === "unknown") return yield* notServed(path);
@@ -195,6 +216,18 @@ function makeApi(ports: ApiPorts): Api {
       }
       return { headDistance: headDistance.value };
     }),
+
+    readQa: Effect.fn("Api.readQa")(function* (path) {
+      return yield* ports.qa.read(yield* oneOf(path));
+    }),
+
+    askQa: Effect.fn("Api.askQa")(function* (path, body) {
+      const target = yield* oneOf(path);
+      const request = yield* parseQaAskJson(body).pipe(
+        Effect.mapError((cause) => new ApiQaRequestInvalid({ cause })),
+      );
+      return yield* ports.qa.ask(target, request);
+    }),
   };
 }
 
@@ -250,7 +283,7 @@ function firstFailure(diagnostics: readonly CheckDiagnostic[]): string {
 }
 
 export interface ApiErrorResponse {
-  readonly status: 400 | 404 | 500;
+  readonly status: 400 | 404 | 409 | 412 | 500 | 503;
   readonly message: string;
 }
 
@@ -260,6 +293,10 @@ export function apiErrorResponse(error: ApiError): ApiErrorResponse {
     ApiReviewStateInvalid: (): ApiErrorResponse => ({
       status: 400,
       message: "The body is not a review state: it needs version 1, walkthrough, pr and stamp.",
+    }),
+    ApiQaRequestInvalid: (): ApiErrorResponse => ({
+      status: 400,
+      message: "The body is not a valid clarification question.",
     }),
     ApiReviewStateMismatch: ({ statePath, requestPath }): ApiErrorResponse => ({
       status: 400,
@@ -288,6 +325,41 @@ export function apiErrorResponse(error: ApiError): ApiErrorResponse {
     ApiReviewStateUnavailable: ({ path }): ApiErrorResponse => ({
       status: 500,
       message: `Review state for \`${path}\` is unavailable.`,
+    }),
+    QaSectionNotFound: ({ sectionId }): ApiErrorResponse => ({
+      status: 400,
+      message: `Section \`${sectionId}\` is not in this walkthrough.`,
+    }),
+    QaThreadNotFound: (): ApiErrorResponse => ({
+      status: 404,
+      message: "This clarification thread no longer exists.",
+    }),
+    QaThreadBusy: (): ApiErrorResponse => ({
+      status: 409,
+      message: "This clarification thread is already answering a question.",
+    }),
+    QaGenerationChanged: (): ApiErrorResponse => ({
+      status: 412,
+      message: "The walkthrough changed after this page was loaded. Reload before asking again.",
+    }),
+    QaAgentUnavailable: ({ reason }): ApiErrorResponse => ({
+      status: 503,
+      message:
+        reason === "setup-cancelled"
+          ? "Agent setup did not finish; the clarification was not submitted."
+          : "The clarification agent could not be configured.",
+    }),
+    QaIdentifierFailed: (): ApiErrorResponse => ({
+      status: 500,
+      message: "The clarification question could not be created.",
+    }),
+    QaWalkthroughUnavailable: ({ path }): ApiErrorResponse => ({
+      status: 500,
+      message: `Walkthrough \`${path}\` is unavailable for clarification.`,
+    }),
+    QaStateUnavailable: ({ path }): ApiErrorResponse => ({
+      status: 500,
+      message: `Clarifications for \`${path}\` are unavailable.`,
     }),
   });
 }

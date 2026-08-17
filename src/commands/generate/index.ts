@@ -1,8 +1,14 @@
 /** Interactive command boundary for provider login, model choice and draft reporting. */
 
 import { createRequire } from "node:module";
-import { Context, Effect, Option, Schema, Terminal } from "effect";
+import { Effect, Option, Schema, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
+import {
+  AgentModelManager,
+  modelSelectionFromFlags,
+  type AgentModelConfigurationError,
+} from "../../agent/model.js";
+import { agentModelErrorMessage } from "../../agent/terminal.js";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import { langOfMeta } from "../../contract/schema.js";
 import type { Lang } from "../../contract/types.js";
@@ -16,27 +22,15 @@ import {
   plainTheme,
   sanitizeTerminalText,
   stdoutTheme,
-  stderrTheme,
   stopMessage,
   warningText,
-  writeStderr,
   writeStdout,
   type Theme,
 } from "../../terminal.js";
 import {
-  AuthorDiscoveryFailed,
-  LoginCancelled,
-  LoginFailed,
-  WalkthroughAuthor,
   type AuthoringPreset,
-  type AuthorLoginMethod,
-  type AuthorModel,
   type AuthorProgress,
   type AuthorProgressMode,
-  type LoginInteraction,
-  type LoginNotification,
-  type LoginPrompt,
-  type LoginSecretPrompt,
 } from "../../pi/author.js";
 import { generateErrorMessage, runGeneration, type GenerateError } from "./pipeline.js";
 import {
@@ -46,32 +40,20 @@ import {
   type RefreshingWalkthrough,
   type SupersededWalkthrough,
 } from "./output.js";
-import {
-  matchingModels,
-  modelSelectionFromFlags,
-  modelsForPicker,
-  NoProviderAuthenticated,
-  noProviderMessage,
-  orderedLoginMethods,
-  preferredModel,
-  type ModelFilter,
-  type ModelSelection,
-} from "./selection.js";
 
 type GenerationFacets = { preset?: AuthoringPreset; lang?: Lang; guidance?: string };
-type ChoiceDescriptionFacet = { description?: string };
 
 const target = Argument.string("pr").pipe(
   Argument.withDescription("Bare pull request number, URL, or quoted '#number'"),
 );
 
 const provider = Flag.string("provider").pipe(
-  Flag.withDescription("Pi provider id; partial or unavailable selections open the picker"),
+  Flag.withDescription("Agent provider id; partial or unavailable selections open the picker"),
   Flag.optional,
 );
 
 const model = Flag.string("model").pipe(
-  Flag.withDescription("Pi model id; partial or unavailable selections open the picker"),
+  Flag.withDescription("Agent model id; partial or unavailable selections open the picker"),
   Flag.optional,
 );
 
@@ -218,7 +200,8 @@ export const generateCommand = Command.make(
       }
       writeStdout(generationRefreshText(plan.refreshing, source.pin, stdoutTheme));
 
-      const selected = yield* selectAuthorModel(selection);
+      const agentModels = yield* AgentModelManager;
+      const selected = yield* agentModels.configure(selection);
       const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
       const progress = makeGenerationProgress(writeStdout, progressMode, stdoutTheme);
       const generationFacets: GenerationFacets = {};
@@ -284,177 +267,6 @@ export const generateCommand = Command.make(
       ),
     ),
 ).pipe(Command.withDescription("Draft, validate, and open a walkthrough for a pull request"));
-
-const selectAuthorModel = Effect.fn("selectAuthorModel")(function* (selection: ModelSelection) {
-  const author = yield* WalkthroughAuthor;
-  const rememberSelected = (selected: AuthorModel) =>
-    author.rememberModel(selected).pipe(
-      Effect.catchTag("AuthorPreferenceWriteFailed", () =>
-        Effect.sync(() => {
-          writeStderr(
-            `${stderrTheme.warning("warning")} Pi's model preference could not be saved; this run will continue.\n`,
-          );
-        }),
-      ),
-    );
-  let available = yield* author.availableModels;
-  const filter: ModelFilter = selection._tag === "Choose" ? selection.filter : {};
-  if (filter.providerId !== undefined && filter.modelId !== undefined) {
-    const selected = matchingModels(available, filter)[0];
-    if (selected !== undefined) {
-      yield* rememberSelected(selected);
-      announceModel(selected);
-      return selected;
-    }
-  }
-
-  if (selection._tag === "UsePreference") {
-    const preference = yield* author.modelPreference.pipe(
-      Effect.catchTag("AuthorPreferenceReadFailed", () =>
-        Effect.sync(() => {
-          writeStderr(
-            `${stderrTheme.warning("warning")} Pi's saved model preference could not be read; choose a model.\n`,
-          );
-          return Option.none();
-        }),
-      ),
-    );
-    const saved = preferredModel(available, preference);
-    if (Option.isSome(saved)) {
-      announceModel(saved.value, "saved preference");
-      return saved.value;
-    }
-  }
-
-  const providerModels =
-    filter.providerId === undefined
-      ? []
-      : matchingModels(available, { providerId: filter.providerId });
-  let methods: readonly AuthorLoginMethod[] = [];
-  if (available.length === 0) {
-    const allMethods = yield* author.loginMethods;
-    const requestedMethods = orderedLoginMethods(allMethods, filter.providerId);
-    methods =
-      requestedMethods.length > 0 ? requestedMethods : orderedLoginMethods(allMethods, undefined);
-  } else if (filter.providerId !== undefined && providerModels.length === 0) {
-    methods = orderedLoginMethods(yield* author.loginMethods, filter.providerId);
-  }
-  if (methods.length > 0) {
-    yield* reportWaitingDuring(
-      Effect.gen(function* () {
-        const method = yield* Prompt.run(
-          Prompt.select({
-            message: "Log in to a Pi provider",
-            choices: methods.map((candidate) => ({
-              title: `${candidate.providerName} — ${candidate.label}`,
-              value: candidate,
-              description:
-                candidate.billing === "anthropic-extra-usage"
-                  ? anthropicBillingCaveat()
-                  : `${candidate.method === "oauth" ? "Subscription" : "API key"} authentication`,
-            })),
-          }),
-        );
-        if (method.billing === "anthropic-extra-usage") {
-          writeStdout(`${anthropicBillingCaveat()}\n`);
-        }
-        const promptContext = yield* Effect.context<Prompt.Environment>();
-        yield* author.login(method, loginInteraction(promptContext));
-      }),
-    );
-    available = yield* author.availableModels;
-  } else if (available.length === 0) {
-    return yield* new NoProviderAuthenticated({ requested: requestedModel(filter) });
-  }
-
-  const picker = modelsForPicker(available, filter);
-  if (picker.models.length === 0) {
-    return yield* new NoProviderAuthenticated({ requested: requestedModel(filter) });
-  }
-  if (picker.usedFallback) {
-    writeStderr(
-      `${stderrTheme.warning("warning")} No available Pi model matches ${requestedModel(filter)}; choose from the available models.\n`,
-    );
-  }
-
-  const selected = yield* reportWaitingDuring(
-    Prompt.run(
-      Prompt.select({
-        message: "Choose the provider and model",
-        choices: picker.models.map((candidate) => ({
-          title: `${candidate.providerName} — ${candidate.modelName}`,
-          value: candidate,
-          description:
-            candidate.providerId === "anthropic"
-              ? anthropicBillingCaveat()
-              : `${candidate.providerId}/${candidate.modelId}`,
-        })),
-      }),
-    ),
-  );
-  yield* rememberSelected(selected);
-  announceModel(selected);
-  return selected;
-});
-
-function loginInteraction(context: Context.Context<Prompt.Environment>): LoginInteraction {
-  const runPrompt = Effect.runPromiseWith(context);
-  return {
-    prompt: (prompt) =>
-      runPrompt(loginPrompt(prompt), prompt.signal === undefined ? {} : { signal: prompt.signal }),
-    secret: (prompt) =>
-      runPrompt(
-        loginSecretPrompt(prompt),
-        prompt.signal === undefined ? {} : { signal: prompt.signal },
-      ),
-    notify: printLoginNotification,
-  };
-}
-
-function loginPrompt(prompt: LoginPrompt) {
-  if (prompt.type === "select" && prompt.options.length > 0) {
-    return Prompt.run(
-      Prompt.select({
-        message: prompt.message,
-        choices: prompt.options.map((option) => {
-          const facets: ChoiceDescriptionFacet = {};
-          if (option.description !== undefined) facets.description = option.description;
-          return { title: option.label, value: option.id, ...facets };
-        }),
-      }),
-    );
-  }
-  if (prompt.type === "select") return Prompt.run(Prompt.text({ message: prompt.message }));
-  const message =
-    prompt.placeholder === undefined ? prompt.message : `${prompt.message} (${prompt.placeholder})`;
-  return Prompt.run(Prompt.text({ message }));
-}
-
-function loginSecretPrompt(prompt: LoginSecretPrompt) {
-  const message =
-    prompt.placeholder === undefined ? prompt.message : `${prompt.message} (${prompt.placeholder})`;
-  return Prompt.run(Prompt.password({ message }));
-}
-
-function printLoginNotification(event: LoginNotification): void {
-  switch (event.type) {
-    case "info":
-      writeStdout(`${event.message}\n`);
-      for (const link of event.links) {
-        writeStdout(`${link.label === undefined ? "Open" : link.label}: ${link.url}\n`);
-      }
-      break;
-    case "auth_url":
-      writeStdout(`${event.instructions ?? "Open this URL to authenticate:"}\n${event.url}\n`);
-      break;
-    case "device_code":
-      writeStdout(`Open ${event.verificationUri} and enter code ${event.userCode}.\n`);
-      break;
-    case "progress":
-      writeStdout(`${event.message}\n`);
-      break;
-  }
-}
 
 export function makeGenerationProgress(
   write: (value: string) => void,
@@ -529,24 +341,6 @@ function progressMessage(tool: string): string {
     default:
       return "Authoring the walkthrough…";
   }
-}
-
-function announceModel(model: AuthorModel, source?: string): void {
-  writeStdout(
-    `Provider/model: ${stdoutTheme.emphasis(`${model.providerName} — ${model.modelName}`)} (${model.providerId}/${model.modelId})${source === undefined ? "" : ` — ${source}`}\n`,
-  );
-  if (model.providerId === "anthropic") writeStdout(`${anthropicBillingCaveat()}\n`);
-}
-
-function anthropicBillingCaveat(): string {
-  return (
-    "Anthropic subscription login in third-party tools is billed per token as extra usage; " +
-    "it does not draw on Claude plan limits."
-  );
-}
-
-function requestedModel(filter: ModelFilter): string {
-  return `${filter.providerId ?? "any provider"}/${filter.modelId ?? "any model"}`;
 }
 
 function repairSummary(repairs: number): string {
@@ -660,40 +454,19 @@ export function generationSiblingText(
   );
 }
 
-type GenerationCliError =
-  | GenerateError
-  | AuthorDiscoveryFailed
-  | LoginFailed
-  | LoginCancelled
-  | NoProviderAuthenticated
-  | Terminal.QuitError;
+type GenerationCliError = GenerateError | AgentModelConfigurationError | Terminal.QuitError;
 
 function generationCliErrorMessage(error: GenerationCliError): string {
   switch (error._tag) {
-    case "LoginFailed":
-      return loginErrorMessage(error);
-    case "AuthorDiscoveryFailed":
-      return "Pi providers and models could not be loaded. Check the local Pi installation and try again.";
     case "LoginCancelled":
-      return "Generation cancelled.";
-    case "NoProviderAuthenticated":
-      return noProviderMessage(error);
+    case "AgentModelSelectionCancelled":
     case "QuitError":
       return "Generation cancelled.";
+    case "LoginFailed":
+    case "AuthorDiscoveryFailed":
+    case "NoProviderAuthenticated":
+      return agentModelErrorMessage(error);
     default:
       return generateErrorMessage(error);
-  }
-}
-
-function loginErrorMessage(error: LoginFailed): string {
-  switch (error.reason) {
-    case "oauth":
-      return `Pi could not complete ${error.provider} subscription login. Retry interactively, or run the pi CLI login first.`;
-    case "auth":
-      return `Pi rejected the ${error.provider} credential. Check the account or API key and log in again.`;
-    case "provider":
-      return `Pi could not initialize ${error.provider}. Check the provider configuration and try again.`;
-    case "unknown":
-      return `Pi could not authenticate ${error.provider}. Run the pi CLI login, then retry balade generate.`;
   }
 }

@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Layer, Option, Path } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { repoRelative } from "../src/contract/paths.js";
+import { isContainedRepoRelativePath, repoRelative } from "../src/contract/paths.js";
 
 const longRoot = "/Users/runneradmin/work/balade";
 const shortRoot = "/Users/RUNNER~1/work/balade";
@@ -31,6 +31,16 @@ const testLayer = Layer.merge(
 );
 
 describe("repo-relative paths", () => {
+  it.each(["walkthroughs/valid.md", ".agents/walkthroughs/review.md"])(
+    "accepts contained git path %s",
+    (path) => expect(isContainedRepoRelativePath(path)).toBe(true),
+  );
+
+  it.each(["", "/tmp/review.md", "../review.md", "docs/../review.md", "docs\\review.md"])(
+    "rejects uncontained path %s",
+    (path) => expect(isContainedRepoRelativePath(path)).toBe(false),
+  );
+
   it.effect("recognizes Windows long and 8.3 spellings by filesystem identity", () =>
     Effect.gen(function* () {
       const relative = yield* repoRelative(longRoot, `${shortRoot}/walkthroughs/valid.md`);

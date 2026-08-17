@@ -10,21 +10,24 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 (the document, bytes to contract), `git/` (facts from the repository and forge),
 `contract/` (shared vocabulary: shapes that cross module boundaries), `preset/`,
 `authoring/` (the versioned authoring package: typed data plus its renderings),
-`pi/` (the generation engine), `server/` (live session runtime) — and the root
-files `cli.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`.
+`pi/` (the Pi adapter and agent sessions), `agent/` (shared provider/model
+configuration), `server/` (live session runtime) — and the root files `cli.ts`,
+`shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`, `submission.ts`.
 
 All imports flow one direction; peers never import each other:
 
 ```
 cli.ts                      entry + layer wiring
-commands/    server/        orchestrators — the ONLY places concepts compose
+commands/    server/        orchestrators — the ONLY places product concepts compose
+agent/                      → pi, presence, terminal
 pi/                         → authoring, git (type imports), contract, shell
 walkthrough/                → preset, contract, shell        (never git/)
 git/                        → contract, shell                (never walkthrough/)
 preset/                     → contract
 authoring/                  → nothing internal
 contract/                   → nothing internal
-shell.ts  state.ts  terminal.ts  failure.ts  presence.ts     root ports & utils → contract
+shell.ts  state.ts  terminal.ts  failure.ts  presence.ts  submission.ts
+                                                            root ports & utils → contract
 ```
 
 1. `Command.make` appears only in `commands/<verb>/index.ts` (plus the root
@@ -36,7 +39,8 @@ shell.ts  state.ts  terminal.ts  failure.ts  presence.ts     root ports & utils 
 3. `walkthrough/`, `git/`, `preset/` are autonomous: they import only
    `contract/` and root ports (`walkthrough/` may additionally import
    `preset/` — the tag catalog is an extension of the format). Concepts compose
-   only in `commands/` and `server/`, plus layer wiring in `cli.ts`.
+   only in `commands/` and `server/`, plus the deliberately shared `agent/`
+   workflow and layer wiring in `cli.ts`.
 4. Outside `commands/`, a concept with one file is a root file, not a folder.
 5. Module files are nouns; verbs live in exports. The thing, not the action:
    `compiler.ts` exports `compileDocument`, `pipeline.ts` exports
@@ -178,7 +182,7 @@ different host.
 ## Core pipelines separate failures from report values
 
 `loadWalkthrough`, `resolveContext`, `runCheck`, `runBuild`, `prepareSession`
-and the four served API methods are named `Effect.fn` pipelines. They request
+and the seven served API methods are named `Effect.fn` pipelines. They request
 filesystem, path, command and repository capabilities through services. The
 Markdoc parser, diff parser and document compiler remain ordinary pure
 functions called by those pipelines; wrapping them in `Effect` would add an
@@ -197,7 +201,7 @@ and carry reports directly: an error diagnostic may still be renderable, while
 a missing payload stops those commands. Terminal and HTTP reporting use
 exhaustive `Match.valueTags` mappings, so adding a result or error variant
 forces its reporting boundary to handle it. These tags never cross a JSON
-edge: `check --json` still emits only `ok` and `reports`, while the four `/api`
+edge: `check --json` still emits only `ok` and `reports`, while the seven `/api`
 response bodies keep their established shapes.
 
 ## Failures are tagged errors; absence is `Option`
@@ -424,11 +428,12 @@ response so another site cannot frame the served review UI. This is a
 response-header control and stays separate from the export's meta CSP, which
 browsers cannot use to enforce `frame-ancestors`.
 
-Only `PUT /api/state` reads a request body. Its JSON read provides Effect's
-`MaxBodySize` with a 4 MiB limit; an oversized body follows the existing invalid
-review-state response and leaves the process alive. The limit is generous for a
-review state while staying far below the Node string-size failure found during
-the security audit.
+The two mutating API routes accept bounded JSON bodies. `PUT /api/state`
+provides Effect's `MaxBodySize` with a 4 MiB limit, while `POST /api/qa` uses a
+64 KiB limit and rejects every content type except `application/json`. An
+oversized body follows the route's existing invalid-request response and leaves
+the process alive. The limits are generous for their payloads while staying far
+below the Node string-size failure found during the security audit.
 
 API failures retain their original cause as `Schema.Defect()` until one shared
 HTTP translation pipeline handles them. That boundary logs internal `500`
@@ -535,26 +540,35 @@ The explicit pin makes npm dedupe onto the version balade's own `effect` pin
 matches. Bump it in lockstep with every effect-family bump; drop it when the
 Effect v4 packages stabilize their internal ranges.
 
-Every Pi surface sits behind the one `WalkthroughAuthor` service, the
-anti-corruption boundary for Pi's 0.x churn. What would move this: Pi's
-Anthropic subscription path closing, in which case the same seam takes a
-Codex-SDK-plus-API-key pair of adapters instead.
+Pi's 0.x SDK stops at two Balade-owned service boundaries:
+`WalkthroughAuthor` for generation, provider/model discovery and credential
+operations, and `WalkthroughClarifier` for one stateless answer. What would move
+this: Pi's Anthropic subscription path closing, in which case the same seams
+take a Codex-SDK-plus-API-key pair of adapters instead.
 
-The adapter itself is split at the session boundary: `pi/client.ts` owns
-account, authentication and global settings, while `pi/session.ts` owns the
-scoped authoring session, its read-only tool policy and provider-event
-forwarding. `pi/project-context.ts` owns repository-instruction selection and
-the system-prompt trust boundary. Project-context loading composes the pinned
+The adapter is split at the session boundary. `pi/client.ts` owns account,
+authentication, global settings and the generation adapter; `pi/session.ts`
+owns pinned snapshot/context preparation and the shared read-only inspection
+sandbox; `pi/clarifier.ts` owns the clarification turn and its validated submit
+tool. `pi/project-context.ts` owns repository-instruction selection and the
+system-prompt trust boundary. Project-context loading composes the pinned
 snapshot's typed effects directly. Session preparation stays inside the
-`WalkthroughAuthor.start` Effect, preserving snapshot and project-context
-failures as typed errors and translating search-configuration failures at the
-filesystem boundary. Only calls into Pi's Promise-based SDK cross through
-`Effect.tryPromise`; unknown SDK exceptions become `AuthorSessionStartFailed`.
+calling service Effect, preserving snapshot and project-context failures as
+typed errors and translating search-configuration failures at the filesystem
+boundary. Promise-based SDK calls cross through explicit Effect runtime
+boundaries; unknown SDK exceptions become the owning workflow's tagged session
+or request failure.
 The immutable snapshot memoizes
 its source-file listing as an Effect and shares it with Pi's Promise-based tool
 callbacks, where the runtime boundary belongs.
 This keeps preference durability independent from the security-sensitive tool
-sandbox and session lifecycle.
+sandbox and session lifecycle. `agent/model.ts` owns the higher-level
+provider/model configuration workflow shared by generation, clarification,
+`balade agent setup` and `balade agent logout`; `agent/terminal.ts` is its sole
+interactive adapter.
+Selection rules, login ordering, typed configuration failures and preference
+warnings therefore have one implementation instead of drifting between CLI
+verbs.
 
 Balade points Pi at its own agent directory, `~/.balade/pi/` — `auth.json`,
 `settings.json`, `models.json` and Pi's derived `models-store.json` all live
@@ -567,14 +581,23 @@ the earlier choice of Pi's global settings file silently changed that CLI's
 default model (revised 2026-08-04, issue #27). The accepted cost is one extra
 login for users who already authenticated the pi CLI. Project settings are not
 trusted or loaded for this choice. Picking a model in the picker is itself the
-confirmation: generation starts directly, with no second confirm prompt
-(revised 2026-08-04, issue #25). An interactive selection updates balade's
-saved default; a matching default is reused without another picker. Every
-explicit or interactive selection updates that default. An exact
+confirmation: the requesting agent workflow starts directly, with no second
+confirm prompt (revised 2026-08-04, issue #25). An interactive selection
+updates balade's saved default; a matching default is reused without another
+picker. Every explicit or interactive selection updates that default. An exact
 `--provider` and `--model` pair skips the picker; partial, empty, or
 unavailable values open it, narrowed to matching models when possible.
-Preference read and write failures are typed warnings and do not prevent a
-generation run.
+Preference read and write failures are typed warnings and do not prevent a run
+after the user has selected a model.
+
+`balade agent logout` enumerates non-secret credential metadata through Pi and
+removes every credential stored in Balade's agent directory. It runs under the
+same model-manager semaphore as setup, is idempotent when the store is empty,
+and reports credential-store read and provider-specific deletion failures as
+typed errors. It does not delete `~/.balade/pi/` or inspect credential values.
+Pi exposes no clear-default operation, so the saved provider/model preference
+remains inert after logout and the next successful setup overwrites it.
+Environment-provided credentials remain outside this stored-login operation.
 
 The session runs in memory with a resource loader that exposes no Pi extensions,
 skills, prompts, themes, global context, or working-tree context. It exposes
@@ -599,11 +622,12 @@ closing tag always rejects the file with a notice, even when the file is
 otherwise trusted, and attribute characters in its untrusted repository path
 are escaped before Pi interpolates the path into the system prompt.
 
-The allowlist contains only seven balade-owned tools: list PR changes, list
-pinned paths, search pinned source, read a pinned diff, read numbered lines at
-the pin or base, and submit the structured draft. The agent never receives Pi's
-shell or mutation tools. `submit_walkthrough` ends the agent loop; the adapter
-stamps the schema version, PR and commit after the model returns.
+The generation allowlist contains only seven balade-owned tools: list PR
+changes, list pinned paths, search pinned source, read a pinned diff, read
+numbered lines at the pin or base, and submit the structured draft. The agent
+never receives Pi's shell or mutation tools. `submit_walkthrough` ends the agent
+loop; the adapter stamps the schema version, PR and commit after the model
+returns.
 
 Pinned source inspection is filesystem-backed (revised 2026-08-04, issue #28).
 After the resolver fetches the PR head object, `git archive` extracts that pin
@@ -627,16 +651,14 @@ partial tree. Each open updates access metadata outside `tree/`; a global LRU
 keeps five entries and deletes older ones. This bounds retained disk while
 preserving the common repeat-run cache hit.
 
-The baseline authoring turn is deliberately bounded to eight diff reads and
-twenty searches plus twelve source reads shared across pin and base. Search gets
-the larger allowance because a capped match list makes the following reads more
-targeted. The prompt asks for the behavioral spine in two to five sections and
-normally three to eight focused ranges, with ten as a hard maximum. These limits
-keep provider context and cost proportional to a review story instead of
-rewarding an inventory of every changed file. All inspection allowances reset
-for a repair turn so the agent can verify a corrected range. The submit tool
-rejects drafts above the range ceiling and asks the agent to focus the complete
-draft before accepting it.
+The authoring turn receives the selected inspection tier. `medium`, the
+default, scales diff reads, searches and source reads with the changed-file
+count and keeps floors of 16, 30 and 24. `low` scales with floors of 8, 20 and
+12; `high` removes enforcement. The prompt sizes sections and code ranges to the
+change instead of imposing fixed counts or a range ceiling. All inspection
+allowances reset for a generation repair turn so the agent can verify a
+corrected range. The later entry "Budgets guarantee termination; only the
+operator opts into economy" records the scaling rationale and tier semantics.
 
 A failed check gets at most two repair turns. Repairs use a new
 `AgentSession.prompt()` in the same in-memory session, rather than Pi's queued
@@ -1040,12 +1062,11 @@ unlike the closing full-PR diff, a missing Mechanism section is an authoring
 quality issue, not invalid input. `collapsed` is an authored initial state
 only; the app does not persist the reader's toggle. Evidence ranges count
 against the unchanged 10-range budget on purpose — the cap is what forces
-"critical pieces", not an inventory of hunks. Authored artifacts written
-against the old skeleton (`.agents/walkthroughs/pr-88-*.md`,
-`app/src/fixtures/pr96.ts`) keep their free-text `Deep dive` labels; group
-labels are data, not contract. What would move this: dogfooding showing the
-range budget starves evidence pinning, or reviewers wanting collapse state
-persisted with the other review marks.
+"critical pieces", not an inventory of hunks. The authored fixture written
+against the old skeleton (`app/src/fixtures/pr96.ts`) keeps its free-text
+`Deep dive` label; group labels are data, not contract. What would move this:
+dogfooding showing the range budget starves evidence pinning, or reviewers
+wanting collapse state persisted with the other review marks.
 
 ## PR package previews publish only after the tarball smoke test
 
@@ -1367,3 +1388,94 @@ now disappear at their source, while a command-local denylist would duplicate
 checker semantics and drift as diagnostics change. What would move this:
 diagnostics gaining an explicit repair owner or structured fix target in the
 shared contract.
+
+## Clarifications are generation-bound sidecars, not walkthrough content
+
+Reviewer Q&A for issue #131 lives in one
+`.balade/<walkthrough>.qa.json` sidecar beside review marks. Both sidecar kinds
+mirror the complete repository-relative walkthrough path below `.balade/`;
+keeping only the basename was rejected because two served walkthroughs in
+different directories would overwrite each other. The kind suffix is appended
+to the complete source path instead of replacing `.md`, keeping the mapping
+injective even for an explicitly opened extensionless walkthrough. This
+pre-alpha format has no legacy basename fallback or migration. Before deriving
+the destination, the store applies the same contained repository-relative path
+rule as source inspection and rejects invalid paths in its typed error channel.
+It then resolves every existing path component below the canonical repository
+root and rejects symlinks or other aliases that escape the expected location;
+missing directories are created one checked component at a time. Concurrent
+first writes recover only an `AlreadyExists` directory result and then run the
+same canonical-path and directory-type checks, so the race does not weaken
+containment. The sidecar carries the walkthrough path, PR number and stamp; a
+mismatch makes the whole value absent. Each ask also carries the PR number and
+stamp displayed by the browser. The server verifies that generation before
+setup, after setup, and after preparing the agent context; a mismatch rejects
+the ask and tells the reviewer to reload instead of attaching an answer to a
+different walkthrough.
+Questions stay anchored to the selected section id and quoted passage, so no
+locator needs to drift across edits. Pending, answered and failed are explicit
+states. A provider failure persists only the question and a generic failure
+marker, never credentials or provider diagnostics, and a later follow-up can
+retry the conversation.
+
+Every question and follow-up creates a fresh scoped Pi session. Generation and
+clarification share one pinned, read-only inspection-tool module and one
+sandbox session assembler, while each workflow owns its submit tool and prompt.
+The clarification prompt receives the walkthrough source, pinned diff, anchor
+and completed turns as untrusted data. It teaches the same focused display
+vocabulary as generation — pinned code, core and preset widgets, pseudo-code,
+and mermaid — but omits whole-document structure. Answers lead with the direct
+response and then explain at the depth the question needs; concise means
+relevant, not terse.
+Its submitted Markdoc fragment is parsed with the canonical walkthrough grammar
+and compiled into `Block` values before the sidecar changes to answered. This
+keeps Q&A out of the committed document and adds no renderer-only dialect or
+HTML sink. Answer fragments reject whole-document `section`, `group` and
+`files` tags. `submit_answer` runs that canonical validator before terminating
+the Pi session. An invalid submission returns exact diagnostics as untrusted
+tool data, and the same agent repairs and resubmits the complete answer in the
+same turn. At most two changing repair cycles are allowed, matching generation;
+an unchanged diagnostic set stops early, and a final invalid fragment becomes
+the existing failed thread state. Validator infrastructure failures retain
+their original typed Effect cause, while provider failures remain clarifier
+errors. Expected failures log only sanitized operational identifiers before
+becoming the durable failed state; unexpected defects keep their cause and log
+its sanitized rendering.
+The server writes pending state before forking the run, serializes
+all transitions with one semaphore, and writes the sidecar by same-directory
+temporary-file rename so polling never observes partial JSON. Committing the
+pending state and starting its supervised worker are one uninterruptible
+handoff. The worker starts synchronously enough to install its exit finalizer
+before the handoff returns, so a closing server settles an in-flight question
+as failed instead of leaving a permanent pending record. A process crash cannot
+run that finalizer, so the first sidecar read after restart reconciles abandoned
+pending entries to the same generic failed state once per walkthrough
+generation.
+
+Static exports deliberately omit Q&A: asking requires the local repository,
+an agent model under `~/.balade/pi/`, and the live loopback server. Opening a
+walkthrough does not require authentication or eagerly load Pi; opening a Q&A
+panel triggers `GET /api/agent`, which exposes only `ready` or
+`setup-required`, never provider, model or credential details. If the first
+question needs setup, the JSON-only `POST /api/qa` request opens the same
+terminal interaction used by generation and `balade agent setup`, then
+continues the original request after selection. No pending thread is persisted
+until setup succeeds, so cancellation or failure leaves the draft in the
+browser for retry. One semaphore around the shared model manager rechecks the
+preference after acquiring its permit, so simultaneous first questions cannot
+create duplicate login prompts. What would move static exports is an explicit
+portable-conversation feature with its own privacy and credential model, not an
+implicit extension of export payloads.
+
+The walkthrough sidebar lists every clarification thread independently of its
+anchor section. Each entry shows the latest question, anchor title and explicit
+pending, answered or failed state; pending entries animate and every entry opens
+its section drawer with that thread highlighted first. Closing the drawer
+therefore never hides the only route back to an in-flight question, and several
+concurrent questions stay visible at once. While an ask is in flight, polling
+pauses and responses from older polls are ignored, so stale state cannot hide a
+question the server just accepted.
+The drawer's mutually exclusive closed, section, thread and composer locations
+are one tagged UI state rather than independently nullable coordinates. If the
+server refuses a follow-up before accepting it as pending, the drawer stays
+open and preserves the draft for retry.

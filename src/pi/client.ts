@@ -1,4 +1,4 @@
-/** Pi 0.83 adapter. The package is loaded only when a generation method runs. */
+/** Pi 0.83 adapter. The package loads only when an agent-powered workflow needs it. */
 
 import type { AgentSession, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
@@ -23,10 +23,13 @@ import { baladePiAgentDirectory, baladeSnapshotCacheDirectory } from "../state.j
 import {
   AuthorDiscoveryFailed,
   AuthorDraft,
+  AuthorCredentialReadFailed,
   AuthorLoginMethod,
+  AuthorLogoutFailed,
   AuthorModel,
   AuthorModelUnavailable,
   AuthorModelPreference,
+  AuthorProviderId,
   AuthorPreferenceReadFailed,
   AuthorPreferenceWriteFailed,
   AuthorRuntimeLoadFailed,
@@ -46,6 +49,7 @@ import {
   type LoginSecretPrompt,
 } from "./author.js";
 import { initialAuthoringPrompt, repairAuthoringPrompt } from "./authoring.js";
+import { hasEnvelopeOrFence } from "../submission.js";
 import {
   createPiSession,
   preparePiSession,
@@ -70,6 +74,9 @@ const decodeModels = Schema.decodeUnknownEffect(Schema.Array(AuthorModel), {
   onExcessProperty: "error",
 });
 const decodeLoginMethods = Schema.decodeUnknownEffect(Schema.Array(AuthorLoginMethod), {
+  onExcessProperty: "error",
+});
+const decodeProviderIds = Schema.decodeUnknownEffect(Schema.Array(AuthorProviderId), {
   onExcessProperty: "error",
 });
 const decodeModelPreference = Schema.decodeUnknownEffect(AuthorModelPreference, {
@@ -112,7 +119,7 @@ export async function loadLiveDependencies(
   };
 }
 
-/** Inert until a method calls `dependencies`; check/open/build never import Pi. */
+/** Inert until a method needs dependencies; initial open, check and build never import Pi. */
 export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {}) {
   return Layer.effect(
     WalkthroughAuthor,
@@ -274,6 +281,28 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
         });
       });
 
+      const logout = Effect.gen(function* () {
+        const { modelRuntime, credentials } = yield* Effect.tryPromise({
+          try: async () => {
+            const { modelRuntime } = await dependencies();
+            return { modelRuntime, credentials: await modelRuntime.listCredentials() };
+          },
+          catch: (cause) => new AuthorCredentialReadFailed({ cause }),
+        });
+        const providers = yield* decodeProviderIds(
+          credentials.map((credential) => credential.providerId),
+        ).pipe(Effect.mapError((cause) => new AuthorCredentialReadFailed({ cause })));
+        yield* Effect.forEach(
+          providers,
+          (provider) =>
+            Effect.tryPromise({
+              try: () => modelRuntime.logout(provider),
+              catch: (cause) => new AuthorLogoutFailed({ provider, cause }),
+            }),
+          { discard: true },
+        );
+      }).pipe(Effect.withSpan("WalkthroughAuthor.logout"));
+
       const start = Effect.fn("WalkthroughAuthor.start")(function* (request: AuthoringRequest) {
         const pi = yield* Effect.tryPromise({
           try: dependencies,
@@ -372,7 +401,15 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
         } satisfies AuthoringSession;
       });
 
-      return { availableModels, modelPreference, rememberModel, loginMethods, login, start };
+      return {
+        availableModels,
+        modelPreference,
+        rememberModel,
+        loginMethods,
+        login,
+        logout,
+        start,
+      };
     }),
   );
 }
@@ -443,11 +480,6 @@ function modelsErrorCode(cause: unknown): "oauth" | "auth" | "provider" | "unkno
   if (!Predicate.isObject(cause) || !("code" in cause)) return "unknown";
   const code = cause.code;
   return code === "oauth" || code === "auth" || code === "provider" ? code : "unknown";
-}
-
-function hasEnvelopeOrFence(body: string): boolean {
-  const trimmed = body.trimStart();
-  return trimmed.startsWith("---") || trimmed.startsWith("```");
 }
 
 const readUsage = Effect.fn("PiAuthoringSession.readUsage")(function* (

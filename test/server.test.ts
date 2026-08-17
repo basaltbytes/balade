@@ -6,13 +6,21 @@
 
 import { Effect, Layer, Option, Schema } from "effect";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import type { LoadResult } from "../src/walkthrough/pipeline.js";
-import type { IndexPayload, Payload, ReviewState } from "../src/contract/types.js";
+import type { IndexPayload, Payload, QaState, ReviewState } from "../src/contract/types.js";
 import {
   ApiReviewStateUnavailable,
   ApiWalkthroughUnavailable,
@@ -24,7 +32,7 @@ import { reviewSessionStartedText, startReviewSession } from "../src/server/revi
 import { findAppBundle, serve } from "../src/server/http.js";
 import { prepareSession, type Session } from "../src/server/session.js";
 import { gitCommonDir } from "../src/shell.js";
-import { ReviewStateStore, stateFileName } from "../src/state.js";
+import { qaFilePath, QaStateStore, ReviewStateStore, stateFilePath } from "../src/state.js";
 import { provideLive } from "./support/effect.js";
 import { addSubmodule, addWorktree, createFixtureRepo, type FixtureRepo } from "./support/repo.js";
 
@@ -326,8 +334,10 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
   for (const [route, request] of [
     ["/", { kind: "read" }],
     ["/api/walkthrough", { kind: "read" }],
+    ["/api/agent", { kind: "read" }],
     [`/api/state${query}`, { kind: "read" }],
     [`/api/state${query}`, { kind: "write", body: "{}" }],
+    [`/api/qa${query}`, { kind: "read" }],
     [`/api/staleness${query}`, { kind: "read" }],
   ] satisfies ReadonlyArray<readonly [string, HostRequest]>) {
     expect(await statusWithHost(`${url}${route}`, "evil.com", request, signal)).toBe(403);
@@ -346,6 +356,45 @@ async function exercise(url: string, path: string, signal: AbortSignal): Promise
   expect(payload.walkthrough).toBe(1);
   expect(payload.sourcePath).toBe(path);
   expect(payload.sections.map((section) => section.id)).toContain("overview");
+
+  const qa = await send(`/api/qa${query}`);
+  expect(qa.status).toBe(200);
+  expect(await qa.json()).toMatchObject({
+    version: 1,
+    walkthrough: path,
+    pr: payload.pr.number,
+    stamp: payload.commit,
+    threads: [],
+  });
+
+  const agent = await send("/api/agent");
+  expect(agent.status).toBe(200);
+  expect(await agent.json()).toEqual({ status: "setup-required" });
+
+  const invalidQuestion = await send(`/api/qa${query}`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ kind: "new", question: "Missing anchor" }),
+  });
+  expect(invalidQuestion.status).toBe(400);
+
+  const formQuestion = await send(`/api/qa${query}`, {
+    method: "POST",
+    headers: { "content-type": "text/plain" },
+    body: JSON.stringify({
+      kind: "new",
+      anchor: { sectionId: "overview", excerpt: "selected" },
+      question: "Cross-origin form?",
+    }),
+  });
+  expect(formQuestion.status).toBe(400);
+
+  const oversizedQuestion = await send(`/api/qa${query}`, {
+    method: "POST",
+    headers: json,
+    body: "x".repeat(64 * 1024 + 1),
+  });
+  expect(oversizedQuestion.status).toBe(400);
 
   const unknown = await send("/api/walkthrough?path=walkthroughs/nope.md");
   expect(unknown.status).toBe(404);
@@ -547,7 +596,7 @@ describe("the index", () => {
   it.effect("keeps an unreadable index state in the API error channel", () =>
     Effect.gen(function* () {
       writeFileSync(
-        join(repo.dir, ".balade", stateFileName("walkthroughs/second.md")),
+        join(repo.dir, ".balade", stateFilePath("walkthroughs/second.md")),
         "{ not json",
         "utf8",
       );
@@ -600,8 +649,14 @@ describe("review-state files", () => {
       yield* store.write("walkthroughs/valid.md", state);
       const stored = yield* store.read("walkthroughs/valid.md");
       expect(Option.isSome(stored) ? stored.value : undefined).toEqual(state);
-      expect(stateFileName("walkthroughs/pr-96-loan-refactor.md")).toBe(
-        "pr-96-loan-refactor.review.json",
+      expect(stateFilePath("walkthroughs/pr-96-loan-refactor.md")).toBe(
+        "walkthroughs/pr-96-loan-refactor.md.review.json",
+      );
+      expect(qaFilePath("walkthroughs/pr-96-loan-refactor.md")).toBe(
+        "walkthroughs/pr-96-loan-refactor.md.qa.json",
+      );
+      expect(stateFilePath("walkthroughs/review")).not.toBe(
+        stateFilePath("walkthroughs/review.md"),
       );
 
       const exclude = readFileSync(join(repo.dir, ".git/info/exclude"), "utf8");
@@ -614,26 +669,59 @@ describe("review-state files", () => {
     }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
+  it.effect("keeps same-basename walkthrough sidecars independent", () =>
+    Effect.gen(function* () {
+      const store = yield* ReviewStateStore;
+      const first = { ...state, walkthrough: "walkthroughs/one/review.md" };
+      const second = { ...state, walkthrough: "docs/two/review.md" };
+
+      yield* store.write(first.walkthrough, first);
+      yield* store.write(second.walkthrough, second);
+
+      const storedFirst = yield* store.read(first.walkthrough);
+      const storedSecond = yield* store.read(second.walkthrough);
+      expect(Option.isSome(storedFirst) ? storedFirst.value : undefined).toEqual(first);
+      expect(Option.isSome(storedSecond) ? storedSecond.value : undefined).toEqual(second);
+      expect(stateFilePath(first.walkthrough)).not.toBe(stateFilePath(second.walkthrough));
+      expect(qaFilePath(first.walkthrough)).not.toBe(qaFilePath(second.walkthrough));
+    }).pipe(Effect.provide(storeLayer()), provideLive),
+  );
+
+  it.effect("rejects a sidecar path outside the repository state directory", () =>
+    Effect.gen(function* () {
+      const store = yield* ReviewStateStore;
+      const sourcePath = "../escaped.md";
+      const rejectedRead = yield* store.read(sourcePath).pipe(Effect.flip);
+      const rejectedWrite = yield* store
+        .write(sourcePath, { ...state, walkthrough: sourcePath })
+        .pipe(Effect.flip);
+
+      expect(rejectedRead).toMatchObject({ _tag: "StatePathRejected", path: sourcePath });
+      expect(rejectedWrite).toMatchObject({ _tag: "StatePathRejected", path: sourcePath });
+      expect(existsSync(join(repo.dir, "escaped.md.review.json"))).toBe(false);
+    }).pipe(Effect.provide(storeLayer()), provideLive),
+  );
+
   it.effect("returns a typed error for corrupt JSON", () =>
     Effect.gen(function* () {
       const store = yield* ReviewStateStore;
-      writeFileSync(
-        join(repo.dir, ".balade", stateFileName("walkthroughs/broken.md")),
-        "{ not json",
-        "utf8",
-      );
+      const file = join(repo.dir, ".balade", stateFilePath("walkthroughs/broken.md"));
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, "{ not json", "utf8");
 
       const error = yield* Effect.flip(store.read("walkthroughs/broken.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
-      expect(error.path).toContain("broken.review.json");
+      expect(error.path).toContain("broken.md.review.json");
     }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
   it.effect("returns a typed error for schema-invalid state", () =>
     Effect.gen(function* () {
       const store = yield* ReviewStateStore;
+      const file = join(repo.dir, ".balade", stateFilePath("walkthroughs/invalid.md"));
+      mkdirSync(dirname(file), { recursive: true });
       writeFileSync(
-        join(repo.dir, ".balade", stateFileName("walkthroughs/invalid.md")),
+        file,
         JSON.stringify({
           ...state,
           walkthrough: "walkthroughs/invalid.md",
@@ -644,7 +732,7 @@ describe("review-state files", () => {
 
       const error = yield* Effect.flip(store.read("walkthroughs/invalid.md"));
       expect(error).toMatchObject({ _tag: "StateInvalid" });
-      expect(error.path).toContain("invalid.review.json");
+      expect(error.path).toContain("invalid.md.review.json");
     }).pipe(Effect.provide(storeLayer()), provideLive),
   );
 
@@ -676,6 +764,72 @@ describe("review-state files", () => {
       expect(exclude.split("\n")).toContain(".balade/");
       expect(checkIgnore(worktree.dir)).toBe(".balade");
     }).pipe(provideLive),
+  );
+
+  it.effect("rejects a sidecar parent redirected through a symbolic link", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const isolated = createFixtureRepo();
+        const outside = mkdtempSync(join(tmpdir(), "balade-sidecar-outside-"));
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            isolated.cleanup();
+            rmSync(outside, { recursive: true, force: true });
+          }),
+        );
+        mkdirSync(join(isolated.dir, ".balade"));
+        symlinkSync(
+          outside,
+          join(isolated.dir, ".balade", "walkthroughs"),
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        const store = yield* ReviewStateStore.pipe(
+          Effect.provide(
+            ReviewStateStore.layer({
+              repoRoot: isolated.dir,
+              gitCommonDir: join(isolated.dir, ".git"),
+            }),
+          ),
+        );
+
+        const error = yield* store.write("walkthroughs/valid.md", state).pipe(Effect.flip);
+
+        expect(error).toMatchObject({ _tag: "StatePathRejected", path: "walkthroughs/valid.md" });
+        expect(existsSync(join(outside, "valid.md.review.json"))).toBe(false);
+      }).pipe(provideLive),
+    ),
+  );
+
+  it.effect("allows concurrent first review and Q&A sidecar writes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const isolated = createFixtureRepo();
+        yield* Effect.addFinalizer(() => Effect.sync(isolated.cleanup));
+        const options = { repoRoot: isolated.dir, gitCommonDir: join(isolated.dir, ".git") };
+        const qaState: QaState = {
+          version: 1,
+          walkthrough: state.walkthrough,
+          pr: state.pr,
+          stamp: state.stamp,
+          threads: [],
+        };
+        const writeReview = Effect.gen(function* () {
+          const store = yield* ReviewStateStore;
+          yield* store.write(state.walkthrough, state);
+        }).pipe(Effect.provide(ReviewStateStore.layer(options)));
+        const writeQa = Effect.gen(function* () {
+          const store = yield* QaStateStore;
+          yield* store.write(qaState.walkthrough, qaState);
+        }).pipe(Effect.provide(QaStateStore.layer(options)));
+
+        yield* Effect.all([writeReview, writeQa], { concurrency: "unbounded" });
+
+        expect(existsSync(join(isolated.dir, ".balade", stateFilePath(state.walkthrough)))).toBe(
+          true,
+        );
+        expect(existsSync(join(isolated.dir, ".balade", qaFilePath(state.walkthrough)))).toBe(true);
+      }).pipe(provideLive),
+    ),
   );
 
   it.effect("excludes through the module git directory from a submodule", () =>
@@ -718,6 +872,7 @@ describe("the payload cache", () => {
       root: "/fixture",
       slug: "fixture/repo",
       head: Effect.sync(() => head),
+      source: () => Effect.succeed(""),
       pin: () => Effect.succeed(Option.some(pin)),
       distance: () => Effect.succeed(Option.none()),
       row: () => Effect.succeed(Option.none()),

@@ -44,7 +44,14 @@ function layerOf(module: string): string {
   return module.includes("/") ? (head ?? module) : module;
 }
 
-const ROOT_UTILS = ["shell.ts", "state.ts", "terminal.ts", "failure.ts", "presence.ts"];
+const ROOT_UTILS = [
+  "shell.ts",
+  "state.ts",
+  "terminal.ts",
+  "failure.ts",
+  "presence.ts",
+  "submission.ts",
+];
 
 /** Which layers each layer may import from. Orchestrators may import anything but commands/. */
 const CONCEPT_EDGES = new Map<string, readonly string[]>(
@@ -55,6 +62,7 @@ const CONCEPT_EDGES = new Map<string, readonly string[]>(
     git: ["git", "contract", ...ROOT_UTILS],
     walkthrough: ["walkthrough", "preset", "contract", ...ROOT_UTILS],
     pi: ["pi", "authoring", "git", "contract", ...ROOT_UTILS],
+    agent: ["agent", "pi", ...ROOT_UTILS],
     ...Object.fromEntries(ROOT_UTILS.map((util) => [util, [util, "contract"]])),
   }),
 );

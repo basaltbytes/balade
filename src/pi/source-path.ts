@@ -1,6 +1,7 @@
-/** The source-path policy shared by pinned and base authoring reads. */
+/** The source-path policy shared by pinned and base agent inspection reads. */
 
 import { Result, Schema } from "effect";
+import { isContainedRepoRelativePath } from "../contract/paths.js";
 
 const CREDENTIAL_FILE_BASENAME_PATTERNS = [
   /^\.env(?:\..*)?$/iu,
@@ -59,10 +60,7 @@ function isReadableRepositoryPath(sourcePath: string): boolean {
   const segments = sourcePath.split("/");
   const basename = segments.at(-1) ?? "";
   return !(
-    sourcePath === "" ||
-    sourcePath.startsWith("/") ||
-    sourcePath.includes("\\") ||
-    segments.some((segment) => segment === "" || segment === "." || segment === "..") ||
+    !isContainedRepoRelativePath(sourcePath) ||
     segments
       .slice(0, -1)
       .some((segment) => CREDENTIAL_DIRECTORY_NAMES.has(segment.toLowerCase())) ||

@@ -21,9 +21,10 @@ import { describeFailure } from "../failure.js";
 import type { Lang, CheckReport } from "../contract/types.js";
 import { gitCommonDir, gitToplevel } from "../shell.js";
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
-import { ReviewStateStore } from "../state.js";
+import { QaStateStore, ReviewStateStore } from "../state.js";
 import { createApi, type Api } from "./api.js";
 import { PayloadCache } from "./cache.js";
+import { QaWorkflow, type QaWorkflowOptions } from "./qa.js";
 import { ServerRepo, type RepoOptions, type ServerRepoError } from "./repo.js";
 
 /**
@@ -161,13 +162,26 @@ export const prepareSession = Effect.fn("prepareSession")(function* (options: Se
   /* Exclusion is advisory: a failed resolution degrades to the plain-clone
      layout, whose failed exclude write the store already logs as a warning
      instead of failing the session. */
-  const stateLayer = ReviewStateStore.layer({
+  const storeOptions = {
     repoRoot: root,
     gitCommonDir: yield* gitCommonDir(root).pipe(
       Effect.catchTag("CommandFailed", () => Effect.succeed(pathService.join(root, ".git"))),
     ),
-  });
-  const sessionLayer = Layer.mergeAll(payloadLayer, stateLayer);
+  };
+  const stateLayer = Layer.merge(
+    ReviewStateStore.layer(storeOptions),
+    QaStateStore.layer(storeOptions),
+  );
+  const sessionBaseLayer = Layer.merge(payloadLayer, stateLayer);
+  const workflowResolution =
+    at === undefined ? {} : { resolution: { _tag: "PullHead" as const, head: at } };
+  const workflowGh = options.useGh === undefined ? {} : { useGh: options.useGh };
+  const workflowOptions: QaWorkflowOptions = {
+    scope: yield* Effect.scope,
+    ...workflowResolution,
+    ...workflowGh,
+  };
+  const sessionLayer = QaWorkflow.layer(workflowOptions).pipe(Layer.provideMerge(sessionBaseLayer));
 
   return yield* Effect.gen(function* () {
     /* Named files and located PRs compile before the port opens, so a dead

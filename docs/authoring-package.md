@@ -15,6 +15,12 @@ slots carrying the typed data in. The package ships with the CLI, so a
 plain `npx balade generate …` does not depend on a second repository or an
 installed agent skill.
 
+Live clarification is a narrower consumer of this package. Its dedicated
+prompt ([`src/pi/clarification-prompt.md`](../src/pi/clarification-prompt.md))
+reuses the core tag catalog and inspection budgets, but asks for a validated
+answer fragment rather than a complete walkthrough and does not use the section
+templates or writing rubric.
+
 The current package version is `1.21.0`. Its major version matches the
 walkthrough schema it authors.
 
@@ -51,11 +57,13 @@ instructions keep the default behavior. A file containing a project-context
 closing tag is always rejected with a warning. Nested instructions apply only
 below their directory, and unrelated monorepo instructions are omitted.
 
-The session adds seven balade-owned read-only tools. They list the change and
-pinned tree, search the pinned snapshot with fixed text or a regular expression,
-read a changed-file diff, read numbered lines at the pin or PR base, and submit
-one structured draft. A loaded instruction can direct the model to read another
-project document through the pinned source tool. The session cannot run shell
+The generation session adds seven balade-owned tools: six read-only inspection
+tools that list the change and pinned tree, search the pinned snapshot with
+fixed text or a regular expression, and read a changed-file diff or numbered
+lines at the pin or PR base, plus one structured draft submit tool.
+Clarification reuses the same six inspection tools and adds `submit_answer`
+instead. A loaded instruction can direct the generation model to read another
+project document through the pinned source tool. Neither session can run shell
 commands or write files. Every requested path is resolved through the snapshot
 root, including symlink targets, before a filesystem-backed tool uses it.
 Source reads also reject credential-file basenames and paths below `.aws/`,
@@ -64,9 +72,10 @@ changes without quoting their values and to state when it omits one.
 
 The pinned tree is extracted with `git archive` into
 `~/.balade/cache/snapshots/`. Cache entries are keyed by repository and commit,
-and the extracted `tree/` directory contains no cache metadata. Repeat and
-repair turns reuse an entry. On each open, a least-recently-used cleanup keeps
-the five newest snapshot entries across repositories.
+and the extracted `tree/` directory contains no cache metadata. Repeat, repair
+and clarification turns reuse an entry. Each snapshot open runs a
+least-recently-used cleanup that keeps the five newest snapshot entries across
+repositories.
 
 The submitted draft contains a title, scalar metadata, an optional preset, and
 a complete Markdoc body. Balade owns the envelope. It stamps `walkthrough`,

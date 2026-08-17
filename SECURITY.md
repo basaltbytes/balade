@@ -19,8 +19,9 @@ balade reads a pull request and renders it for review, so the interesting
 surfaces are the ones where pull-request content reaches a reviewer:
 
 - the review app's rendering of walkthrough and diff content
-- the authoring agent's prompt and its read-only tool surface
+- the agent prompts and read-only tool surfaces used by generation and live clarification
 - the local review server on `127.0.0.1`
+- the git-excluded review and Q&A sidecars
 - the standalone HTML export produced by `balade build`
 - the CLI's use of `git` and `gh`
 

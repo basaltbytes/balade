@@ -20,12 +20,7 @@ import { authoringSystemPrompt } from "../src/pi/authoring.js";
 import { inspectionBudget } from "../src/authoring/package.js";
 import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
 import { slugifyTitle, type ExistingWalkthrough } from "../src/commands/generate/output.js";
-import {
-  matchingModels,
-  modelSelectionFromFlags,
-  modelsForPicker,
-  preferredModel,
-} from "../src/commands/generate/selection.js";
+import { makeAgentModelManager, type AgentModelNotice } from "../src/agent/model.js";
 import { shellLayer } from "./support/effect.js";
 import { contextResolverLive } from "../src/git/git.js";
 import type { PullSnapshot } from "../src/git/pr.js";
@@ -498,18 +493,45 @@ describe("the Pi adapter", () => {
     }),
   );
 
-  it.effect("reads and updates Pi's global model preference", () =>
+  it.effect("configures one shared agent model for concurrent first requests", () =>
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() => piHarness());
-      const stored = yield* Effect.gen(function* () {
+      const result = yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         expect(Option.isNone(yield* author.modelPreference)).toBe(true);
-        const model = yield* fauxModel();
-        yield* author.rememberModel(model);
-        return yield* author.modelPreference;
+        const selected: AuthorModel[] = [];
+        const notices: AgentModelNotice[] = [];
+        const manager = yield* makeAgentModelManager(author, {
+          chooseLogin: () => Effect.die("unexpected login picker"),
+          chooseModel: (models) => {
+            const model = models[0];
+            return model === undefined
+              ? Effect.die("model picker was empty")
+              : Effect.succeed(model);
+          },
+          login: {
+            prompt: async () => "",
+            secret: async () => Redacted.make(""),
+            notify: () => {},
+          },
+          waiting: (effect) => effect,
+          notice: (notice) => Effect.sync(() => notices.push(notice)),
+          selected: (model) => Effect.sync(() => selected.push(model)),
+        });
+        expect((yield* manager.status)._tag).toBe("AgentModelSetupRequired");
+        const concurrent = yield* Effect.all([manager.ensure, manager.ensure], {
+          concurrency: "unbounded",
+        });
+        const configured = concurrent[0];
+        if (configured === undefined) return yield* Effect.die("model setup returned no model");
+        expect(concurrent).toEqual([configured, configured]);
+        expect(notices).toContainEqual({ _tag: "SetupRequired" });
+        expect((yield* manager.status)._tag).toBe("AgentModelReady");
+        return { configured, selected, stored: yield* author.modelPreference };
       }).pipe(Effect.provide(harness.layer));
 
-      expect(Option.getOrUndefined(stored)).toEqual({
+      expect(result.selected).toEqual([result.configured]);
+      expect(Option.getOrUndefined(result.stored)).toEqual({
         providerId: "faux",
         modelId: "faux-1",
       });
@@ -574,6 +596,72 @@ describe("the Pi adapter", () => {
           .filter((event) => event._tag === "AuthorToolStarted")
           .every((event) => event.input === ""),
       ).toBe(true);
+    }),
+  );
+
+  it.effect("reserves the search budget before parallel path resolution", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      let finalRequest = "";
+      /* One changed file floors the medium budget at 30 searches. */
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          Array.from({ length: 31 }, () =>
+            ai.fauxToolCall("search_source", {
+              query: "planning.pool.item",
+              mode: "fixed",
+              path: "models/planning_pool_item.py",
+            }),
+          ),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          finalRequest = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(finalRequest).toContain("Source search budget reached after 30 searches");
+    }),
+  );
+
+  it.effect("reserves the shared source-read budget before parallel path parsing", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const harness = yield* Effect.promise(() => piHarness());
+      let finalRequest = "";
+      /* One changed file floors the medium budget at 24 source reads. */
+      harness.faux.setResponses([
+        ai.fauxAssistantMessage(
+          Array.from({ length: 25 }, (_, index) =>
+            ai.fauxToolCall(index % 2 === 0 ? "read_source" : "read_base_source", {
+              path: "models/planning_pool_item.py",
+              from: 1,
+              to: 1,
+            }),
+          ),
+          { stopReason: "toolUse" },
+        ),
+        (context) => {
+          finalRequest = JSON.stringify(context.messages);
+          return submitted(validBody);
+        },
+      ]);
+
+      yield* Effect.gen(function* () {
+        const author = yield* WalkthroughAuthor;
+        const model = yield* fauxModel();
+        yield* author.start(authorRequest(repo.dir, repo.pin, model));
+      }).pipe(Effect.scoped, Effect.provide(harness.layer));
+
+      expect(finalRequest).toContain("Source inspection budget reached after 24 reads");
     }),
   );
 
@@ -1067,69 +1155,5 @@ describe("generation", () => {
   it("derives stable, filesystem-safe draft names", () => {
     expect(slugifyTitle("  Déjà vu: API / v2!  ")).toBe("deja-vu-api-v2");
     expect(slugifyTitle("🎉")).toBe("walkthrough");
-    expect(
-      matchingModels(
-        [
-          Schema.decodeUnknownSync(AuthorModelSchema)({
-            providerId: "faux",
-            providerName: "Faux",
-            modelId: "one",
-            modelName: "One",
-          }),
-        ],
-        { providerId: "other" },
-      ),
-    ).toEqual([]);
-    const models = [
-      Schema.decodeUnknownSync(AuthorModelSchema)({
-        providerId: "faux",
-        providerName: "Faux",
-        modelId: "one",
-        modelName: "One",
-      }),
-    ];
-    const first = models[0];
-    if (first === undefined) throw new Error("test model fixture is empty");
-    const preference = Option.some({
-      providerId: first.providerId,
-      modelId: first.modelId,
-    });
-    expect(Option.getOrUndefined(preferredModel(models, preference))).toEqual(first);
-    expect(modelSelectionFromFlags(Option.none(), Option.none())).toEqual({
-      _tag: "UsePreference",
-    });
-    expect(modelSelectionFromFlags(Option.some("  faux  "), Option.some(""))).toEqual({
-      _tag: "Choose",
-      filter: { providerId: "faux" },
-    });
-    expect(modelSelectionFromFlags(Option.some(""), Option.none())).toEqual({
-      _tag: "Choose",
-      filter: {},
-    });
-
-    const second = Schema.decodeUnknownSync(AuthorModelSchema)({
-      providerId: "other",
-      providerName: "Other",
-      modelId: "two",
-      modelName: "Two",
-    });
-    expect(
-      modelsForPicker([...models, second], { providerId: "faux", modelId: "missing" }),
-    ).toEqual({
-      models,
-      usedFallback: true,
-    });
-    expect(modelsForPicker([...models, second], { providerId: "missing", modelId: "two" })).toEqual(
-      {
-        models: [second],
-        usedFallback: true,
-      },
-    );
-    expect(
-      modelsForPicker([...models, second], { providerId: "missing", modelId: "absent" }),
-    ).toEqual({
-      models: [...models, second],
-      usedFallback: true,
-    });
   });
 });
