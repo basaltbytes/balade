@@ -31,7 +31,7 @@ import {
   SnapshotPathRejected,
   SnapshotReadFailed,
 } from "../src/pi/snapshot.js";
-import { sanitizeTerminalText } from "../src/terminal.js";
+import { plainTheme, sanitizeTerminalText, type Theme } from "../src/terminal.js";
 
 describe("generation command output", () => {
   it("removes terminal control sequences from untrusted text", () => {
@@ -42,7 +42,13 @@ describe("generation command output", () => {
 
   it("summarizes compact progress with cumulative cost and gives generate-only runs a next step", () => {
     const output: string[] = [];
-    const progress = makeGenerationProgress((value) => output.push(value));
+    const progress = makeGenerationProgress({
+      write: (value) => output.push(value),
+      mode: "compact",
+      presentation: "pipe",
+      theme: plainTheme,
+      onStatus: () => {},
+    });
 
     progress({
       _tag: "AuthorNotice",
@@ -66,6 +72,7 @@ describe("generation command output", () => {
         _tag: "GenerationStatusChanged",
         status: { _tag: "RunningAuthorTool", turn: 1, name },
       });
+      progress({ _tag: "AuthorToolFinished", name, output: "", failed: false });
       progress({
         _tag: "GenerationStatusChanged",
         status: { _tag: "AuthoringGeneration", turn: 1 },
@@ -87,18 +94,18 @@ describe("generation command output", () => {
       "warning head-instructions-skipped\n" +
         '  Skipped "AGENTS.md" because this pull request changes it.\n' +
         '  fix Review "AGENTS.md", then pass --trust-head-instructions to apply it during generation.\n',
-      "Preparing the authoring session…\n",
-      "Authoring the walkthrough (turn 1)…\n",
-      "Inspecting pull-request changes…\n",
-      "Authoring the walkthrough (turn 1)…\n",
-      "Searching pinned source…\n",
-      "Authoring the walkthrough (turn 1)…\n",
-      "Reading relevant diffs…\n",
-      "Authoring the walkthrough (turn 1)…\n",
-      "Confirming pinned source ranges…\n",
-      "Authoring the walkthrough (turn 1)…\n",
-      "Submitting the walkthrough draft…\n",
-      "Authoring the walkthrough (turn 1)…\n",
+      "→ Started preparing the authoring session.\n",
+      "→ Started authoring the walkthrough (turn 1).\n",
+      "→ Started inspecting pull-request changes.\n",
+      "✓ Inspected pull-request changes.\n",
+      "→ Started searching pinned source.\n",
+      "✓ Searched pinned source.\n",
+      "→ Started reading relevant diffs.\n",
+      "✓ Read relevant diffs.\n",
+      "→ Started confirming pinned source ranges.\n",
+      "✓ Confirmed pinned source ranges.\n",
+      "→ Started submitting the walkthrough draft.\n",
+      "✓ Submitted the walkthrough draft.\n",
       "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cumulative cost $0.0123\n",
     ]);
     expect(
@@ -146,7 +153,13 @@ describe("generation command output", () => {
 
   it("shows model prose and tool details only in verbose progress", () => {
     const output: string[] = [];
-    const progress = makeGenerationProgress((value) => output.push(value), "verbose");
+    const progress = makeGenerationProgress({
+      write: (value) => output.push(value),
+      mode: "verbose",
+      presentation: "tty",
+      theme: plainTheme,
+      onStatus: () => {},
+    });
 
     progress({ _tag: "AuthorAssistantText", text: "I found the behavioral spine." });
     progress({
@@ -166,6 +179,41 @@ describe("generation command output", () => {
       '[read_source] {"path":"src/example.ts","from":1,"to":2}\n',
       "1 | export const value = 1;\n",
       "[/read_source]\n",
+      "✓ Confirmed pinned source ranges.\n",
+    ]);
+  });
+
+  it("marks completed tools as successful or failed milestones", () => {
+    const output: string[] = [];
+    const markerTheme: Theme = {
+      ...plainTheme,
+      ok: (text) => `<ok>${text}</ok>`,
+      error: (text) => `<error>${text}</error>`,
+    };
+    const progress = makeGenerationProgress({
+      write: (value) => output.push(value),
+      mode: "compact",
+      presentation: "tty",
+      theme: markerTheme,
+      onStatus: () => {},
+    });
+
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "read_source",
+      output: "Source lines.",
+      failed: false,
+    });
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "search_source",
+      output: "Search failed.",
+      failed: true,
+    });
+
+    expect(output).toEqual([
+      "<ok>✓</ok> Confirmed pinned source ranges.\n",
+      "<error>✗</error> Could not search pinned source.\n",
     ]);
   });
 

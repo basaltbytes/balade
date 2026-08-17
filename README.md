@@ -171,8 +171,10 @@ status 1.
 
 On an interactive terminal, the live status names preparation, model generation,
 short-lived inspection tools, checks and repair turns, with an elapsed clock for
-the current state. Piped runs receive the same transitions as plain lines. The
-final summary reports total time plus preparation, model-turn and check timing.
+the current state. Finished tools move into history with a green check or red
+failure mark and past-tense wording. Piped runs log explicit starts and the same
+completions without repeating the model-authoring state after each tool. The final
+summary reports total time plus preparation, model-turn and check timing.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text
 and allowlisted tool calls; provider-hidden reasoning remains hidden.
 

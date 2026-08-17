@@ -1290,13 +1290,16 @@ backed out after dogfooding showed it lying. Issue #122 replaces that attempt
 with an owned status model. The Pi adapter emits its current semantic state —
 model generating or one of the concurrently tracked tools running — and the
 generate pipeline maps it into preparation, authoring turn, check pass and
-repair turn states. The display renders only those states; raw tool start/end
-events leave the adapter without presentation filtering and the renderer alone
-decides whether compact or verbose output includes them. The spinner's clock
-resets per state, while the completed summary reports total time and aggregates
-tool intervals into their owning model turn. Piped output receives every state
-transition as a stable line, including the return to model generation after a
-tool finishes.
+repair turn states. Raw tool start/end events leave the adapter without
+presentation filtering, and the renderer alone decides whether compact or
+verbose output includes them. The spinner's clock resets per state, while the
+completed summary reports total time and aggregates tool intervals into their
+owning model turn. On a TTY, present-tense states belong exclusively to the
+mutable spinner; append-only history records successful or failed tool finish
+events in the past tense with a semantic mark. Returning from a tool to model
+generation updates the spinner without inventing another milestone. A pipe
+cannot redraw, so it receives explicit “Started …” lifecycle events and the
+same marked completions; the model-authoring start appears once per turn.
 
 The status model became viable only after `CommandExecutor` moved from
 `spawnSync` to interruptible `execFile`: git-heavy checks no longer freeze the

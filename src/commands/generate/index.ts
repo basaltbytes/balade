@@ -208,12 +208,13 @@ export const generateCommand = Command.make(
       const selected = yield* agentModels.configure(selection);
       const progressMode: GenerationProgressMode = config.verbose ? "verbose" : "compact";
       const spinner = makeSpinner();
-      const progress = makeGenerationProgress(
-        (value) => spinner.print(() => writeStdout(value)),
-        progressMode,
-        stdoutTheme,
-        (status) => spinner.update(generationStatusText(status)),
-      );
+      const progress = makeGenerationProgress({
+        write: (value) => spinner.print(() => writeStdout(value)),
+        mode: progressMode,
+        presentation: process.stderr.isTTY === true ? "tty" : "pipe",
+        theme: stdoutTheme,
+        onStatus: (status) => spinner.update(generationStatusText(status)),
+      });
       const generationFacets: GenerationFacets = {};
       if (chosen !== undefined) {
         generationFacets.preset = { name: chosen.name, authoring: chosen.authoring };

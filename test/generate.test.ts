@@ -912,15 +912,16 @@ describe("generation", () => {
         const spinner = makeSpinner(tty.stream);
         const output: string[] = [];
         const statuses: GenerationStatus[] = [];
-        const progress = makeGenerationProgress(
-          (value) => spinner.print(() => output.push(value)),
-          "compact",
-          plainTheme,
-          (status) => {
+        const progress = makeGenerationProgress({
+          write: (value) => spinner.print(() => output.push(value)),
+          mode: "compact",
+          presentation: "tty",
+          theme: plainTheme,
+          onStatus: (status) => {
             statuses.push(status);
             spinner.update(generationStatusText(status));
           },
-        );
+        });
 
         const result = yield* Effect.gen(function* () {
           const model = yield* fauxModel();
@@ -953,9 +954,15 @@ describe("generation", () => {
         expect(frames).toContain("Authoring the walkthrough (turn 1)…");
         expect(frames).toContain("Confirming pinned source ranges…");
         expect(frames).toContain("Checking the draft against the pinned source (pass 1)…");
-        expect(
-          output.filter((value) => value === "Authoring the walkthrough (turn 1)…\n"),
-        ).toHaveLength(3);
+        /* The spinner owns present-tense activity. History records only work
+           whose finish event proves that it completed. */
+        expect(output.filter((value) => value.startsWith("✓"))).toEqual([
+          "✓ Confirmed pinned source ranges.\n",
+          "✓ Submitted the walkthrough draft.\n",
+        ]);
+        for (const status of statuses) {
+          expect(output).not.toContain(`${generationStatusText(status)}\n`);
+        }
         expect(output.some((value) => value.startsWith("[read_source]"))).toBe(false);
       }).pipe(Effect.scoped),
   );
