@@ -1062,12 +1062,11 @@ unlike the closing full-PR diff, a missing Mechanism section is an authoring
 quality issue, not invalid input. `collapsed` is an authored initial state
 only; the app does not persist the reader's toggle. Evidence ranges count
 against the unchanged 10-range budget on purpose — the cap is what forces
-"critical pieces", not an inventory of hunks. Authored artifacts written
-against the old skeleton (`.agents/walkthroughs/pr-88-*.md`,
-`app/src/fixtures/pr96.ts`) keep their free-text `Deep dive` labels; group
-labels are data, not contract. What would move this: dogfooding showing the
-range budget starves evidence pinning, or reviewers wanting collapse state
-persisted with the other review marks.
+"critical pieces", not an inventory of hunks. The authored fixture written
+against the old skeleton (`app/src/fixtures/pr96.ts`) keeps its free-text
+`Deep dive` label; group labels are data, not contract. What would move this:
+dogfooding showing the range budget starves evidence pinning, or reviewers
+wanting collapse state persisted with the other review marks.
 
 ## PR package previews publish only after the tarball smoke test
 
