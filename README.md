@@ -170,12 +170,12 @@ validation still fails, the draft stays on disk and the command exits with
 status 1.
 
 On an interactive terminal, the live status names preparation, model generation,
-short-lived inspection tools, checks and repair turns, with an elapsed clock for
-the current state. Finished tools move into history with a green check or red
-failure mark and past-tense wording; repeated successful calls become one distinct
-milestone per authoring turn. Piped runs log each activity start once and the same
-milestone summary. The final summary reports total time plus preparation,
-model-turn and check timing.
+short-lived inspection tools, checks and repair turns, with one cumulative
+elapsed clock for the generation run. Finished tools move into history with a
+green check or red failure mark and past-tense wording; repeated successful calls
+become one distinct milestone per authoring turn. Piped runs log each activity
+start once and the same milestone summary. The final summary reports total time
+plus preparation, model-turn and check timing.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text
 and allowlisted tool calls; provider-hidden reasoning remains hidden.
 

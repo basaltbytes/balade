@@ -146,7 +146,7 @@ describe("warning shape", () => {
 });
 
 describe("status spinner", () => {
-  it("resets the elapsed clock on each explicit status transition", () => {
+  it("keeps elapsed time cumulative across status transitions", () => {
     vi.useFakeTimers();
     try {
       let now = 0;
@@ -158,10 +158,10 @@ describe("status spinner", () => {
       expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Authoring… 1s");
 
       spinner.update("Checking…");
-      expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Checking… 0s");
+      expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Checking… 1s");
       now = 3_200;
       vi.advanceTimersByTime(2_100);
-      expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Checking… 2s");
+      expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Checking… 3s");
 
       spinner.stop();
       const trailing = tty.chunks.at(-1) ?? "";

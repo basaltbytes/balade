@@ -256,8 +256,8 @@ export interface TerminalStream extends NodeJS.WritableStream {
 
 /**
  * A single-line activity spinner on stderr, animated only on an interactive
- * terminal. Its clock resets for each owned status transition, so the elapsed
- * value describes the state on screen rather than an unrelated earlier phase.
+ * terminal. Its clock starts with the first owned status and remains cumulative
+ * across status transitions until the spinner stops.
  */
 export const makeSpinner = (
   stream: TerminalStream = process.stderr,
@@ -282,8 +282,8 @@ export const makeSpinner = (
     update(text) {
       label = sanitizeTerminalText(text);
       if (!animated) return;
-      startedAt = now();
       if (timer === undefined) {
+        startedAt = now();
         stream.write(HIDE_CURSOR);
         timer = setInterval(render, SPINNER_INTERVAL_MS);
         /* The animation must never be what keeps the process alive. */
