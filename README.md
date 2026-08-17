@@ -40,7 +40,7 @@ say exactly what to fix, so the walkthrough you open is a working one.
 ## Quick start
 
 ```sh
-# cd into your repo folder and the number of the github PR
+# cd into your repo folder and generate with the number of the github PR
 npx balade generate 96
 ```
 
