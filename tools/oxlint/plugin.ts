@@ -16,9 +16,9 @@ import { noUnsafeDictionaryTypeRule } from "./rules/no-unsafe-dictionary-type.ts
 import { noWidenThenAssertRule } from "./rules/no-widen-then-assert.ts";
 import { requireSafetyCommentForTypeAssertionRule } from "./rules/require-safety-comment-for-type-assertion.ts";
 
-/** Generic Oxlint rules that reject low-evidence and low-signal implementation patterns. */
-const antiSlopPlugin = eslintCompatPlugin({
-  meta: { name: "anti-slop" },
+/** Balade's local Oxlint rules for low-evidence and low-signal implementation patterns. */
+const baladePlugin = eslintCompatPlugin({
+  meta: { name: "balade" },
   rules: {
     "no-chained-type-assertions": noChainedTypeAssertionsRule,
     "no-conditional-empty-object-spread": noConditionalEmptyObjectSpreadRule,
@@ -38,4 +38,4 @@ const antiSlopPlugin = eslintCompatPlugin({
   },
 });
 
-export default antiSlopPlugin;
+export default baladePlugin;
