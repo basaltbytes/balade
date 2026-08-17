@@ -1,15 +1,17 @@
-/** Terminal styling: the SGR allowlist at the write edge and themed formatting. */
+/** Terminal styling, themed formatting, and the state-timed TTY spinner. */
 
 import { describe, expect, it, vi } from "@effect/vitest";
 import { stripVTControlCharacters } from "node:util";
 import type { CheckReport } from "../src/contract/types.js";
 import {
   formatText,
+  makeSpinner,
   sanitizeStyledTerminalText,
   stdoutTheme,
   warningText,
   type Theme,
 } from "../src/terminal.js";
+import { scriptedTerminal } from "./support/terminal.js";
 
 /** Marks each slot so a test reads placement, not ANSI bytes. */
 const markerTheme: Theme = {
@@ -140,5 +142,63 @@ describe("warning shape", () => {
     );
     expect(text).toContain("<warning>warning</warning> walkthrough-exists");
     expect(text).toContain("<muted>fix</muted> Pass --force.");
+  });
+});
+
+describe("status spinner", () => {
+  it("resets the elapsed clock on each explicit status transition", () => {
+    vi.useFakeTimers();
+    try {
+      let now = 0;
+      const tty = scriptedTerminal("tty");
+      const spinner = makeSpinner(tty.stream, () => now);
+      spinner.update("Authoring…");
+      now = 1_100;
+      vi.advanceTimersByTime(1_100);
+      expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Authoring… 1s");
+
+      spinner.update("Checking…");
+      expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Checking… 0s");
+      now = 3_200;
+      vi.advanceTimersByTime(2_100);
+      expect(stripVTControlCharacters(tty.chunks.at(-1) ?? "")).toContain("Checking… 2s");
+
+      spinner.stop();
+      const trailing = tty.chunks.at(-1) ?? "";
+      expect(trailing).toContain("\r\u001b[2K");
+      vi.advanceTimersByTime(500);
+      expect(tty.chunks.at(-1)).toBe(trailing);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears around printed output and strips controls from status labels", () => {
+    const tty = scriptedTerminal("tty");
+    const spinner = makeSpinner(tty.stream);
+    spinner.update("safe\u001b[2Jlabel");
+    expect(tty.chunks.join("")).not.toContain("\u001b[2J");
+    tty.chunks.length = 0;
+    const output: string[] = [];
+
+    spinner.print(() => output.push("line"));
+
+    expect(output).toEqual(["line"]);
+    expect(tty.chunks[0]).toBe("\r\u001b[2K");
+    expect(tty.chunks.at(-1)).toContain("safelabel");
+    spinner.stop();
+  });
+
+  it("does not emit animation controls to a non-interactive stream", () => {
+    const piped = scriptedTerminal("pipe");
+    const spinner = makeSpinner(piped.stream);
+    const output: string[] = [];
+
+    spinner.update("Authoring…");
+    spinner.print(() => output.push("line"));
+    spinner.stop();
+
+    expect(output).toEqual(["line"]);
+    expect(piped.chunks).toEqual([]);
   });
 });

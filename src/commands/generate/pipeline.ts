@@ -1,6 +1,6 @@
 /** Generate → write → check → repair, with the invalid draft kept for manual recovery. */
 
-import { Effect, Schema } from "effect";
+import { Clock, Effect, Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
 import { formatText } from "../../terminal.js";
 import { checkOne } from "../../walkthrough/checker.js";
@@ -14,8 +14,6 @@ import {
   WalkthroughAuthor,
   type AuthorDraft,
   type AuthorModel,
-  type AuthorProgress,
-  type AuthorProgressMode,
   type AuthorStartupError,
   type AuthorUsage,
   type AuthoringPreset,
@@ -37,6 +35,11 @@ import {
   validateGenerationOutput,
   writeGenerationDraft,
 } from "./output.js";
+import {
+  makeGenerationProgressReporter,
+  type GenerationProgress,
+  type GenerationTiming,
+} from "./progress.js";
 
 const MAX_REPAIR_ATTEMPTS = 2;
 
@@ -64,8 +67,7 @@ export interface RunGenerationOptions {
   /** Named by `--budget`; sizes the inspection budget. */
   readonly budget?: InspectionTier;
   readonly headInstructionPolicy: HeadInstructionPolicy;
-  readonly progress: (event: AuthorProgress) => void;
-  readonly progressMode: AuthorProgressMode;
+  readonly progress: (event: GenerationProgress) => void;
 }
 
 interface GenerationSummary {
@@ -75,6 +77,7 @@ interface GenerationSummary {
   readonly repairs: number;
   readonly siblings: readonly string[];
   readonly superseded: readonly SupersededWalkthrough[];
+  readonly timing: GenerationTiming;
 }
 
 export interface Generated extends GenerationSummary {
@@ -101,6 +104,10 @@ export type GenerateError =
 export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationOptions) =>
   Effect.gen(function* () {
     const author = yield* WalkthroughAuthor;
+    const clock = yield* Clock.Clock;
+    const progress = makeGenerationProgressReporter(options.progress, () =>
+      clock.currentTimeMillisUnsafe(),
+    );
     yield* validateGenerationOutput({
       root: options.source.root,
       directory: options.directory,
@@ -121,8 +128,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       model: options.model,
       ...requestFacets,
       headInstructionPolicy: options.headInstructionPolicy,
-      progressMode: options.progressMode,
-      progress: options.progress,
+      progress: progress.author,
     });
     const initial = session.initial;
 
@@ -138,10 +144,12 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
 
     let turn = initial;
     let repairs = 0;
+    progress.checking(1);
     let report = yield* checkGeneratedDraft(options.source, file);
     while (!report.ok && repairs < MAX_REPAIR_ATTEMPTS) {
       const previousReport = report;
       repairs++;
+      progress.repairing(repairs, MAX_REPAIR_ATTEMPTS);
       turn = yield* session
         .repair(formatText({ reports: [report] }))
         .pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
@@ -149,6 +157,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
         file,
         renderDraft(options.source, turn.draft, options.preset, options.lang),
       ).pipe(Effect.mapError((cause) => new RepairFailed({ file, report, cause })));
+      progress.checking(repairs + 1);
       report = yield* checkGeneratedDraft(options.source, file);
       if (sameDiagnosticLocations(previousReport, report)) break;
     }
@@ -160,6 +169,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       repairs,
       siblings: output.siblings,
       superseded: output.superseded,
+      timing: progress.finish(),
     };
     return report.ok
       ? ({ _tag: "Generated", ...summary } satisfies Generated)

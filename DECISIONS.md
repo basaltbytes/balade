@@ -160,9 +160,11 @@ stack explicitly so tests never import the executable entry). That layer holds
 Effect's Node `FileSystem`/`Path` services, `CommandExecutor`,
 `BrowserLauncher`, `PrLocator`, the Pi author adapter, and the live
 `ContextResolver`.
-`CommandExecutor` deliberately still wraps `spawnSync`; process behavior and the
-served payload-cache cost model stay unchanged. The resolver depends on that
-process boundary rather than on Node's child-process API.
+`CommandExecutor` wraps Node's `execFile` through `Effect.callback`; its public
+port, environment, 256 MiB output bound and `CommandFailed` classification stay
+unchanged, while Effect interruption aborts the child process. The asynchronous
+adapter keeps the runtime scheduler alive through long check phases. The resolver
+depends on that process boundary rather than on Node's child-process API.
 
 Repository selection happens after command parsing and may fetch a PR ref, so
 the root-dependent `ServerRepo`, `PayloadCache`, and `ReviewStateStore` layers
@@ -280,13 +282,12 @@ selection.
 
 ## Resolution shells out through the `CommandExecutor` layer
 
-The live layer still uses `spawnSync`. One resolve costs 2576 ms across 25
-processes — fine for `check`, too slow to repeat per request. The decided path
-is the synchronous adapter plus a
-served-mode payload cache keyed `(sourcePath, pin, head)`, which turns repeat
-requests into a map lookup. If the cache falls short, `execAsync` goes in beside
-the synchronous implementation in `src/shell.ts`, behind the same
-service.
+The live layer uses asynchronous `execFile` behind the one `CommandExecutor`
+method. One resolve measured 2576 ms across 25 processes — fine for `check`, too
+slow to repeat per request — so served mode still keeps a payload cache keyed
+`(sourcePath, pin, head)`, turning repeat requests into a map lookup. Async
+execution solves scheduler starvation and interruption; it does not make a cache
+miss cheap enough to repeat on every request.
 
 `src/server/cache.ts` keeps one slot per walkthrough rather than one per key: a
 payload carries the full contents of every changed file, and the head only moves
@@ -298,8 +299,9 @@ slot when the file itself changes.
 
 `balade open` opens the served URL in the default browser (issue #21) through
 `BrowserLauncher` in `src/server/browser.ts`, not through `CommandExecutor`:
-the synchronous adapter blocks the event loop, and a Linux opener that stays
-attached to the browser it starts would freeze the server it was launched for.
+the command port captures output and waits for exit, while a Linux opener that
+stays attached to the browser it starts would freeze the server it was launched
+for.
 The launcher spawns the platform opener detached and waits a short verdict
 window — a fast non-zero exit (missing binary, no display, no handler) becomes
 a typed `BrowserLaunchFailed`, while an opener still running after the window
@@ -1283,13 +1285,25 @@ two layers: untrusted values are control-stripped where they are interpolated,
 and the writers keep only the theme's own single-parameter SGR sequences
 (no conceal, no cursor control, no OSC), so a missed interpolation site can at
 worst borrow a palette color.
-A live progress display for `generate` (activity spinner, phase lines,
-elapsed clock) was built on top of these colors and backed out: the author's
-event stream has no state semantics — tools are millisecond reads while the
-minutes are eventless generation gaps — and the synchronous `CommandExecutor`
-blocks the event loop through the whole check phase, so every animated
-display ended up lying. Issue #122 carries the post-mortem and the shape of a
-real fix (owned status model, async process port, faux-provider TTY harness).
+A live progress display for `generate` was first built on provider events and
+backed out after dogfooding showed it lying. Issue #122 replaces that attempt
+with an owned status model. The Pi adapter emits its current semantic state —
+model generating or one of the concurrently tracked tools running — and the
+generate pipeline maps it into preparation, authoring turn, check pass and
+repair turn states. The display renders only those states; raw tool start/end
+events leave the adapter without presentation filtering and the renderer alone
+decides whether compact or verbose output includes them. The spinner's clock
+resets per state, while the completed summary reports total time and aggregates
+tool intervals into their owning model turn. Piped output receives every state
+transition as a stable line, including the return to model generation after a
+tool finishes.
+
+The status model became viable only after `CommandExecutor` moved from
+`spawnSync` to interruptible `execFile`: git-heavy checks no longer freeze the
+clock or Ctrl+C. A scripted TTY test drives Pi's real faux-provider session,
+real inspection tools and the generated-draft check with provider delays; it
+pins the return from a finished tool to model generation and would catch the
+verbose-only finish-event gap that escaped the first attempt.
 What would move this: a renderer needing richer styling than six slots, which
 would argue for widening the palette allowlist in the same motion as the
 theme, never for trusting formatter output wholesale.

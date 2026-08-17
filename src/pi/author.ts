@@ -98,7 +98,17 @@ export interface AuthorNotice {
   readonly hint: string;
 }
 
-export type AuthorProgress =
+/** The Pi adapter's current authoring state, independent of terminal policy. */
+export type AuthorStatus =
+  | { readonly _tag: "AuthorGenerating" }
+  | { readonly _tag: "AuthorUsingTool"; readonly name: string };
+
+export interface AuthorStatusChanged {
+  readonly _tag: "AuthorStatusChanged";
+  readonly status: AuthorStatus;
+}
+
+export type AuthorOutput =
   | AuthorNotice
   | { readonly _tag: "AuthorAssistantText"; readonly text: string }
   | { readonly _tag: "AuthorToolStarted"; readonly name: string; readonly input: string }
@@ -110,7 +120,7 @@ export type AuthorProgress =
     }
   | { readonly _tag: "AuthorUsageUpdated"; readonly usage: AuthorUsage };
 
-export type AuthorProgressMode = "compact" | "verbose";
+export type AuthorProgress = AuthorStatusChanged | AuthorOutput;
 
 /** Whether repository instructions changed at the pinned head enter authoring. */
 export type HeadInstructionPolicy = "omit-changed" | "trust-changed";
@@ -153,7 +163,6 @@ export interface AuthoringRequest {
   /** Named by `--budget`; sizes the inspection budget. Absent means `medium`. */
   readonly budget?: InspectionTier;
   readonly headInstructionPolicy: HeadInstructionPolicy;
-  readonly progressMode: AuthorProgressMode;
   readonly progress: (event: AuthorProgress) => void;
 }
 

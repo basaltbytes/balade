@@ -48,7 +48,6 @@ describe(`authoring package ${AUTHORING_PACKAGE_VERSION} paid evaluation`, () =>
               directory: "walkthroughs",
               supersede: [],
               headInstructionPolicy: "omit-changed",
-              progressMode: "compact",
               progress: () => {},
             });
             const output = readFileSync(result.file, "utf8");

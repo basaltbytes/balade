@@ -169,8 +169,12 @@ leaves the same diagnostic codes on the same lines, balade stops early. If
 validation still fails, the draft stays on disk and the command exits with
 status 1.
 
-Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text and
-allowlisted tool calls; provider-hidden reasoning remains hidden.
+On an interactive terminal, the live status names preparation, model generation,
+short-lived inspection tools, checks and repair turns, with an elapsed clock for
+the current state. Piped runs receive the same transitions as plain lines. The
+final summary reports total time plus preparation, model-turn and check timing.
+Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text
+and allowlisted tool calls; provider-hidden reasoning remains hidden.
 
 Generated frontmatter records authoring package version `1.21.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and

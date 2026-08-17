@@ -19,12 +19,19 @@ import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
 import { authoringSystemPrompt } from "../src/pi/authoring.js";
 import { inspectionBudget } from "../src/authoring/package.js";
 import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
+import type { GenerationStatus } from "../src/commands/generate/progress.js";
+import {
+  generationStatusText,
+  makeGenerationProgress,
+} from "../src/commands/generate/progress-terminal.js";
 import { slugifyTitle, type ExistingWalkthrough } from "../src/commands/generate/output.js";
 import { makeAgentModelManager, type AgentModelNotice } from "../src/agent/model.js";
 import { shellLayer } from "./support/effect.js";
 import { contextResolverLive } from "../src/git/git.js";
 import type { PullSnapshot } from "../src/git/pr.js";
 import { createFixtureRepo } from "./support/repo.js";
+import { scriptedTerminal } from "./support/terminal.js";
+import { makeSpinner, plainTheme } from "../src/terminal.js";
 
 const PINNED_LINE = "from odoo import api, fields, models";
 const CHANGED_FILE = {
@@ -74,7 +81,6 @@ function authorRequest(
   pin: string,
   model: AuthorModel,
   progress: (event: AuthorProgress) => void = () => {},
-  progressMode: "compact" | "verbose" = "compact",
 ): AuthoringRequest {
   return {
     root,
@@ -95,7 +101,6 @@ function authorRequest(
     files: [CHANGED_FILE],
     model,
     headInstructionPolicy: "omit-changed",
-    progressMode,
     progress,
   };
 }
@@ -172,6 +177,9 @@ const fauxModel = Effect.fn("test.fauxModel")(function* () {
   return model;
 });
 
+const wait = (milliseconds: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 describe("the Pi adapter", () => {
   it.effect("reads source at the pin and receives a structured submission", () =>
     Effect.gen(function* () {
@@ -205,7 +213,7 @@ describe("the Pi adapter", () => {
         const author = yield* WalkthroughAuthor;
         const model = yield* fauxModel();
         const session = yield* author.start(
-          authorRequest(repo.dir, pin, model, (event) => progress.push(event), "verbose"),
+          authorRequest(repo.dir, pin, model, (event) => progress.push(event)),
         );
         return session.initial;
       }).pipe(Effect.scoped, Effect.provide(harness.layer));
@@ -590,12 +598,16 @@ describe("the Pi adapter", () => {
 
       expect(finalRequest).toContain("Diff inspection budget reached after 16 reads");
       expect(progress.some((event) => event._tag === "AuthorAssistantText")).toBe(false);
-      expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(false);
-      expect(
-        progress
-          .filter((event) => event._tag === "AuthorToolStarted")
-          .every((event) => event.input === ""),
-      ).toBe(true);
+      expect(progress.some((event) => event._tag === "AuthorToolFinished")).toBe(true);
+      expect(progress.some((event) => event._tag === "AuthorToolStarted")).toBe(true);
+      expect(progress).toContainEqual({
+        _tag: "AuthorStatusChanged",
+        status: { _tag: "AuthorUsingTool", name: "read_pr_diff" },
+      });
+      expect(progress).toContainEqual({
+        _tag: "AuthorStatusChanged",
+        status: { _tag: "AuthorGenerating" },
+      });
     }),
   );
 
@@ -873,6 +885,81 @@ describe("the Pi adapter", () => {
 });
 
 describe("generation", () => {
+  it.live(
+    "drives truthful status transitions through the real faux-provider session and a scripted TTY",
+    () =>
+      Effect.gen(function* () {
+        const repo = yield* fixture;
+        const harness = yield* Effect.promise(() => piHarness());
+        harness.faux.setResponses([
+          async () => {
+            await wait(120);
+            return ai.fauxAssistantMessage(
+              ai.fauxToolCall("read_source", {
+                path: "models/planning_pool_item.py",
+                from: 1,
+                to: 3,
+              }),
+              { stopReason: "toolUse" },
+            );
+          },
+          async () => {
+            await wait(120);
+            return submitted(validBody);
+          },
+        ]);
+        const tty = scriptedTerminal("tty");
+        const spinner = makeSpinner(tty.stream);
+        const output: string[] = [];
+        const statuses: GenerationStatus[] = [];
+        const progress = makeGenerationProgress(
+          (value) => spinner.print(() => output.push(value)),
+          "compact",
+          plainTheme,
+          (status) => {
+            statuses.push(status);
+            spinner.update(generationStatusText(status));
+          },
+        );
+
+        const result = yield* Effect.gen(function* () {
+          const model = yield* fauxModel();
+          return yield* runGeneration({
+            source: prepared(repo.dir, repo.pin),
+            model,
+            directory: "walkthroughs",
+            supersede: [],
+            headInstructionPolicy: "omit-changed",
+            progress,
+          });
+        }).pipe(Effect.ensuring(Effect.sync(() => spinner.stop())), Effect.provide(harness.layer));
+
+        expect(result._tag).toBe("Generated");
+        expect(statuses).toEqual([
+          { _tag: "PreparingGeneration" },
+          { _tag: "AuthoringGeneration", turn: 1 },
+          { _tag: "RunningAuthorTool", turn: 1, name: "read_source" },
+          { _tag: "AuthoringGeneration", turn: 1 },
+          { _tag: "RunningAuthorTool", turn: 1, name: "submit_walkthrough" },
+          { _tag: "AuthoringGeneration", turn: 1 },
+          { _tag: "CheckingGeneration", pass: 1 },
+        ]);
+        const authorTiming = result.timing.segments.find(
+          (segment) => segment._tag === "AuthorTurnTiming",
+        );
+        expect(authorTiming).toMatchObject({ _tag: "AuthorTurnTiming", turn: 1 });
+        expect(authorTiming?.milliseconds).toBeGreaterThanOrEqual(200);
+        const frames = tty.chunks.join("");
+        expect(frames).toContain("Authoring the walkthrough (turn 1)…");
+        expect(frames).toContain("Confirming pinned source ranges…");
+        expect(frames).toContain("Checking the draft against the pinned source (pass 1)…");
+        expect(
+          output.filter((value) => value === "Authoring the walkthrough (turn 1)…\n"),
+        ).toHaveLength(3);
+        expect(output.some((value) => value.startsWith("[read_source]"))).toBe(false);
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("checks a merged pull request against the prepared generation range", () =>
     Effect.gen(function* () {
       const repo = yield* fixture;
@@ -902,7 +989,6 @@ describe("generation", () => {
           directory: "walkthroughs",
           supersede: [],
           headInstructionPolicy: "omit-changed",
-          progressMode: "compact",
           progress: () => {},
         });
       }).pipe(Effect.provide(harness.layer));
@@ -952,7 +1038,6 @@ describe("generation", () => {
           directory: "walkthroughs",
           supersede: [],
           headInstructionPolicy: "trust-changed",
-          progressMode: "compact",
           progress: (event) => {
             if (event._tag === "AuthorUsageUpdated") usageTurns.push(event.usage.total);
           },
@@ -1003,7 +1088,6 @@ describe("generation", () => {
           directory: "drafts",
           supersede: [],
           headInstructionPolicy: "omit-changed",
-          progressMode: "compact",
           progress: () => {},
         });
       }).pipe(Effect.provide(harness.layer));
@@ -1036,7 +1120,6 @@ describe("generation", () => {
             directory: "linked/walkthroughs",
             supersede: [],
             headInstructionPolicy: "omit-changed",
-            progressMode: "compact",
             progress: () => {},
           }),
         );
@@ -1047,7 +1130,6 @@ describe("generation", () => {
             directory: ".git/walkthroughs",
             supersede: [],
             headInstructionPolicy: "omit-changed",
-            progressMode: "compact",
             progress: () => {},
           }),
         );
@@ -1092,7 +1174,6 @@ describe("generation", () => {
           directory: "walkthroughs",
           supersede,
           headInstructionPolicy: "omit-changed",
-          progressMode: "compact",
           progress: () => {},
         });
       }).pipe(Effect.provide(harness.layer));
@@ -1135,7 +1216,6 @@ describe("generation", () => {
             directory: "drafts",
             supersede: [],
             headInstructionPolicy: "omit-changed",
-            progressMode: "compact",
             progress: (event) => {
               if (event._tag === "AuthorUsageUpdated") usage.push(event.usage.total);
             },

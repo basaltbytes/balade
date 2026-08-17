@@ -9,6 +9,7 @@
  * the theme's own color sequences, so no untrusted escape reaches the terminal.
  */
 
+import { performance } from "node:perf_hooks";
 import { stripVTControlCharacters, styleText } from "node:util";
 import type { CheckDiagnostic, CheckReport, RangeEcho } from "./contract/types.js";
 
@@ -233,3 +234,79 @@ export const served = (paths: readonly string[]): string =>
 
 export const size = (bytes: number): string =>
   bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.round(bytes / 1000)} kB`;
+
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const SPINNER_INTERVAL_MS = 80;
+const ERASE_LINE = "\r\u001b[2K";
+const HIDE_CURSOR = "\u001b[?25l";
+const SHOW_CURSOR = "\u001b[?25h";
+
+export interface Spinner {
+  /** Show a status immediately, starting the animation on first use. */
+  readonly update: (label: string) => void;
+  /** Clear the frame, hand the line to `write`, and redraw underneath it. */
+  readonly print: (write: () => void) => void;
+  readonly stop: () => void;
+}
+
+/** The narrow stream surface used by the spinner and its scripted test seam. */
+export interface TerminalStream extends NodeJS.WritableStream {
+  readonly isTTY?: boolean;
+}
+
+/**
+ * A single-line activity spinner on stderr, animated only on an interactive
+ * terminal. Its clock resets for each owned status transition, so the elapsed
+ * value describes the state on screen rather than an unrelated earlier phase.
+ */
+export const makeSpinner = (
+  stream: TerminalStream = process.stderr,
+  now: () => number = () => performance.now(),
+): Spinner => {
+  const animated = stream.isTTY === true;
+  let label = "";
+  let frame = 0;
+  let startedAt = 0;
+  let timer: NodeJS.Timeout | undefined;
+
+  const render = () => {
+    const glyph = styleText("cyan", SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "", {
+      stream,
+    });
+    const elapsed = styleText("dim", formatElapsed(now() - startedAt), { stream });
+    stream.write(`${ERASE_LINE}${glyph} ${label} ${elapsed}`);
+    frame++;
+  };
+
+  return {
+    update(text) {
+      label = sanitizeTerminalText(text);
+      if (!animated) return;
+      startedAt = now();
+      if (timer === undefined) {
+        stream.write(HIDE_CURSOR);
+        timer = setInterval(render, SPINNER_INTERVAL_MS);
+        /* The animation must never be what keeps the process alive. */
+        timer.unref();
+      }
+      render();
+    },
+    print(write) {
+      if (timer !== undefined) stream.write(ERASE_LINE);
+      write();
+      if (timer !== undefined) render();
+    },
+    stop() {
+      if (timer === undefined) return;
+      clearInterval(timer);
+      timer = undefined;
+      stream.write(`${ERASE_LINE}${SHOW_CURSOR}`);
+    },
+  };
+};
+
+export function formatElapsed(milliseconds: number): string {
+  const seconds = Math.floor(milliseconds / 1_000);
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0 ? `${minutes}m${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
+}

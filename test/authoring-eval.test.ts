@@ -37,7 +37,6 @@ describe(`authoring package ${AUTHORING_PACKAGE_VERSION} offline evaluation`, ()
                 directory: "walkthroughs",
                 supersede: [],
                 headInstructionPolicy: "omit-changed",
-                progressMode: "compact",
                 progress: () => {},
               });
             }).pipe(Effect.provide(harness.layer));
