@@ -1,6 +1,6 @@
 /**
  * The served-mode payload cache (DECISIONS.md, "Resolution shells out through
- * `spawnSync`"): one entry keyed `(sourcePath, pin, head)` holding the whole
+ * the `CommandExecutor` layer"): one entry keyed `(sourcePath, pin, head)` holding the whole
  * compiled payload. Keying costs one file read and one `git rev-parse`; a miss
  * costs the twenty-five processes of a full resolve, so the resolver runs once
  * per key and never per request.

@@ -19,6 +19,7 @@ import { resolvePullHead } from "../../git/pr.js";
 import { runReviewSession } from "../../server/review.js";
 import {
   formatText,
+  makeSpinner,
   plainTheme,
   sanitizeTerminalText,
   stdoutTheme,
@@ -27,12 +28,15 @@ import {
   writeStdout,
   type Theme,
 } from "../../terminal.js";
-import {
-  type AuthoringPreset,
-  type AuthorProgress,
-  type AuthorProgressMode,
-} from "../../pi/author.js";
+import type { AuthoringPreset } from "../../pi/author.js";
 import { generateErrorMessage, runGeneration, type GenerateError } from "./pipeline.js";
+import type { GenerationTiming } from "./progress.js";
+import {
+  generationStatusText,
+  generationTimingText,
+  makeGenerationProgress,
+  type GenerationProgressMode,
+} from "./progress-terminal.js";
 import {
   inspectExistingWalkthroughs,
   planSupersession,
@@ -202,8 +206,15 @@ export const generateCommand = Command.make(
 
       const agentModels = yield* AgentModelManager;
       const selected = yield* agentModels.configure(selection);
-      const progressMode: AuthorProgressMode = config.verbose ? "verbose" : "compact";
-      const progress = makeGenerationProgress(writeStdout, progressMode, stdoutTheme);
+      const progressMode: GenerationProgressMode = config.verbose ? "verbose" : "compact";
+      const spinner = makeSpinner();
+      const progress = makeGenerationProgress({
+        write: (value) => spinner.print(() => writeStdout(value)),
+        mode: progressMode,
+        presentation: process.stderr.isTTY === true ? "tty" : "pipe",
+        theme: stdoutTheme,
+        onStatus: (status) => spinner.update(generationStatusText(status)),
+      });
       const generationFacets: GenerationFacets = {};
       if (chosen !== undefined) {
         generationFacets.preset = { name: chosen.name, authoring: chosen.authoring };
@@ -218,9 +229,8 @@ export const generateCommand = Command.make(
         directory: config.directory,
         supersede: [...plan.refreshing, ...plan.undecided],
         headInstructionPolicy: config.trustHeadInstructions ? "trust-changed" : "omit-changed",
-        progressMode,
         progress,
-      });
+      }).pipe(Effect.ensuring(Effect.sync(() => spinner.stop())));
       /* Authoring is over on both branches; the serve loop below is the reviewer's time. */
       yield* reportPresence("settled");
       writeStdout(generationSupersededText(result.superseded, result.report.file, stdoutTheme));
@@ -235,6 +245,7 @@ export const generateCommand = Command.make(
           file: result.report.file,
           ranges: result.report.ranges.length,
           repairs: result.repairs,
+          timing: result.timing,
         };
         if (config.noOpen) {
           writeStdout(generationSuccessText(summary, stdoutTheme));
@@ -268,81 +279,6 @@ export const generateCommand = Command.make(
     ),
 ).pipe(Command.withDescription("Draft, validate, and open a walkthrough for a pull request"));
 
-export function makeGenerationProgress(
-  write: (value: string) => void,
-  mode: AuthorProgressMode = "compact",
-  theme: Theme = plainTheme,
-): (event: AuthorProgress) => void {
-  let turn = 0;
-  const announced = new Set<string>();
-  return (event) => {
-    switch (event._tag) {
-      case "AuthorNotice":
-        write(warningText(event, theme));
-        break;
-      case "AuthorUsageUpdated": {
-        turn++;
-        const usage = event.usage;
-        write(
-          theme.muted(
-            `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
-              `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
-              `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
-              `cumulative cost $${usage.cost.toFixed(4)}`,
-          ) + "\n",
-        );
-        break;
-      }
-      case "AuthorAssistantText":
-        if (mode === "verbose") {
-          write(`[assistant]\n${withTrailingNewline(sanitizeTerminalText(event.text))}`);
-        }
-        break;
-      case "AuthorToolStarted":
-        if (mode === "verbose") {
-          const input = sanitizeTerminalText(event.input);
-          write(`[${sanitizeTerminalText(event.name)}]${input === "" ? "" : ` ${input}`}\n`);
-        } else {
-          const message = progressMessage(event.name);
-          if (!announced.has(message)) {
-            announced.add(message);
-            write(`${message}\n`);
-          }
-        }
-        break;
-      case "AuthorToolFinished":
-        if (mode === "verbose") {
-          if (event.output !== "") write(withTrailingNewline(sanitizeTerminalText(event.output)));
-          write(`[/${sanitizeTerminalText(event.name)}${event.failed ? " error" : ""}]\n`);
-        }
-        break;
-    }
-  };
-}
-
-function withTrailingNewline(value: string): string {
-  return value.endsWith("\n") ? value : `${value}\n`;
-}
-
-function progressMessage(tool: string): string {
-  switch (tool) {
-    case "list_pr_changes":
-    case "list_source_files":
-      return "Inspecting pull-request changes…";
-    case "read_pr_diff":
-      return "Reading relevant diffs…";
-    case "search_source":
-      return "Searching pinned source…";
-    case "read_source":
-    case "read_base_source":
-      return "Confirming pinned source ranges…";
-    case "submit_walkthrough":
-      return "Submitting the walkthrough draft…";
-    default:
-      return "Authoring the walkthrough…";
-  }
-}
-
 function repairSummary(repairs: number): string {
   return repairs === 0 ? "" : ` after ${repairs} repair ${repairs === 1 ? "turn" : "turns"}`;
 }
@@ -352,6 +288,7 @@ export function generationSuccessText(
     readonly file: string;
     readonly ranges: number;
     readonly repairs: number;
+    readonly timing: GenerationTiming;
   },
   theme: Theme = plainTheme,
 ): string {
@@ -366,12 +303,14 @@ export function generationSummaryText(
     readonly file: string;
     readonly ranges: number;
     readonly repairs: number;
+    readonly timing: GenerationTiming;
   },
   theme: Theme = plainTheme,
 ): string {
   const ranges = `${result.ranges} code ${result.ranges === 1 ? "range" : "ranges"}`;
   return (
     `${theme.ok("Check passed")}${repairSummary(result.repairs)}: ${ranges} verified.\n` +
+    `${theme.muted(generationTimingText(result.timing))}\n` +
     `Generated ${theme.emphasis(result.file)}.\n`
   );
 }

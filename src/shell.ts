@@ -3,8 +3,8 @@
  * resolution stays a pure function of the strings it returns.
  */
 
-import { spawnSync } from "node:child_process";
-import { Context, Effect, Layer, Path } from "effect";
+import { execFile } from "node:child_process";
+import { Context, Effect, Layer, Path, Predicate } from "effect";
 import { CommandFailed, NotARepository } from "./contract/context.js";
 
 type ExecError = CommandFailed | NotARepository;
@@ -38,23 +38,38 @@ export class CommandExecutor extends Context.Service<CommandExecutor, CommandExe
       args: readonly string[],
       cwd: string,
     ) {
-      const res = spawnSync(file, [...args], {
-        cwd,
-        encoding: "utf8",
-        maxBuffer: MAX_BUFFER,
-        env: ENV,
-      });
-      const code = res.status ?? -1;
-      if (res.error !== undefined || code !== 0) {
-        return yield* new CommandFailed({
+      return yield* Effect.callback<string, CommandFailed>((resume, signal) => {
+        execFile(
           file,
           args,
-          cwd,
-          stderr: res.error?.message ?? res.stderr ?? "",
-          code,
-        });
-      }
-      return res.stdout ?? "";
+          {
+            cwd,
+            encoding: "utf8",
+            maxBuffer: MAX_BUFFER,
+            env: ENV,
+            signal,
+          },
+          (error, stdout, stderr) => {
+            if (error !== null) {
+              const code = Predicate.isNumber(error.code) ? error.code : -1;
+              const detail = Predicate.isNumber(error.code) ? stderr : error.message;
+              resume(
+                Effect.fail(
+                  new CommandFailed({
+                    file,
+                    args,
+                    cwd,
+                    stderr: detail,
+                    code,
+                  }),
+                ),
+              );
+              return;
+            }
+            resume(Effect.succeed(stdout));
+          },
+        );
+      });
     });
 
     return { exec };

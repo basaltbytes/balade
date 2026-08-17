@@ -10,9 +10,13 @@ import {
   generationSummaryText,
   generationSuccessText,
   generationSupersededText,
-  makeGenerationProgress,
 } from "../src/commands/generate/index.js";
 import { generateErrorMessage } from "../src/commands/generate/pipeline.js";
+import {
+  makeGenerationProgressReporter,
+  type GenerationProgress,
+} from "../src/commands/generate/progress.js";
+import { makeGenerationProgress } from "../src/commands/generate/progress-terminal.js";
 import type {
   ExistingWalkthrough,
   RefreshingWalkthrough,
@@ -30,7 +34,7 @@ import {
   SnapshotPathRejected,
   SnapshotReadFailed,
 } from "../src/pi/snapshot.js";
-import { sanitizeTerminalText } from "../src/terminal.js";
+import { plainTheme, sanitizeTerminalText, type Theme } from "../src/terminal.js";
 
 describe("generation command output", () => {
   it("removes terminal control sequences from untrusted text", () => {
@@ -41,7 +45,13 @@ describe("generation command output", () => {
 
   it("summarizes compact progress with cumulative cost and gives generate-only runs a next step", () => {
     const output: string[] = [];
-    const progress = makeGenerationProgress((value) => output.push(value));
+    const progress = makeGenerationProgress({
+      write: (value) => output.push(value),
+      mode: "compact",
+      presentation: "pipe",
+      theme: plainTheme,
+      onStatus: () => {},
+    });
 
     progress({
       _tag: "AuthorNotice",
@@ -49,16 +59,33 @@ describe("generation command output", () => {
       message: 'Skipped "AGENTS.md" because this pull request changes it.',
       hint: 'Review "AGENTS.md", then pass --trust-head-instructions to apply it during generation.',
     });
-    progress({ _tag: "AuthorToolStarted", name: "list_pr_changes", input: "{}" });
-    progress({ _tag: "AuthorToolStarted", name: "search_source", input: "{}" });
-    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff", input: "{}" });
-    progress({ _tag: "AuthorToolStarted", name: "read_pr_diff", input: "{}" });
-    progress({ _tag: "AuthorToolStarted", name: "read_source", input: "{}" });
-    progress({ _tag: "AuthorToolStarted", name: "read_source", input: "{}" });
-    progress({ _tag: "AuthorToolStarted", name: "read_base_source", input: "{}" });
-    progress({ _tag: "AuthorToolStarted", name: "submit_walkthrough", input: "{}" });
+    progress({ _tag: "GenerationStatusChanged", status: { _tag: "PreparingGeneration" } });
     progress({
-      _tag: "AuthorUsageUpdated",
+      _tag: "GenerationStatusChanged",
+      status: { _tag: "AuthoringGeneration", turn: 1 },
+    });
+    for (const name of [
+      "list_pr_changes",
+      "search_source",
+      "read_pr_diff",
+      "read_pr_diff",
+      "read_pr_diff",
+      "read_source",
+      "submit_walkthrough",
+    ]) {
+      progress({
+        _tag: "GenerationStatusChanged",
+        status: { _tag: "RunningAuthorTool", turn: 1, name },
+      });
+      progress({ _tag: "AuthorToolFinished", name, output: "", failed: false });
+      progress({
+        _tag: "GenerationStatusChanged",
+        status: { _tag: "AuthoringGeneration", turn: 1 },
+      });
+    }
+    progress({
+      _tag: "GenerationTurnCompleted",
+      turn: 1,
       usage: {
         input: 12,
         output: 3,
@@ -73,11 +100,18 @@ describe("generation command output", () => {
       "warning head-instructions-skipped\n" +
         '  Skipped "AGENTS.md" because this pull request changes it.\n' +
         '  fix Review "AGENTS.md", then pass --trust-head-instructions to apply it during generation.\n',
-      "Inspecting pull-request changes…\n",
-      "Searching pinned source…\n",
-      "Reading relevant diffs…\n",
-      "Confirming pinned source ranges…\n",
-      "Submitting the walkthrough draft…\n",
+      "→ Started preparing the authoring session.\n",
+      "→ Started authoring the walkthrough (turn 1).\n",
+      "→ Started inspecting pull-request changes.\n",
+      "→ Started searching pinned source.\n",
+      "→ Started reading relevant diffs.\n",
+      "→ Started confirming pinned source ranges.\n",
+      "→ Started submitting the walkthrough draft.\n",
+      "✓ Inspected pull-request changes.\n",
+      "✓ Searched pinned source.\n",
+      "✓ Read relevant diffs.\n",
+      "✓ Confirmed pinned source ranges.\n",
+      "✓ Submitted the walkthrough draft.\n",
       "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cumulative cost $0.0123\n",
     ]);
     expect(
@@ -85,9 +119,18 @@ describe("generation command output", () => {
         file: "walkthroughs/pr-20-generate-with-pi.md",
         ranges: 7,
         repairs: 0,
+        timing: {
+          totalMilliseconds: 65_000,
+          segments: [
+            { _tag: "PreparationTiming", milliseconds: 1_000 },
+            { _tag: "AuthorTurnTiming", turn: 1, milliseconds: 60_000 },
+            { _tag: "CheckTiming", pass: 1, milliseconds: 4_000 },
+          ],
+        },
       }),
     ).toBe(
       "Check passed: 7 code ranges verified.\n" +
+        "Elapsed 1m05s total (preparation 1s, turn 1 1m00s, check 1 4s).\n" +
         "Generated walkthroughs/pr-20-generate-with-pi.md.\n" +
         "Review it with:\n  balade open walkthroughs/pr-20-generate-with-pi.md\n",
     );
@@ -96,16 +139,33 @@ describe("generation command output", () => {
         file: "walkthroughs/pr-20-generate-with-pi.md",
         ranges: 7,
         repairs: 1,
+        timing: {
+          totalMilliseconds: 83_000,
+          segments: [
+            { _tag: "PreparationTiming", milliseconds: 2_000 },
+            { _tag: "AuthorTurnTiming", turn: 1, milliseconds: 60_000 },
+            { _tag: "CheckTiming", pass: 1, milliseconds: 8_000 },
+            { _tag: "AuthorTurnTiming", turn: 2, milliseconds: 11_000 },
+            { _tag: "CheckTiming", pass: 2, milliseconds: 2_000 },
+          ],
+        },
       }),
     ).toBe(
       "Check passed after 1 repair turn: 7 code ranges verified.\n" +
+        "Elapsed 1m23s total (preparation 2s, turn 1 1m00s, check 1 8s, turn 2 11s, check 2 2s).\n" +
         "Generated walkthroughs/pr-20-generate-with-pi.md.\n",
     );
   });
 
   it("shows model prose and tool details only in verbose progress", () => {
     const output: string[] = [];
-    const progress = makeGenerationProgress((value) => output.push(value), "verbose");
+    const progress = makeGenerationProgress({
+      write: (value) => output.push(value),
+      mode: "verbose",
+      presentation: "tty",
+      theme: plainTheme,
+      onStatus: () => {},
+    });
 
     progress({ _tag: "AuthorAssistantText", text: "I found the behavioral spine." });
     progress({
@@ -125,6 +185,136 @@ describe("generation command output", () => {
       '[read_source] {"path":"src/example.ts","from":1,"to":2}\n',
       "1 | export const value = 1;\n",
       "[/read_source]\n",
+    ]);
+  });
+
+  it("coalesces successful tool calls at turn completion and reports failures immediately", () => {
+    const output: string[] = [];
+    const markerTheme: Theme = {
+      ...plainTheme,
+      ok: (text) => `<ok>${text}</ok>`,
+      error: (text) => `<error>${text}</error>`,
+    };
+    const progress = makeGenerationProgress({
+      write: (value) => output.push(value),
+      mode: "compact",
+      presentation: "tty",
+      theme: markerTheme,
+      onStatus: () => {},
+    });
+
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "read_pr_diff",
+      output: "First diff page.",
+      failed: false,
+    });
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "read_pr_diff",
+      output: "Second diff page.",
+      failed: false,
+    });
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "read_pr_diff",
+      output: "Third diff page.",
+      failed: false,
+    });
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "search_source",
+      output: "Search failed.",
+      failed: true,
+    });
+    progress({
+      _tag: "GenerationTurnCompleted",
+      turn: 1,
+      usage: { input: 12, output: 3, cacheRead: 20, cacheWrite: 0, total: 35, cost: 0.0123 },
+    });
+
+    expect(output).toEqual([
+      "<error>✗</error> Could not search pinned source.\n",
+      "<ok>✓</ok> Read relevant diffs.\n",
+      "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cumulative cost $0.0123\n",
+    ]);
+  });
+
+  it("owns status transitions and accumulates tools into their authoring turn", () => {
+    let now = 0;
+    const events: GenerationProgress[] = [];
+    const reporter = makeGenerationProgressReporter(
+      (event) => events.push(event),
+      () => now,
+    );
+
+    now = 2_000;
+    reporter.author({
+      _tag: "AuthorStatusChanged",
+      status: { _tag: "AuthorGenerating" },
+    });
+    now = 5_000;
+    reporter.author({
+      _tag: "AuthorStatusChanged",
+      status: { _tag: "AuthorUsingTool", name: "read_source" },
+    });
+    now = 7_000;
+    reporter.author({
+      _tag: "AuthorStatusChanged",
+      status: { _tag: "AuthorGenerating" },
+    });
+    now = 10_000;
+    reporter.author({
+      _tag: "AuthorUsageUpdated",
+      usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 0, total: 10, cost: 0.01 },
+    });
+    reporter.checking(1);
+    now = 12_000;
+    reporter.repairing(1, 2);
+    reporter.author({
+      _tag: "AuthorStatusChanged",
+      status: { _tag: "AuthorGenerating" },
+    });
+    now = 15_000;
+    reporter.author({
+      _tag: "AuthorStatusChanged",
+      status: { _tag: "AuthorUsingTool", name: "submit_walkthrough" },
+    });
+    now = 18_000;
+    reporter.author({
+      _tag: "AuthorStatusChanged",
+      status: { _tag: "AuthorGenerating" },
+    });
+    now = 20_000;
+    reporter.author({
+      _tag: "AuthorUsageUpdated",
+      usage: { input: 10, output: 6, cacheRead: 4, cacheWrite: 0, total: 20, cost: 0.02 },
+    });
+    reporter.checking(2);
+    now = 21_000;
+
+    expect(reporter.finish()).toEqual({
+      totalMilliseconds: 21_000,
+      segments: [
+        { _tag: "PreparationTiming", milliseconds: 2_000 },
+        { _tag: "AuthorTurnTiming", turn: 1, milliseconds: 8_000 },
+        { _tag: "CheckTiming", pass: 1, milliseconds: 2_000 },
+        { _tag: "AuthorTurnTiming", turn: 2, milliseconds: 8_000 },
+        { _tag: "CheckTiming", pass: 2, milliseconds: 1_000 },
+      ],
+    });
+    expect(events.filter((event) => event._tag === "GenerationStatusChanged")).toHaveLength(9);
+    expect(events.filter((event) => event._tag === "GenerationTurnCompleted")).toEqual([
+      {
+        _tag: "GenerationTurnCompleted",
+        turn: 1,
+        usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 0, total: 10, cost: 0.01 },
+      },
+      {
+        _tag: "GenerationTurnCompleted",
+        turn: 2,
+        usage: { input: 10, output: 6, cacheRead: 4, cacheWrite: 0, total: 20, cost: 0.02 },
+      },
     ]);
   });
 

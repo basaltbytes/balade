@@ -318,15 +318,18 @@ they describe.
   failures log their complete Effect cause chain there after terminal-control
   sanitization, but their JSON responses contain no exception text or absolute
   filesystem paths.
-- **No shell strings anywhere.** Every git, gh and browser invocation goes
-  through `spawnSync(file, [...args])` with no `shell: true`
-  (`src/shell.ts:41-46`, `src/server/browser.ts:73`). Terminal output is
+- **No shell strings anywhere.** Every git and gh invocation goes through
+  `execFile(file, args)` and the browser launcher uses `spawn(file, args)`;
+  neither enables a shell (`src/shell.ts`, `src/server/browser.ts`). Terminal output is
   control-stripped in two layers (`src/terminal.ts`): untrusted values pass
   `sanitizeTerminalText` (full strip) where they are interpolated into a
   formatted line, and the stdout/stderr writers admit only the theme's own
   single-parameter SGR color sequences (`sanitizeStyledTerminalText`), so a
   value that skipped the first layer can at worst borrow a palette color —
-  conceal, cursor movement and OSC hyperlinks never reach the terminal.
+  conceal, cursor movement and OSC hyperlinks never reach those writers. The
+  interactive progress spinner is the one direct terminal path: its cursor and
+  erase sequences are fixed constants, it runs only when `isTTY` is true, and
+  every status label is fully control-stripped before interpolation.
 - Standalone attacker-controlled paths reaching git follow `--`. Diff and agent
   inspection pathspecs additionally use `:(literal)` magic
   (`src/git/git.ts:150`, `src/pi/inspection.ts:175`); server metadata lookups

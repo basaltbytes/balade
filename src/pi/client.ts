@@ -341,6 +341,7 @@ export function piWalkthroughAuthorLayer(options: PiWalkthroughAuthorOptions = {
             Effect.gen(function* () {
               acquired.clearDraft();
               acquired.resetInspectionBudget();
+              acquired.beginTurn();
               const invocation = yield* Effect.result(
                 Effect.tryPromise({
                   try: invoke,

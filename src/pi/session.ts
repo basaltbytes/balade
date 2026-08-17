@@ -14,6 +14,7 @@ import type { InspectionBudget } from "../authoring/package.js";
 import type {
   AuthorChangedFile,
   AuthorDraft,
+  AuthorStatus,
   AuthoringRequest,
   HeadInstructionPolicy,
 } from "./author.js";
@@ -125,9 +126,11 @@ export async function createPiSession(
     submit,
   );
   const { session } = created;
+  const activeTools = new Map<string, string>();
+  const reportStatus = (status: AuthorStatus) =>
+    request.progress({ _tag: "AuthorStatusChanged", status });
   const unsubscribe = session.subscribe((event) => {
     if (
-      request.progressMode === "verbose" &&
       event.type === "message_update" &&
       event.assistantMessageEvent.type === "text_end" &&
       event.assistantMessageEvent.content !== ""
@@ -136,13 +139,26 @@ export async function createPiSession(
         _tag: "AuthorAssistantText",
         text: event.assistantMessageEvent.content,
       });
-    } else if (event.type === "tool_execution_start") {
+      return;
+    }
+    if (event.type === "tool_execution_start") {
+      activeTools.set(event.toolCallId, event.toolName);
+      reportStatus({ _tag: "AuthorUsingTool", name: event.toolName });
       request.progress({
         _tag: "AuthorToolStarted",
         name: event.toolName,
-        input: request.progressMode === "verbose" ? verboseValue(event.args) : "",
+        input: verboseValue(event.args),
       });
-    } else if (request.progressMode === "verbose" && event.type === "tool_execution_end") {
+      return;
+    }
+    if (event.type === "tool_execution_end") {
+      activeTools.delete(event.toolCallId);
+      const stillRunning = [...activeTools.values()].at(-1);
+      reportStatus(
+        stillRunning === undefined
+          ? { _tag: "AuthorGenerating" }
+          : { _tag: "AuthorUsingTool", name: stillRunning },
+      );
       request.progress({
         _tag: "AuthorToolFinished",
         name: event.toolName,
@@ -155,6 +171,10 @@ export async function createPiSession(
   return {
     session,
     unsubscribe,
+    beginTurn: () => {
+      activeTools.clear();
+      reportStatus({ _tag: "AuthorGenerating" });
+    },
     clearDraft: () => {
       draft = undefined;
     },
