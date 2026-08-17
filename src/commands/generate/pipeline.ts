@@ -1,6 +1,7 @@
 /** Generate → write → check → repair, with the invalid draft kept for manual recovery. */
 
-import { Clock, Effect, Schema } from "effect";
+import { performance } from "node:perf_hooks";
+import { Effect, Schema } from "effect";
 import { stringify as stringifyYaml } from "yaml";
 import { formatText } from "../../terminal.js";
 import { checkOne } from "../../walkthrough/checker.js";
@@ -104,10 +105,7 @@ export type GenerateError =
 export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationOptions) =>
   Effect.gen(function* () {
     const author = yield* WalkthroughAuthor;
-    const clock = yield* Clock.Clock;
-    const progress = makeGenerationProgressReporter(options.progress, () =>
-      clock.currentTimeMillisUnsafe(),
-    );
+    const progress = makeGenerationProgressReporter(options.progress, () => performance.now());
     yield* validateGenerationOutput({
       root: options.source.root,
       directory: options.directory,

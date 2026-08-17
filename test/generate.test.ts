@@ -1046,7 +1046,7 @@ describe("generation", () => {
           supersede: [],
           headInstructionPolicy: "trust-changed",
           progress: (event) => {
-            if (event._tag === "AuthorUsageUpdated") usageTurns.push(event.usage.total);
+            if (event._tag === "GenerationTurnCompleted") usageTurns.push(event.usage.total);
           },
         });
       }).pipe(Effect.provide(harness.layer));
@@ -1224,7 +1224,7 @@ describe("generation", () => {
             supersede: [],
             headInstructionPolicy: "omit-changed",
             progress: (event) => {
-              if (event._tag === "AuthorUsageUpdated") usage.push(event.usage.total);
+              if (event._tag === "GenerationTurnCompleted") usage.push(event.usage.total);
             },
           }),
         );

@@ -1,8 +1,12 @@
 /** Terminal rendering policy for owned generation progress. */
 
-import type { AuthorOutput } from "../../pi/author.js";
 import { formatElapsed, sanitizeTerminalText, warningText, type Theme } from "../../terminal.js";
-import type { GenerationProgress, GenerationStatus, GenerationTiming } from "./progress.js";
+import type {
+  GenerationProgress,
+  GenerationStatus,
+  GenerationTiming,
+  GenerationTurnCompleted,
+} from "./progress.js";
 
 /** Presentation detail belongs to this renderer, never the Pi adapter. */
 export type GenerationProgressMode = "compact" | "verbose";
@@ -71,7 +75,6 @@ export function makeGenerationProgress({
   theme,
   onStatus,
 }: GenerationProgressRendererOptions): (event: GenerationProgress) => void {
-  let turn = 0;
   const announcedStatuses = new Set<string>();
   const completedToolMilestones = new Map<string, AuthorToolCopy>();
 
@@ -93,10 +96,9 @@ export function makeGenerationProgress({
       case "AuthorNotice":
         write(warningText(event, theme));
         break;
-      case "AuthorUsageUpdated":
+      case "GenerationTurnCompleted":
         flushCompletedToolMilestones();
-        turn++;
-        write(usageText(turn, event, theme));
+        write(usageText(event, theme));
         break;
       case "AuthorAssistantText":
         if (mode === "verbose") {
@@ -127,15 +129,11 @@ export function makeGenerationProgress({
   };
 }
 
-function usageText(
-  turn: number,
-  event: Extract<AuthorOutput, { _tag: "AuthorUsageUpdated" }>,
-  theme: Theme,
-): string {
+function usageText(event: GenerationTurnCompleted, theme: Theme): string {
   const usage = event.usage;
   return (
     theme.muted(
-      `Turn ${turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
+      `Turn ${event.turn}: ${usage.total.toLocaleString("en-US")} cumulative tokens ` +
         `(in ${usage.input.toLocaleString("en-US")}, out ${usage.output.toLocaleString("en-US")}, ` +
         `cache ${usage.cacheRead.toLocaleString("en-US")}/${usage.cacheWrite.toLocaleString("en-US")}); ` +
         `cumulative cost $${usage.cost.toFixed(4)}`,

@@ -1,6 +1,6 @@
 /** Owned generation states and timing, independent of terminal policy. */
 
-import type { AuthorOutput, AuthorProgress } from "../../pi/author.js";
+import type { AuthorOutput, AuthorProgress, AuthorUsage } from "../../pi/author.js";
 
 export type GenerationStatus =
   | { readonly _tag: "PreparingGeneration" }
@@ -18,7 +18,18 @@ export interface GenerationStatusChanged {
   readonly status: GenerationStatus;
 }
 
-export type GenerationProgress = AuthorOutput | GenerationStatusChanged;
+export interface GenerationTurnCompleted {
+  readonly _tag: "GenerationTurnCompleted";
+  readonly turn: number;
+  readonly usage: AuthorUsage;
+}
+
+type AuthorDisplayOutput = Exclude<AuthorOutput, { readonly _tag: "AuthorUsageUpdated" }>;
+
+export type GenerationProgress =
+  | AuthorDisplayOutput
+  | GenerationStatusChanged
+  | GenerationTurnCompleted;
 
 export type GenerationTimingSegment =
   | { readonly _tag: "PreparationTiming"; readonly milliseconds: number }
@@ -44,11 +55,11 @@ export interface GenerationProgressReporter {
  */
 export function makeGenerationProgressReporter(
   progress: (event: GenerationProgress) => void,
-  now: () => number,
+  monotonicNow: () => number,
 ): GenerationProgressReporter {
   let authoring: AuthoringStatus = { _tag: "AuthoringGeneration", turn: 1 };
   let current: GenerationStatus = { _tag: "PreparingGeneration" };
-  const totalStartedAt = now();
+  const totalStartedAt = monotonicNow();
   let currentSince = totalStartedAt;
   const segments = new Map<string, GenerationTimingSegment>();
   progress({ _tag: "GenerationStatusChanged", status: current });
@@ -62,8 +73,8 @@ export function makeGenerationProgressReporter(
 
   const transition = (status: GenerationStatus) => {
     if (sameStatus(current, status)) return;
-    const changedAt = now();
-    addElapsed(current, Math.max(0, changedAt - currentSince));
+    const changedAt = monotonicNow();
+    addElapsed(current, changedAt - currentSince);
     current = status;
     currentSince = changedAt;
     progress({ _tag: "GenerationStatusChanged", status });
@@ -89,8 +100,14 @@ export function makeGenerationProgressReporter(
       case "AuthorAssistantText":
       case "AuthorToolStarted":
       case "AuthorToolFinished":
-      case "AuthorUsageUpdated":
         progress(event);
+        break;
+      case "AuthorUsageUpdated":
+        progress({
+          _tag: "GenerationTurnCompleted",
+          turn: authoringTurn(authoring),
+          usage: event.usage,
+        });
         break;
     }
   };
@@ -103,11 +120,11 @@ export function makeGenerationProgressReporter(
       transition(authoring);
     },
     finish: () => {
-      const completedAt = now();
-      addElapsed(current, Math.max(0, completedAt - currentSince));
+      const completedAt = monotonicNow();
+      addElapsed(current, completedAt - currentSince);
       currentSince = completedAt;
       return {
-        totalMilliseconds: Math.max(0, completedAt - totalStartedAt),
+        totalMilliseconds: completedAt - totalStartedAt,
         segments: [...segments.values()],
       };
     },

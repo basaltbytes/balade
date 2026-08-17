@@ -1293,12 +1293,16 @@ generate pipeline maps it into preparation, authoring turn, check pass and
 repair turn states. Raw tool start/end events leave the adapter without
 presentation filtering, and the renderer alone decides whether compact or
 verbose output includes them. The spinner's clock remains cumulative across
-states for the generation run, while the completed summary reports total time
-and aggregates tool intervals into their owning model turn. On a TTY,
+states for the generation run. Both the spinner and completed summary measure
+elapsed time with monotonic clocks; wall time is not an elapsed-time source. The
+generation reporter translates Pi's usage update into an explicit, numbered
+turn-completed event, so the renderer never reconstructs turn ownership by
+counting adapter output. The completed summary aggregates tool intervals into
+their owning model turn. On a TTY,
 present-tense states belong exclusively to the mutable spinner. Successful tool
 finishes accumulate by semantic activity and become distinct, past-tense
-milestones when `AuthorUsageUpdated` closes the turn; failed tool finishes remain
-immediate and individually visible. Returning
+milestones when `GenerationTurnCompleted` closes the turn; failed tool finishes
+remain immediate and individually visible. Returning
 from a tool to model generation updates the spinner without inventing another
 milestone. A pipe cannot redraw, so it receives explicit “Started …” lifecycle
 events with the same per-turn coalescing, followed by the marked milestone

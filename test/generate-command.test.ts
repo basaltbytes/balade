@@ -12,7 +12,10 @@ import {
   generationSupersededText,
 } from "../src/commands/generate/index.js";
 import { generateErrorMessage } from "../src/commands/generate/pipeline.js";
-import { makeGenerationProgressReporter } from "../src/commands/generate/progress.js";
+import {
+  makeGenerationProgressReporter,
+  type GenerationProgress,
+} from "../src/commands/generate/progress.js";
 import { makeGenerationProgress } from "../src/commands/generate/progress-terminal.js";
 import type {
   ExistingWalkthrough,
@@ -81,7 +84,8 @@ describe("generation command output", () => {
       });
     }
     progress({
-      _tag: "AuthorUsageUpdated",
+      _tag: "GenerationTurnCompleted",
+      turn: 1,
       usage: {
         input: 12,
         output: 3,
@@ -224,7 +228,8 @@ describe("generation command output", () => {
       failed: true,
     });
     progress({
-      _tag: "AuthorUsageUpdated",
+      _tag: "GenerationTurnCompleted",
+      turn: 1,
       usage: { input: 12, output: 3, cacheRead: 20, cacheWrite: 0, total: 35, cost: 0.0123 },
     });
 
@@ -237,9 +242,9 @@ describe("generation command output", () => {
 
   it("owns status transitions and accumulates tools into their authoring turn", () => {
     let now = 0;
-    const events: string[] = [];
+    const events: GenerationProgress[] = [];
     const reporter = makeGenerationProgressReporter(
-      (event) => events.push(event._tag),
+      (event) => events.push(event),
       () => now,
     );
 
@@ -259,6 +264,10 @@ describe("generation command output", () => {
       status: { _tag: "AuthorGenerating" },
     });
     now = 10_000;
+    reporter.author({
+      _tag: "AuthorUsageUpdated",
+      usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 0, total: 10, cost: 0.01 },
+    });
     reporter.checking(1);
     now = 12_000;
     reporter.repairing(1, 2);
@@ -277,6 +286,10 @@ describe("generation command output", () => {
       status: { _tag: "AuthorGenerating" },
     });
     now = 20_000;
+    reporter.author({
+      _tag: "AuthorUsageUpdated",
+      usage: { input: 10, output: 6, cacheRead: 4, cacheWrite: 0, total: 20, cost: 0.02 },
+    });
     reporter.checking(2);
     now = 21_000;
 
@@ -290,7 +303,19 @@ describe("generation command output", () => {
         { _tag: "CheckTiming", pass: 2, milliseconds: 1_000 },
       ],
     });
-    expect(events).toEqual(Array.from({ length: 9 }, () => "GenerationStatusChanged"));
+    expect(events.filter((event) => event._tag === "GenerationStatusChanged")).toHaveLength(9);
+    expect(events.filter((event) => event._tag === "GenerationTurnCompleted")).toEqual([
+      {
+        _tag: "GenerationTurnCompleted",
+        turn: 1,
+        usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 0, total: 10, cost: 0.01 },
+      },
+      {
+        _tag: "GenerationTurnCompleted",
+        turn: 2,
+        usage: { input: 10, output: 6, cacheRead: 4, cacheWrite: 0, total: 20, cost: 0.02 },
+      },
+    ]);
   });
 
   it("resolves the overwrite decision in pre-flight prose, never a paid re-run", () => {
