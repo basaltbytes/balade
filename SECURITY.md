@@ -31,5 +31,5 @@ tell you whether something is a finding or a documented position.
 
 ## Supported versions
 
-balade is pre-alpha and moves fast. Fixes land on the latest published version
+balade is alpha and moves fast. Fixes land on the latest published version
 on npm; there are no backported releases.

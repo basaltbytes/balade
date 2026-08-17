@@ -2,11 +2,11 @@
 walkthrough: 1
 title: Clarification threads from selection to pinned answer
 pr: 133
-commit: 4bee0381edbe4a7f0dbfc5d867d117987e052a7d
+commit: 2293391bc9d24020eb4b80db4c005e21b62f6528
 meta:
   pr: "133"
   feature: walkthrough-clarifications
-  commit: 4bee0381
+  commit: 2293391b
   balade-authoring: 1.21.0
 ---
 
