@@ -1,5 +1,20 @@
 # balade
 
+## 0.13.0
+
+### Minor Changes
+
+- 5bd9738: `balade generate` resolves the overwrite decision before the paid model turn instead of failing after it. A walkthrough stamped at an older head is refreshed without a prompt or flag — regenerating after the pull request moved is the intended path — and a stale file with a different title slug is removed when the new one is written, so a re-rolled title no longer leaves a stale duplicate. A walkthrough stamped at the current head asks for confirmation on a TTY; non-interactive runs stop immediately, where `--force` skips the question. If a replaced file had uncommitted changes, a copy is kept beside it as `<file>.superseded`. The post-payment collision error, its `-recovered-` draft files, and the advice to re-run a paid turn are gone; the generated draft is always checked and repaired before the session ends.
+
+### Patch Changes
+
+- 7931712: Add `balade agent logout` to remove every provider credential stored by Balade.
+- 302028e: Stop generation repairs when diagnostic locations do not change.
+- 2d91555: `balade generate` now labels each turn's running cost as cumulative, so the last reported amount is clearly the session total rather than a per-turn charge.
+- 039e382: Ask an agent for rich, evidence-backed clarification from selected walkthrough passages, check and repair invalid answer submissions in the same agent session, continue the conversation in generation-bound review threads, and follow every thread from the walkthrough sidebar. Skill-authored walkthroughs can start Q&A without running generation first: the initial question guides the reviewer through one-time terminal setup and continues automatically. Same-named walkthroughs keep independent review data, and refused submissions preserve their draft for retry.
+  Stale open pages ask the reviewer to reload before submitting, and questions interrupted by a server restart become retryable failed threads.
+- ad1001e: Check generated drafts against the same pull request range used for authoring, avoiding false repair diagnostics after the pull request has merged.
+
 ## 0.12.0
 
 ### Minor Changes
