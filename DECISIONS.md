@@ -1016,8 +1016,8 @@ dispatch is explicit (`gh workflow run`) because a tag pushed with the default
 `GITHUB_TOKEN` does not fire another workflow's `push: tags` trigger, and the
 repository deliberately holds no long-lived token that would.
 
-The tag step is hand-rolled rather than `changeset tag` behind the action's
-`publish` input: gated on the action's `hasChangesets` output, it tags only
+The tag step is hand-rolled rather than `changeset git-tag` behind the action's
+`publish-script` input: gated on the action's `has-changesets` output, it tags only
 when the checked-out `package.json` version has no tag yet, so every other
 push to main is a cheap, observable no-op and nothing depends on parsing
 changeset stdout. `package.json` is the CLI version source; the installed
