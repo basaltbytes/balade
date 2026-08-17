@@ -65,6 +65,8 @@ describe("generation command output", () => {
       "list_pr_changes",
       "search_source",
       "read_pr_diff",
+      "read_pr_diff",
+      "read_pr_diff",
       "read_source",
       "submit_walkthrough",
     ]) {
@@ -97,14 +99,14 @@ describe("generation command output", () => {
       "→ Started preparing the authoring session.\n",
       "→ Started authoring the walkthrough (turn 1).\n",
       "→ Started inspecting pull-request changes.\n",
-      "✓ Inspected pull-request changes.\n",
       "→ Started searching pinned source.\n",
-      "✓ Searched pinned source.\n",
       "→ Started reading relevant diffs.\n",
-      "✓ Read relevant diffs.\n",
       "→ Started confirming pinned source ranges.\n",
-      "✓ Confirmed pinned source ranges.\n",
       "→ Started submitting the walkthrough draft.\n",
+      "✓ Inspected pull-request changes.\n",
+      "✓ Searched pinned source.\n",
+      "✓ Read relevant diffs.\n",
+      "✓ Confirmed pinned source ranges.\n",
       "✓ Submitted the walkthrough draft.\n",
       "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cumulative cost $0.0123\n",
     ]);
@@ -179,11 +181,10 @@ describe("generation command output", () => {
       '[read_source] {"path":"src/example.ts","from":1,"to":2}\n',
       "1 | export const value = 1;\n",
       "[/read_source]\n",
-      "✓ Confirmed pinned source ranges.\n",
     ]);
   });
 
-  it("marks completed tools as successful or failed milestones", () => {
+  it("coalesces successful tool calls at turn completion and reports failures immediately", () => {
     const output: string[] = [];
     const markerTheme: Theme = {
       ...plainTheme,
@@ -200,8 +201,20 @@ describe("generation command output", () => {
 
     progress({
       _tag: "AuthorToolFinished",
-      name: "read_source",
-      output: "Source lines.",
+      name: "read_pr_diff",
+      output: "First diff page.",
+      failed: false,
+    });
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "read_pr_diff",
+      output: "Second diff page.",
+      failed: false,
+    });
+    progress({
+      _tag: "AuthorToolFinished",
+      name: "read_pr_diff",
+      output: "Third diff page.",
       failed: false,
     });
     progress({
@@ -210,10 +223,15 @@ describe("generation command output", () => {
       output: "Search failed.",
       failed: true,
     });
+    progress({
+      _tag: "AuthorUsageUpdated",
+      usage: { input: 12, output: 3, cacheRead: 20, cacheWrite: 0, total: 35, cost: 0.0123 },
+    });
 
     expect(output).toEqual([
-      "<ok>✓</ok> Confirmed pinned source ranges.\n",
       "<error>✗</error> Could not search pinned source.\n",
+      "<ok>✓</ok> Read relevant diffs.\n",
+      "Turn 1: 35 cumulative tokens (in 12, out 3, cache 20/0); cumulative cost $0.0123\n",
     ]);
   });
 

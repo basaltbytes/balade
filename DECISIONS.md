@@ -1295,11 +1295,13 @@ presentation filtering, and the renderer alone decides whether compact or
 verbose output includes them. The spinner's clock resets per state, while the
 completed summary reports total time and aggregates tool intervals into their
 owning model turn. On a TTY, present-tense states belong exclusively to the
-mutable spinner; append-only history records successful or failed tool finish
-events in the past tense with a semantic mark. Returning from a tool to model
-generation updates the spinner without inventing another milestone. A pipe
-cannot redraw, so it receives explicit “Started …” lifecycle events and the
-same marked completions; the model-authoring start appears once per turn.
+mutable spinner. Successful tool finishes accumulate by semantic activity and
+become distinct, past-tense milestones when `AuthorUsageUpdated` closes the
+turn; failed tool finishes remain immediate and individually visible. Returning
+from a tool to model generation updates the spinner without inventing another
+milestone. A pipe cannot redraw, so it receives explicit “Started …” lifecycle
+events with the same per-turn coalescing, followed by the marked milestone
+summary; the model-authoring start also appears once per turn.
 
 The status model became viable only after `CommandExecutor` moved from
 `spawnSync` to interruptible `execFile`: git-heavy checks no longer freeze the

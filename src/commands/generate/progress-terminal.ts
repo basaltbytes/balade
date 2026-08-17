@@ -72,12 +72,21 @@ export function makeGenerationProgress({
   onStatus,
 }: GenerationProgressRendererOptions): (event: GenerationProgress) => void {
   let turn = 0;
-  const announcedAuthorTurns = new Set<number>();
+  const announcedStatuses = new Set<string>();
+  const completedToolMilestones = new Map<string, AuthorToolCopy>();
+
+  const flushCompletedToolMilestones = () => {
+    for (const copy of completedToolMilestones.values()) {
+      write(authorToolCompletionText(copy, false, theme));
+    }
+    completedToolMilestones.clear();
+  };
+
   return (event) => {
     switch (event._tag) {
       case "GenerationStatusChanged":
         onStatus(event.status);
-        if (presentation === "pipe" && shouldAnnounceStatus(event.status, announcedAuthorTurns)) {
+        if (presentation === "pipe" && shouldAnnounceStatus(event.status, announcedStatuses)) {
           write(`${generationStatusStartedText(event.status, theme)}\n`);
         }
         break;
@@ -85,6 +94,7 @@ export function makeGenerationProgress({
         write(warningText(event, theme));
         break;
       case "AuthorUsageUpdated":
+        flushCompletedToolMilestones();
         turn++;
         write(usageText(turn, event, theme));
         break;
@@ -104,7 +114,14 @@ export function makeGenerationProgress({
           if (event.output !== "") write(withTrailingNewline(sanitizeTerminalText(event.output)));
           write(`[/${sanitizeTerminalText(event.name)}${event.failed ? " error" : ""}]\n`);
         }
-        write(authorToolCompletionText(event.name, event.failed, theme));
+        {
+          const copy = authorToolCopy(event.name);
+          if (event.failed) {
+            write(authorToolCompletionText(copy, true, theme));
+          } else {
+            completedToolMilestones.set(copy.key, copy);
+          }
+        }
         break;
     }
   };
@@ -131,6 +148,7 @@ function withTrailingNewline(value: string): string {
 }
 
 interface AuthorToolCopy {
+  readonly key: string;
   readonly active: string;
   readonly started: string;
   readonly completed: string;
@@ -142,6 +160,7 @@ function authorToolCopy(tool: string): AuthorToolCopy {
     case "list_pr_changes":
     case "list_source_files":
       return {
+        key: "inspect-pull-request",
         active: "Inspecting pull-request changes…",
         started: "Started inspecting pull-request changes.",
         completed: "Inspected pull-request changes.",
@@ -149,6 +168,7 @@ function authorToolCopy(tool: string): AuthorToolCopy {
       };
     case "read_pr_diff":
       return {
+        key: "read-diffs",
         active: "Reading relevant diffs…",
         started: "Started reading relevant diffs.",
         completed: "Read relevant diffs.",
@@ -156,6 +176,7 @@ function authorToolCopy(tool: string): AuthorToolCopy {
       };
     case "search_source":
       return {
+        key: "search-source",
         active: "Searching pinned source…",
         started: "Started searching pinned source.",
         completed: "Searched pinned source.",
@@ -164,6 +185,7 @@ function authorToolCopy(tool: string): AuthorToolCopy {
     case "read_source":
     case "read_base_source":
       return {
+        key: "confirm-source-ranges",
         active: "Confirming pinned source ranges…",
         started: "Started confirming pinned source ranges.",
         completed: "Confirmed pinned source ranges.",
@@ -171,6 +193,7 @@ function authorToolCopy(tool: string): AuthorToolCopy {
       };
     case "submit_walkthrough":
       return {
+        key: "submit-walkthrough",
         active: "Submitting the walkthrough draft…",
         started: "Started submitting the walkthrough draft.",
         completed: "Submitted the walkthrough draft.",
@@ -178,6 +201,7 @@ function authorToolCopy(tool: string): AuthorToolCopy {
       };
     default:
       return {
+        key: `author-tool:${tool}`,
         active: "Using an authoring tool…",
         started: "Started an authoring tool.",
         completed: "Completed an authoring tool.",
@@ -186,26 +210,28 @@ function authorToolCopy(tool: string): AuthorToolCopy {
   }
 }
 
-function authorToolCompletionText(tool: string, failed: boolean, theme: Theme): string {
-  const copy = authorToolCopy(tool);
+function authorToolCompletionText(copy: AuthorToolCopy, failed: boolean, theme: Theme): string {
   return failed ? `${theme.error("✗")} ${copy.failed}\n` : `${theme.ok("✓")} ${copy.completed}\n`;
 }
 
-function shouldAnnounceStatus(
-  status: GenerationStatus,
-  announcedAuthorTurns: Set<number>,
-): boolean {
+function shouldAnnounceStatus(status: GenerationStatus, announcedStatuses: Set<string>): boolean {
+  const key = statusAnnouncementKey(status);
+  if (announcedStatuses.has(key)) return false;
+  announcedStatuses.add(key);
+  return true;
+}
+
+function statusAnnouncementKey(status: GenerationStatus): string {
   switch (status._tag) {
     case "AuthoringGeneration":
-      if (announcedAuthorTurns.has(status.turn)) return false;
-      announcedAuthorTurns.add(status.turn);
-      return true;
+      return `authoring:${status.turn}`;
     case "RepairingGeneration":
-      announcedAuthorTurns.add(status.attempt + 1);
-      return true;
+      return `authoring:${status.attempt + 1}`;
     case "PreparingGeneration":
+      return "preparing";
     case "RunningAuthorTool":
+      return `tool:${status.turn}:${authorToolCopy(status.name).key}`;
     case "CheckingGeneration":
-      return true;
+      return `checking:${status.pass}`;
   }
 }
