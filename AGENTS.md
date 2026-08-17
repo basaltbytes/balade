@@ -16,6 +16,23 @@ When working on a feature/bugfix/refactoring you need to do the following before
 - tests should still pass without ignore (but keep big OS matrix tests for the CI run).
 - documentation should be updated
 
+### PR preview handoff
+
+For completed work on a PR branch, commit and push the final `HEAD`, then wait
+for the `npm-package` CI job to publish its pkg.pr.new preview. The handoff is
+complete only when it includes a resolved, copy-paste command:
+
+```sh
+# Prefer the immutable preview when a PR has multiple test rounds.
+pnpm dlx https://pkg.pr.new/basaltbytes/balade@<short-sha> generate <pr-number> --budget high
+
+# Use the moving PR preview when the latest branch build is sufficient.
+pnpm dlx https://pkg.pr.new/basaltbytes/balade@<pr-number> generate <pr-number>
+```
+
+Replace every placeholder with the pushed commit and current PR number before
+reporting the command.
+
 ## Rules
 
 - Read [the coding-guidelines charter](.agents/skills/coding-guidelines/CODING_GUIDELINES.md)
