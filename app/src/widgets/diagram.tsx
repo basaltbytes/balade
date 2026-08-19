@@ -157,129 +157,147 @@ export function Diagram({
           <Rich v={intro} />
         </p>
       )}
-      <div ref={containerRef} className="relative border border-border rounded-md bg-card p-4">
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          preserveAspectRatio="none"
-          viewBox="0 0 100 100"
-          aria-hidden="true"
+      <div className="border border-border rounded-lg bg-card overflow-x-auto">
+        <div
+          ref={containerRef}
+          className="relative p-4"
+          /* A node card stops being readable under ~220px, so the grid keeps
+             that much per column and the box scrolls rather than crushing the
+             cards or pushing the page wide. */
+          style={{ minWidth: `${cols * 220}px` }}
         >
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+            aria-hidden="true"
+          >
+            {edges.map((edge, index) => {
+              const from = byId.get(edge.from);
+              const to = byId.get(edge.to);
+              if (!from || !to) return null;
+              const a = center(from);
+              const b = center(to);
+              return (
+                <line
+                  key={index}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={EDGE_COLOR[edge.kind]}
+                  strokeWidth={edge.thick === true ? 1.1 : 0.45}
+                  strokeDasharray={edge.kind === "derived" ? "2 1.4" : undefined}
+                  opacity={lit(edge) ? 0.9 : 0.15}
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            })}
+          </svg>
           {edges.map((edge, index) => {
             const from = byId.get(edge.from);
             const to = byId.get(edge.to);
-            if (!from || !to) return null;
+            if (!from || !to || edge.label === undefined) return null;
             const a = center(from);
             const b = center(to);
+            const spot = spots.get(index) ?? {
+              x: (a.x + b.x) / 2,
+              y: (a.y + b.y) / 2,
+              lifted: false,
+            };
             return (
-              <line
-                key={index}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke={EDGE_COLOR[edge.kind]}
-                strokeWidth={edge.thick === true ? 1.1 : 0.45}
-                strokeDasharray={edge.kind === "derived" ? "2 1.4" : undefined}
-                opacity={lit(edge) ? 0.9 : 0.15}
-                vectorEffect="non-scaling-stroke"
-              />
+              <span
+                key={`label-${index}`}
+                ref={(el) => {
+                  if (el === null) labelRefs.current.delete(index);
+                  else labelRefs.current.set(index, el);
+                }}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none font-mono text-[10px] px-[5px] py-[1px] rounded-md border border-border bg-background text-muted-foreground whitespace-nowrap transition-opacity ${
+                  spot.lifted ? "z-10" : ""
+                }`}
+                style={{
+                  left: `${spot.x}%`,
+                  top: `${spot.y}%`,
+                  opacity: lit(edge) ? 1 : 0.2,
+                  color: lit(edge) ? EDGE_COLOR[edge.kind] : undefined,
+                }}
+              >
+                {edge.label}
+              </span>
             );
           })}
-        </svg>
-        {edges.map((edge, index) => {
-          const from = byId.get(edge.from);
-          const to = byId.get(edge.to);
-          if (!from || !to || edge.label === undefined) return null;
-          const a = center(from);
-          const b = center(to);
-          const spot = spots.get(index) ?? {
-            x: (a.x + b.x) / 2,
-            y: (a.y + b.y) / 2,
-            lifted: false,
-          };
-          return (
-            <span
-              key={`label-${index}`}
-              ref={(el) => {
-                if (el === null) labelRefs.current.delete(index);
-                else labelRefs.current.set(index, el);
-              }}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none font-mono text-[10px] px-[5px] py-[1px] rounded-md border border-border bg-background text-muted-foreground whitespace-nowrap transition-opacity ${
-                spot.lifted ? "z-10" : ""
-              }`}
-              style={{
-                left: `${spot.x}%`,
-                top: `${spot.y}%`,
-                opacity: lit(edge) ? 1 : 0.2,
-                color: lit(edge) ? EDGE_COLOR[edge.kind] : undefined,
-              }}
-            >
-              {edge.label}
-            </span>
-          );
-        })}
-        <div
-          className="relative grid gap-x-6 gap-y-10"
-          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-        >
-          {Array.from({ length: rows }, (_, row) =>
-            Array.from({ length: cols }, (_, col) => {
-              const node = byCell.get(`${row + 1}:${col + 1}`);
-              if (!node) return <div key={`${row}-${col}`} />;
-              const dim =
-                hover !== null && hover !== node.id && neighbours.get(hover)?.has(node.id) !== true;
-              return (
-                <a
-                  key={node.id}
-                  ref={(el) => {
-                    if (el === null) nodeRefs.current.delete(node.id);
-                    else nodeRefs.current.set(node.id, el);
-                  }}
-                  href={node.ref === undefined ? undefined : `#${node.ref}`}
-                  onClick={(event) => {
-                    if (node.ref === undefined) return;
-                    event.preventDefault();
-                    jumpTo(node.ref);
-                  }}
-                  onMouseEnter={() => setHover(node.id)}
-                  onMouseLeave={() => setHover(null)}
-                  className={`block border rounded-md bg-background transition-opacity ${
-                    dim ? "opacity-30" : ""
-                  } ${NODE_BORDER[node.change]}`}
-                >
-                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border-soft">
-                    <span className="font-mono text-[12px] text-foreground">{node.model}</span>
-                    {node.badge !== undefined ? (
-                      <span
-                        className={`text-[10.5px] border rounded-md px-[5px] py-[1px] ${BADGE.get(node.badge) ?? NEW_BADGE}`}
-                      >
-                        {node.badge}
+          <div
+            className="relative grid gap-x-6 gap-y-10"
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+          >
+            {Array.from({ length: rows }, (_, row) =>
+              Array.from({ length: cols }, (_, col) => {
+                const node = byCell.get(`${row + 1}:${col + 1}`);
+                if (!node) return <div key={`${row}-${col}`} />;
+                const dim =
+                  hover !== null &&
+                  hover !== node.id &&
+                  neighbours.get(hover)?.has(node.id) !== true;
+                return (
+                  <a
+                    key={node.id}
+                    ref={(el) => {
+                      if (el === null) nodeRefs.current.delete(node.id);
+                      else nodeRefs.current.set(node.id, el);
+                    }}
+                    href={node.ref === undefined ? undefined : `#${node.ref}`}
+                    onClick={(event) => {
+                      if (node.ref === undefined) return;
+                      event.preventDefault();
+                      jumpTo(node.ref);
+                    }}
+                    onMouseEnter={() => setHover(node.id)}
+                    onMouseLeave={() => setHover(null)}
+                    className={`block border rounded-md bg-background transition-opacity ${
+                      dim ? "opacity-30" : ""
+                    } ${NODE_BORDER[node.change]}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border-soft">
+                      <span className="font-mono text-[12px] text-foreground truncate">
+                        {node.model}
                       </span>
-                    ) : (
-                      node.nlabel !== undefined && (
-                        <span className="text-[11px] text-muted-foreground">{node.nlabel}</span>
-                      )
-                    )}
-                  </div>
-                  {node.compartments.map((compartment, index) => (
-                    <div
-                      key={index}
-                      className="px-3 py-1.5 border-b border-border-soft last:border-b-0"
-                    >
-                      <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
-                        {compartment.label}
-                      </div>
-                      {compartment.rows.map((cells, k) => (
-                        <div key={k} className="font-mono text-[11.5px] text-secondary-foreground">
-                          <Rich v={cells} />
-                        </div>
-                      ))}
+                      {node.badge !== undefined ? (
+                        <span
+                          className={`shrink-0 text-[10.5px] border rounded-md px-[5px] py-[1px] ${BADGE.get(node.badge) ?? NEW_BADGE}`}
+                        >
+                          {node.badge}
+                        </span>
+                      ) : (
+                        node.nlabel !== undefined && (
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            {node.nlabel}
+                          </span>
+                        )
+                      )}
                     </div>
-                  ))}
-                </a>
-              );
-            }),
-          )}
+                    {node.compartments.map((compartment, index) => (
+                      <div
+                        key={index}
+                        className="px-3 py-1.5 border-b border-border-soft last:border-b-0"
+                      >
+                        <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                          {compartment.label}
+                        </div>
+                        {compartment.rows.map((cells, k) => (
+                          <div
+                            key={k}
+                            className="font-mono text-[11.5px] text-secondary-foreground [overflow-wrap:anywhere]"
+                          >
+                            <Rich v={cells} />
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </a>
+                );
+              }),
+            )}
+          </div>
         </div>
       </div>
       {hint !== undefined && (

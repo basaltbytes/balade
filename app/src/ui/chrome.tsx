@@ -23,14 +23,14 @@ export function Header({ payload }: { payload: Payload }) {
   const strings = useStrings();
   const { pr } = payload;
   return (
-    <header className="mb-8">
+    <header className="mb-10">
       <div className="flex items-center flex-wrap gap-2 mb-2">
         <Octicon
           name={STATE_ICON[pr.state]}
           size={18}
           className={pr.state === "open" ? "text-open" : "text-done"}
         />
-        <h1 className="text-[22px] font-semibold">
+        <h1 className="text-page font-semibold tracking-[-0.025em]">
           {payload.title}{" "}
           <a
             href={pr.url}
@@ -102,7 +102,7 @@ export function ErrorCards({ errors }: { errors: ErrorCard[] }) {
         {errors.map((error, index) => (
           <div
             key={`${error.code}-${index}`}
-            className="border border-destructive/50 bg-destructive/10 rounded-md px-4 py-3"
+            className="border border-destructive/50 bg-destructive/10 rounded-lg px-4 py-3"
           >
             <div className="flex items-center flex-wrap gap-2 mb-1">
               <span className="font-mono text-[11.5px] text-destructive">{error.code}</span>

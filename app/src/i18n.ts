@@ -107,6 +107,12 @@ export interface Strings {
     upToDate: string;
   };
 
+  /* the compact viewport's navigation sheet */
+  sheet: {
+    open: string;
+    close: string;
+  };
+
   /* dev-only affordance, kept in the dictionary so no literal escapes */
   devToggleStale: string;
 }
@@ -212,6 +218,10 @@ const en: Strings = {
     upToDate: "up to date",
   },
 
+  sheet: {
+    open: "Sections",
+    close: "Close the section list",
+  },
   devToggleStale: "dev: toggle stale banner",
 };
 
@@ -319,6 +329,10 @@ const fr: Strings = {
     upToDate: "à jour",
   },
 
+  sheet: {
+    open: "Sections",
+    close: "Fermer la liste des sections",
+  },
   devToggleStale: "dev : bannière « obsolète »",
 };
 

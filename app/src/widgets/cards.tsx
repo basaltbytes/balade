@@ -15,7 +15,7 @@ export function Method({
   body: ReadonlyArray<Inline>;
 }) {
   return (
-    <div className="my-3 border border-border rounded-md bg-card px-4 py-3">
+    <div className="my-3 border border-border rounded-lg bg-card px-4 py-3">
       {decorator !== undefined && (
         <div className="font-mono text-[12px] text-done">{decorator}</div>
       )}
@@ -38,7 +38,7 @@ export function Tests({ items }: { items: ReadonlyArray<TestItem> }) {
   return (
     <div className="my-4 grid gap-3 md:grid-cols-2">
       {items.map((item, index) => (
-        <div key={index} className="border border-border rounded-md bg-card p-4">
+        <div key={index} className="border border-border rounded-lg bg-card p-4">
           <div className="flex items-center gap-2 mb-2">
             <Octicon name="beaker" size={14} className="text-done" />
             <span className="font-mono text-[13px] text-foreground">{item.name}</span>
@@ -74,7 +74,7 @@ export function Cards({ cols, items }: { cols: 1 | 2 | 3; items: ReadonlyArray<C
   return (
     <div className={`my-4 grid gap-3 ${grid}`}>
       {items.map((item, index) => (
-        <div key={index} className="border border-border rounded-md bg-card p-4">
+        <div key={index} className="border border-border rounded-lg bg-card p-4">
           {(item.icon !== undefined || item.title !== undefined) && (
             <div className="flex items-center gap-2 mb-2 font-semibold text-[13.5px]">
               {item.icon !== undefined && (
@@ -101,7 +101,7 @@ export function Patterns({ items }: { items: ReadonlyArray<PatternItem> }) {
   return (
     <div className="my-4 grid gap-3 md:grid-cols-2">
       {items.map((item, index) => (
-        <div key={index} className="border border-border rounded-md bg-card p-4 flex gap-3">
+        <div key={index} className="border border-border rounded-lg bg-card p-4 flex gap-3">
           <Octicon name={item.icon} size={16} className="text-accent-muted mt-[2px] shrink-0" />
           <div className="min-w-0">
             <div className="font-semibold text-[13.5px] mb-1">{item.term}</div>

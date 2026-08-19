@@ -2,56 +2,174 @@
 
 @source "./";
 
-/* Primer dark expressed as shadcn slot names, plus the seven domain colors as
-   @theme colors. Values are the approved token map; no raw Primer hex appears
-   past this block (shiki inlines its own). */
+/* balade's own dark surface. Near-neutral ground (chroma under 0.006 on every
+   surface step) so the syntax and diff colors are the only chromatic things on
+   the page; one blue accent; the five status hues unchanged in meaning and
+   retuned for this ground. Every text token clears 4.5:1 on both `background`
+   and `card`. Generated in OKLCH; hex is the normative value. */
 @theme {
-  --color-background: #0d1117;
-  --color-foreground: #e6edf3;
-  --color-card: #161b22;
-  --color-card-foreground: #e6edf3;
-  --color-popover: #161b22;
-  --color-popover-foreground: #e6edf3;
-  --color-primary: #2f81f7;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #21262d;
-  --color-secondary-foreground: #c9d1d9;
-  --color-muted: #21262d;
-  --color-muted-foreground: #7d8590;
-  --color-accent: #21262d;
-  --color-accent-foreground: #e6edf3;
-  --color-destructive: #f85149;
-  --color-border: #30363d;
-  --color-input: #30363d;
-  --color-ring: #2f81f7;
+  --color-background: #0c0c0d;
+  --color-foreground: #f3f3f6;
+  --color-card: #18191b;
+  --color-card-foreground: #f3f3f6;
+  --color-popover: #18191b;
+  --color-popover-foreground: #f3f3f6;
+  --color-primary: #5279ff;
+  --color-primary-foreground: #0c0c0d;
+  --color-secondary: #232326;
+  --color-secondary-foreground: #d0d1d5;
+  --color-muted: #232326;
+  --color-muted-foreground: #919298;
+  --color-accent: #232326;
+  --color-accent-foreground: #f3f3f6;
+  --color-destructive: #fe5650;
+  --color-border: #333336;
+  --color-input: #333336;
+  --color-ring: #5279ff;
 
   /* domain extensions — tailwind @theme colors, no shadcn slot */
-  --color-added: #3fb950;
-  --color-modified: #d29922;
-  --color-removed: #f85149;
-  --color-context: #6e7681;
-  --color-done: #a371f7;
-  --color-open: #238636;
-  --color-accent-muted: #79c0ff;
-  --color-border-soft: #21262d;
+  --color-added: #44c759;
+  --color-modified: #e7ac2a;
+  --color-removed: #fe5650;
+  --color-context: #797a7f;
+  --color-done: #b17eff;
+  --color-open: #1aae54;
+  --color-accent-muted: #89c3ff;
+  --color-border-soft: #212225;
 
+  /* Two radii, one rule: controls take `md`, containers take `lg`. */
   --radius-md: 6px;
+  --radius-lg: 10px;
   --font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Noto Sans", Helvetica,
+    Arial, sans-serif;
+}
+
+/* The reading scale. Chrome stays small and dense; authored prose does not —
+   a walkthrough is read for an hour, and 13px was a instrument label pressed
+   into service as body text. */
+@theme {
+  --text-prose: 15px;
+  --text-prose--line-height: 1.7;
+  --text-section: 24px;
+  --text-section--line-height: 1.25;
+  --text-page: 28px;
+  --text-page--line-height: 1.2;
 }
 
 html {
   color-scheme: dark;
+  scrollbar-color: var(--color-border) transparent;
 }
 
 body {
-  @apply bg-background text-foreground font-sans text-[14px] leading-normal antialiased;
+  @apply bg-background text-foreground font-sans text-[14.5px] leading-normal antialiased;
+}
+
+/* ---- browser surfaces -------------------------------------------------- */
+/* Selection, caret, focus ring and scrollbars ship with defaults that belong
+   to no design system. Selection matters twice here: it is also the gesture
+   that opens a clarification. */
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 32%, transparent);
+  color: var(--color-foreground);
+}
+:where(textarea, input) {
+  caret-color: var(--color-primary);
+}
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border: 3px solid var(--color-background);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-context);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 section[id] {
-  scroll-margin-top: 20px;
+  scroll-margin-top: 24px;
+}
+
+/* ---- the walk ---------------------------------------------------------- */
+/* The document is a path: one continuous rail down the left margin, one node
+   per section, filled when that section is reviewed. It is the only structure
+   in the app that renders progress as position rather than as a count. */
+.sections-rail {
+  position: relative;
+  padding-left: 34px;
+}
+.sections-rail::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    var(--color-border) 0%,
+    var(--color-border) calc(100% - 96px),
+    transparent 100%
+  );
+}
+.sections-rail > section {
+  position: relative;
+}
+.sections-rail > section > .section-head::before {
+  content: "";
+  position: absolute;
+  left: -29px;
+  top: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: var(--color-border);
+  box-shadow: 0 0 0 4px var(--color-background);
+  transition: background-color 150ms;
+}
+.sections-rail > section.is-active > .section-head::before {
+  background: var(--color-primary);
+}
+.sections-rail > section.reviewed-section > .section-head::before {
+  background: var(--color-added);
+}
+@media (max-width: 767px) {
+  .sections-rail {
+    padding-left: 22px;
+  }
+  .sections-rail::before {
+    left: 3px;
+  }
+  .sections-rail > section > .section-head::before {
+    left: -23px;
+  }
+}
+
+/* ---- reading measure --------------------------------------------------- */
+/* Prose is capped; evidence is not. Code blocks, diffs, tables and card grids
+   keep the full column. */
+.section-body > p,
+.section-body > ul,
+.section-body > ol,
+.section-body > h3 {
+  max-width: 72ch;
 }
 
 /* ---- shiki code blocks ------------------------------------------------ */
@@ -59,7 +177,7 @@ section[id] {
    `--ln-start` so numbering matches the file, not the excerpt. */
 .codeblock pre.shiki {
   margin: 0;
-  padding: 12px 0;
+  padding: 0;
   font-size: 12.5px;
   line-height: 20px;
   overflow: auto;
@@ -77,6 +195,25 @@ section[id] {
   width: 100%;
   padding-right: 16px;
 }
+/* Breathing room belongs to the first and last line, not to the `pre`. Padding
+   on the `pre` shows the block's own background above and below the run, so a
+   washed excerpt gets a bare strip framing it; carried on the lines, the wash
+   reaches the block's edges. The gutter's own tint is stretched to match. */
+.codeblock .line:first-child {
+  padding-top: 12px;
+}
+.codeblock .line:first-child::before {
+  margin-top: -12px;
+  padding-top: 12px;
+}
+.codeblock .line:last-child {
+  padding-bottom: 12px;
+}
+.codeblock .line:last-child::before {
+  margin-bottom: -12px;
+  padding-bottom: 12px;
+}
+
 .codeblock .line::before {
   counter-increment: ln;
   content: counter(ln);
@@ -91,14 +228,15 @@ section[id] {
   user-select: none;
 }
 
-/* change view: added-line wash derives from --color-added at the fixed alpha */
+/* change view: the retuned green carries more weight per percent than Primer's,
+   so the wash sits lower than the diff-view sample alphas suggest */
 .view-change .line.add {
-  background: color-mix(in srgb, var(--color-added) 15%, transparent);
+  background: color-mix(in srgb, var(--color-added) 9%, transparent);
 }
 .view-change .line.add::before {
   content: counter(ln) " +";
   color: var(--color-added);
-  background: color-mix(in srgb, var(--color-added) 30%, transparent);
+  background: color-mix(in srgb, var(--color-added) 20%, transparent);
 }
 
 /* mark= block highlight: primary wash + 2px inset bar, in every view */
@@ -121,12 +259,12 @@ section[id] {
 }
 .diff-tailwindcss-wrapper[data-theme="dark"] .diff-style-root {
   --diff-border--: var(--color-border);
-  --diff-add-content--: color-mix(in srgb, var(--color-added) 15%, transparent);
-  --diff-add-lineNumber--: color-mix(in srgb, var(--color-added) 30%, transparent);
-  --diff-add-content-highlight--: color-mix(in srgb, var(--color-added) 40%, transparent);
-  --diff-del-content--: color-mix(in srgb, var(--color-destructive) 12%, transparent);
-  --diff-del-lineNumber--: color-mix(in srgb, var(--color-destructive) 30%, transparent);
-  --diff-del-content-highlight--: color-mix(in srgb, var(--color-destructive) 40%, transparent);
+  --diff-add-content--: color-mix(in srgb, var(--color-added) 9%, transparent);
+  --diff-add-lineNumber--: color-mix(in srgb, var(--color-added) 20%, transparent);
+  --diff-add-content-highlight--: color-mix(in srgb, var(--color-added) 26%, transparent);
+  --diff-del-content--: color-mix(in srgb, var(--color-destructive) 9%, transparent);
+  --diff-del-lineNumber--: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+  --diff-del-content-highlight--: color-mix(in srgb, var(--color-destructive) 26%, transparent);
   --diff-hunk-content--: color-mix(in srgb, var(--color-primary) 10%, transparent);
   --diff-hunk-lineNumber--: color-mix(in srgb, var(--color-primary) 10%, transparent);
   --diff-hunk-lineNumber-hover--: var(--color-primary);

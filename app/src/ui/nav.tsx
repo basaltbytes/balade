@@ -11,7 +11,7 @@ import { QaSidebar } from "./qa-sidebar";
 import { useReview } from "./review-context";
 import { useStrings } from "./strings";
 
-function useActiveSection(): string {
+export function useActiveSection(): string {
   const [active, setActive] = useState("");
   useEffect(() => {
     const sections = Array.from(document.querySelectorAll("section[id]"));
@@ -89,8 +89,8 @@ function NavLeaf({
   const files = section ? review.filesOf(section) : null;
   return (
     <div
-      className={`flex items-center gap-2 px-2 py-[5px] rounded-md border-l-2 ${
-        active ? "border-primary bg-primary/10" : "border-transparent hover:bg-secondary/60"
+      className={`flex items-center gap-2 px-2 py-[5px] rounded-md ${
+        active ? "bg-primary/14" : "hover:bg-secondary/60"
       } ${reviewed && review.hideReviewed ? "opacity-50" : ""}`}
     >
       <MarkButton
@@ -111,7 +111,7 @@ function NavLeaf({
           <>
             <Octicon name={node.icon} size={14} className="text-muted-foreground shrink-0" />
             <span
-              className={`truncate ${active ? "text-foreground" : "text-secondary-foreground"}`}
+              className={`truncate ${active ? "text-foreground font-medium" : "text-secondary-foreground"}`}
             >
               {node.label}
             </span>
@@ -161,8 +161,7 @@ function NavTree({
   );
 }
 
-export function Nav({ payload }: { payload: Payload }) {
-  const active = useActiveSection();
+export function Nav({ payload, active }: { payload: Payload; active: string }) {
   const review = useReview();
   const strings = useStrings();
   const sections = sectionById(payload);

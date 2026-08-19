@@ -11,6 +11,7 @@ import { useHighlighted } from "../highlight/use-highlighted";
 import { Octicon } from "../ui/octicon";
 import { usePayload } from "../ui/payload-context";
 import { useStrings } from "../ui/strings";
+import { useIsWide } from "../ui/viewport";
 import { CodeDiffLink } from "./code-diff-link";
 
 type View = "plain" | "change" | "diff";
@@ -35,11 +36,12 @@ export function Code({ block }: { block: CodeBlock }) {
     [block.lines, block.changed, block.from, block.file],
   );
   const highlighter = useDiffHighlighter([block.lang]);
+  const wide = useIsWide();
   const mismatch = block.expect?.status === "mismatch";
 
   return (
     <div
-      className={`codeblock my-4 border border-border rounded-[11px] overflow-hidden bg-background ${open ? "" : "collapsed"}`}
+      className={`codeblock my-4 border border-border rounded-lg overflow-hidden bg-background ${open ? "" : "collapsed"}`}
     >
       <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted border-b border-border">
         <div className="flex items-center gap-2 min-w-0">
@@ -114,7 +116,7 @@ export function Code({ block }: { block: CodeBlock }) {
                 },
                 hunks: [hunk],
               }}
-              diffViewMode={DiffModeEnum.Split}
+              diffViewMode={wide ? DiffModeEnum.Split : DiffModeEnum.Unified}
               diffViewTheme="dark"
               diffViewHighlight={highlighter !== undefined}
               diffViewFontSize={12}

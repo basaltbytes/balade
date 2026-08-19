@@ -20,7 +20,7 @@ function ChangeBar({ additions, deletions }: { additions: number; deletions: num
   const total = additions + deletions;
   const green = total === 0 ? 0 : Math.round((additions / total) * 5);
   return (
-    <span className="inline-flex gap-[2px] shrink-0">
+    <span className="hidden sm:inline-flex gap-[2px] shrink-0">
       {Array.from({ length: 5 }, (_, index) => (
         <i
           key={index}
@@ -263,7 +263,7 @@ export function Files({
   const stats = totals(byPath, [...(groups ?? []).flatMap((group) => group.paths), ...paths]);
 
   return (
-    <div className="my-4 border border-border rounded-md overflow-hidden">
+    <div className="my-4 border border-border rounded-lg overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-[10px] bg-muted border-b border-border text-[13px] text-muted-foreground">
         <Octicon name="file-diff" size={14} />
         {strings.files.header(stats.files, stats.additions, stats.deletions)}

@@ -21,7 +21,7 @@ export function exportHtml(payload: Payload, assets: ExportAssets): string {
     `<html lang="${payload.lang}">`,
     "<head>",
     '<meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
     `<link rel="icon" type="image/png" sizes="64x64" href="${FAVICON_DATA_URI}">`,
     "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'\">",
     `<title>${escapeText(payload.title)}</title>`,
