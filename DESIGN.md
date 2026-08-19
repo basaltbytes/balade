@@ -312,6 +312,12 @@ becomes unified — two code columns do not fit one phone.
 
 ### Named Rules
 
+**The Own-Your-Overflow Rule.** Content wider than the column — diagrams,
+tables, code, diffs — scrolls inside its own `overflow-x-auto` box. The page
+body never scrolls horizontally. A payload-supplied identifier has no length
+limit, so anything rendering one either truncates it or breaks it with
+`overflow-wrap: anywhere`.
+
 **The Nothing-Dropped Rule.** The compact viewport relocates controls; it never
 removes them. A control that exists at 1280px is reachable at 375px.
 
