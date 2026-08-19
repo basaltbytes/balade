@@ -23,7 +23,7 @@ export const AUTHORING_SECTION_TEMPLATES: readonly AuthoringSectionTemplate[] = 
   {
     role: "Orientation",
     selectWhen:
-      "Always. State what changed, why a reviewer should care, and the constraint that shapes the implementation.",
+      "Always, and always first. Keep the id `overview`; `check` rejects a walkthrough whose first section carries another id. State what changed, why a reviewer should care, and the constraint that shapes the implementation.",
     template: `{% section id="overview" title="Overview" %}
 Replace this line with the review frame.
 {% /section %}`,

@@ -179,7 +179,7 @@ plus preparation, model-turn and check timing.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text
 and allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.27.0`. See the
+Generated frontmatter records authoring package version `1.28.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -200,7 +200,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.27.0
+  balade-authoring: 1.28.0
 ---
 ```
 
@@ -227,7 +227,7 @@ language is known, plain otherwise, so pseudo-code works. A fence tagged
 reach the app. The authoring package documents the other blocks and structural
 rules.
 
-A walkthrough ends with a `{% files /%}` block, the full-PR diff browser that
+A walkthrough opens with a section whose id is `overview`, and ends with a `{% files /%}` block, the full-PR diff browser that
 lists every changed file with a viewed mark. That block can hold
 `{% filegroup /%}` children to group the browser into collapsible sections:
 

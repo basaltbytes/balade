@@ -303,7 +303,7 @@ it("caps a short final batch at the last index", () => {
           meta: { lang: "en", area: "pagination" },
           body: `{% group label="Orientation" %}
 
-{% section id="bug" title="Inclusive batch end" %}
+{% section id="overview" title="Inclusive batch end" %}
 
 The old expression could describe the boundary in two coordinate systems. The new expression computes an exclusive end first, then converts it to the final included index.
 

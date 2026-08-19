@@ -142,7 +142,7 @@ function submitted(body: string, title = "Live planning pool") {
   );
 }
 
-const validBody = `{% section id="pool-model" title="Pool model" %}
+const validBody = `{% section id="overview" title="Pool model" %}
 
 The pool model computes live placement from slots.
 
@@ -156,7 +156,7 @@ The pool model computes live placement from slots.
 
 {% /section %}`;
 
-const invalidBody = `{% section id="pool-model" title="Pool model" %}
+const invalidBody = `{% section id="overview" title="Pool model" %}
 
 {% code file="models/planning_pool_item.py" from=999 to=1000 expect="not there" /%}
 

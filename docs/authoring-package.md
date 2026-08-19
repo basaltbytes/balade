@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.27.0`. Its major version matches the
+The current package version is `1.28.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.27.0
+  balade-authoring: 1.28.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -144,7 +144,7 @@ fill.
 
 | Role | Use it for |
 | --- | --- |
-| Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This role is always present. |
+| Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This role is always present and always first; its section keeps the id `overview`, which `check` requires. |
 | Mechanism | An algorithm or non-obvious logic worth explaining. It follows the orientation directly, and its explanation carries the section. |
 | Models | Domain types, persisted state, components, or services whose structure carries the change. |
 | Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |

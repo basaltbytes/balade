@@ -21,4 +21,4 @@ closing diff's `{% filegroup /%}` children are already named, and a subject with
 one section carries no group header at all. The closing Full PR diff group keeps
 its fixed name.
 
-Authoring package 1.27.0.
+Authoring package 1.28.0.

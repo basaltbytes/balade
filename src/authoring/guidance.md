@@ -23,6 +23,8 @@ The narrative of this section.
 {% /section %}
 {% /group %}
 
+Every walkthrough opens with the overview: the first section carries `id="overview"` and frames the change for the reviewer. `check` rejects a walkthrough that starts with anything else.
+
 Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. That group's label is the one fixed name. Keep it last; it is mandatory and does not count as inventorying the PR. That closing block should instead hold `{% filegroup /%}` children to group a large diff into collapsible thematic sections; the block itself stays attribute-free either way, and the groups only partition the changed files, so grouping never hides one.
 
 {{section-templates}}

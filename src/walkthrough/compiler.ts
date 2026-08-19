@@ -108,6 +108,7 @@ export function compileDocument(input: CompileInput): CompileResult {
   const seen = new Map<string, number>();
   const relatedRefs: { ids: readonly string[]; line: number }[] = [];
   let closingSection: Node | undefined;
+  let openingSection: Node | undefined;
 
   const sectionOf = (node: Node): NavNode | null => {
     const id = String(node.attributes["id"] ?? "");
@@ -216,6 +217,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         continue;
       }
       if (node.type === "tag" && node.tag === "section") {
+        openingSection ??= node;
         closingSection = node;
         const entry = sectionOf(node);
         if (entry !== null) nav.push(entry);
@@ -262,6 +264,20 @@ export function compileDocument(input: CompileInput): CompileResult {
       line: closingSection === undefined ? 1 : lineOf(closingSection),
       message: "The last section must contain a bare `{% files /%}` block.",
       hint: "End the walkthrough with an unfiltered full-PR diff block that has no attributes.",
+    });
+  }
+
+  if (
+    openingSection !== undefined &&
+    String(openingSection.attributes["id"] ?? "") !== "overview"
+  ) {
+    diagnostics.push({
+      code: "overview-section-missing",
+      level: "error",
+      file: sourcePath,
+      line: lineOf(openingSection),
+      message: 'The first section must be the overview, with `id="overview"`.',
+      hint: "Open the walkthrough with the section that frames the change for the reviewer.",
     });
   }
 

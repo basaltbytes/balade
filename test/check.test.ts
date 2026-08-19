@@ -334,6 +334,39 @@ commit: ${repo.pin}
     }),
   );
 
+  it.effect("requires the first section to be the overview", () =>
+    Effect.gen(function* () {
+      const path = join(repo.dir, "walkthroughs/no-overview.md");
+      repo.write(
+        "walkthroughs/no-overview.md",
+        `---
+walkthrough: 1
+title: No overview
+pr: 42
+commit: ${repo.pin}
+---
+
+{% group label="Mechanism" %}
+{% section id="mechanism" title="How it works" %}
+The narrative.
+{% /section %}
+{% /group %}
+{% section id="files" title="Full PR diff" %}
+{% files /%}
+{% /section %}
+`,
+      );
+      const rejected = yield* provideLive(checkOne({ cwd: repo.dir, path, useGh: false }));
+
+      expect(find(rejected, "overview-section-missing")).toMatchObject({
+        level: "error",
+        message: expect.stringContaining("first section"),
+        hint: expect.stringContaining("frames the change"),
+      });
+      expect(codes(valid.diagnostics)).not.toContain("overview-section-missing");
+    }),
+  );
+
   it.effect("discovers every tracked walkthrough with no argument", () =>
     Effect.gen(function* () {
       const outcome = yield* provideLive(runCheck({ cwd: repo.dir, useGh: false }));
