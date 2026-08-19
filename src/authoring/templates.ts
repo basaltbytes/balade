@@ -6,9 +6,10 @@
  * A role is not a heading. The templates carry no `{% group %}` wrapper and no
  * `icon`, because both get copied verbatim: earlier packages shipped them and
  * every walkthrough came back with the same five headings and the same icon in
- * the same position, whatever the pull request contained. The author names the
- * groups, writes the titles, and picks the icons from the change itself. The
- * closing section is the one fixed subject, so it keeps its group and its icon.
+ * the same position, whatever the pull request contained. The author writes the
+ * labels, titles and icons for the change in front of them — a role name is
+ * available when it fits, not supplied as a default. The closing section is the
+ * one fixed subject, so it keeps its group and its icon.
  */
 
 export interface AuthoringSectionTemplate {

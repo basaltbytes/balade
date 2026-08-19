@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.24.0`. Its major version matches the
+The current package version is `1.25.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.24.0
+  balade-authoring: 1.25.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -131,8 +131,9 @@ the existing decisions and objective checks green.
 The package starts from the pr-96 navigation skeleton, which it teaches as
 roles rather than headings. A role says what a part of the walkthrough does; the
 author selects the roles the change carries, decides how many sections each
-needs, and names every section title and group label from the change itself. The
-role names below never reach the reader. The one fixed label is the closing
+needs, and writes every section title and group label for that change. A role
+name can be the label when it is the best name for what its sections cover; it
+is a starting point, not a default to copy. The one fixed label is the closing
 full-PR diff group.
 
 Sections that share a subject go under one group named after what they cover, so

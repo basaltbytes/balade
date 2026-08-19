@@ -4,9 +4,9 @@ Use simple technichal sentences in the style of Google dev documentation. For En
 
 ## Section templates
 
-The skeleton below lists roles, not headings. A role says what a part of the walkthrough does. You decide whether the change carries it, how many sections it needs, and what those sections are called. Orientation, Mechanism, Models, Surface and Quality are names for you; never write them as group labels.
+The skeleton below lists roles, not headings. A role says what a part of the walkthrough does. You decide whether the change carries it, how many sections it needs, and what those sections are called. Orientation, Mechanism, Models, Surface and Quality are the role names. Use one as a group label when it is the best name for what its sections cover, and use a name drawn from the change when that name is clearer.
 
-Name every section title and every group label from the change, the way you already name `{% filegroup /%}` children. Gather the sections that share a subject under one `{% group label="…" %}` and name the group after what those sections cover. A subject with one section needs no group; the section stands on its own in the sidebar. Add the sections the change needs, and skip a role the change does not carry. A changed file does not automatically deserve a narrative section.
+Write every section title and every group label for this change, the way you already name `{% filegroup /%}` children: the label says what its sections cover. Gather the sections that share a subject under one `{% group label="…" %}` and name the group after what those sections cover. A subject with one section needs no group; the section stands on its own in the sidebar. Add the sections the change needs, and skip a role the change does not carry. A changed file does not automatically deserve a narrative section.
 
 Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. That group's label is the one fixed name. Keep it last; it is mandatory and does not count as inventorying the PR. That closing block should instead hold `{% filegroup /%}` children to group a large diff into collapsible thematic sections; the block itself stays attribute-free either way, and the groups only partition the changed files, so grouping never hides one.
 

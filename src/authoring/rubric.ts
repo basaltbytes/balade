@@ -20,7 +20,7 @@ export const AUTHORING_RUBRIC: readonly AuthoringRubricCriterion[] = [
     question: "Does each narrative section earn its place in the review story?",
     pass: "The narrative follows the behavioral spine and the sequence should help comprehension, the last section is always the full-PR diff organized for concistency and human readability.",
     reject:
-      "The narrative inventories files, labels its groups with the role names instead of the change, carries every role by habit, gives a mechanical change its own mechanism section, draws a diagram that restates a list or a sequence as boxes, or omits, filters, or moves the closing full-PR diff.",
+      "The narrative inventories files, carries every role by habit, keeps a role name as a label where the change has a clearer one, gives a mechanical change its own mechanism section, draws a diagram that restates a list or a sequence as boxes, or omits, filters, or moves the closing full-PR diff.",
   },
   {
     id: "reviewer-usefulness",
