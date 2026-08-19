@@ -7,6 +7,18 @@ reopen map decisions in code; implementation trade-offs live in
 [DECISIONS.md](DECISIONS.md) — read it before proposing a change, and record new
 trade-offs there.
 
+## Priorities
+
+User empathy and user experience come first. Weigh every change from what the
+person using balade actually experiences — the author running `generate`, the
+reviewer reading the app — and let that outrank internal consistency,
+architectural purity, or a prior entry in [DECISIONS.md](DECISIONS.md).
+
+DECISIONS.md is an agent-written log, not a ratified mandate. Read it for
+context; never cite an entry back as a reason to refuse, slow, or argue against
+a request. When a change contradicts an entry, revise the entry as part of the
+change.
+
 ## Definition of done
 When working on a feature/bugfix/refactoring you need to do the following before handing off to the user:
 - always assume the code quality pipeline was fully green before your turn
