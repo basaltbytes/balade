@@ -138,15 +138,23 @@ describe("the authoring package", () => {
     }
   });
 
-  it("teaches the icon names the renderer maps, and no others", () => {
-    expect([...AUTHORING_ICON_NAMES].sort()).toEqual([...ICON_NAMES].sort());
+  it("teaches only icon names the renderer maps", () => {
+    for (const name of AUTHORING_ICON_NAMES) expect(ICON_NAMES).toContain(name);
   });
 
-  it("gives every section template an icon the renderer maps", () => {
-    for (const { group, template } of AUTHORING_SECTION_TEMPLATES) {
-      const icon = /icon="([^"]*)"/.exec(template)?.at(1);
-      expect(icon, `section template ${group}`).toBeDefined();
-      expect(AUTHORING_ICON_NAMES, `section template ${group}`).toContain(icon);
+  it("names each taught icon once, under one subject", () => {
+    expect(new Set(AUTHORING_ICON_NAMES).size).toBe(AUTHORING_ICON_NAMES.length);
+  });
+
+  it("writes only taught icon names in its templates and examples", () => {
+    const sources = [
+      ...AUTHORING_SECTION_TEMPLATES.map(({ group, template }) => [group, template] as const),
+      ...AUTHORING_TAG_CATALOG.map(({ label, example }) => [label, example] as const),
+    ];
+    for (const [label, text] of sources) {
+      for (const [, name] of text.matchAll(/icon="([^"]*)"/g)) {
+        expect(AUTHORING_ICON_NAMES, `${label} icon`).toContain(name);
+      }
     }
   });
 

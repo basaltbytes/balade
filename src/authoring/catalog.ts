@@ -14,65 +14,93 @@ export interface AuthoringTagExample {
 }
 
 /**
- * The octicon names a section, card or pattern may carry. The renderer maps
- * this exact set, and a test compares the two lists, so the taught vocabulary
- * cannot drift from what renders.
+ * The icon vocabulary, grouped by the subject each name states. The groups are
+ * what the catalog teaches: a flat list of names makes the model match an icon
+ * to a template position instead of to the section's subject. The renderer maps
+ * every name here, plus the chrome and file-status glyphs an author never
+ * writes; a test holds this list inside the renderer's map.
  */
-export const AUTHORING_ICON_NAMES: readonly string[] = [
-  "alert",
-  "arrow-right",
-  "beaker",
-  "book",
-  "check",
-  "check-circle-fill",
-  "chevron-down",
-  "chevron-right",
-  "circle",
-  "code-square",
-  "columns",
-  "dash",
-  "database",
-  "diff-added",
-  "diff-modified",
-  "diff-removed",
-  "diff-renamed",
-  "dot-fill",
-  "eye",
-  "file",
-  "file-added",
-  "file-binary",
-  "file-code",
-  "file-diff",
-  "gear",
-  "git-branch",
-  "git-commit",
-  "git-compare",
-  "git-merge",
-  "git-pull-request",
-  "globe",
-  "graph",
-  "info",
-  "law",
-  "light-bulb",
-  "link",
-  "link-external",
-  "list-unordered",
-  "package",
-  "person",
-  "question",
-  "repo",
-  "rows",
-  "shield-lock",
-  "sync",
-  "table",
-  "unfold",
-  "x",
+export const AUTHORING_ICON_GROUPS: readonly {
+  readonly subject: string;
+  readonly names: readonly string[];
+}[] = [
+  {
+    subject: "behavior and interfaces",
+    names: ["browser", "terminal", "server", "cloud", "globe", "code-square"],
+  },
+  {
+    subject: "data and state",
+    names: ["database", "stack", "table", "versions", "list-unordered"],
+  },
+  {
+    subject: "flow and history",
+    names: [
+      "workflow",
+      "iterations",
+      "sync",
+      "git-branch",
+      "git-merge",
+      "git-compare",
+      "git-commit",
+      "git-pull-request",
+      "history",
+    ],
+  },
+  {
+    subject: "logic and performance",
+    names: ["gear", "graph", "cpu", "meter", "stopwatch"],
+  },
+  {
+    subject: "security and rules",
+    names: ["shield-lock", "shield-check", "key", "lock", "law"],
+  },
+  {
+    subject: "tests and defects",
+    names: ["beaker", "checklist", "bug", "codescan"],
+  },
+  {
+    subject: "documentation and copy",
+    names: ["book", "note", "pencil", "typography", "comment-discussion"],
+  },
+  {
+    subject: "interface design",
+    names: ["paintbrush", "image", "device-mobile", "accessibility"],
+  },
+  {
+    subject: "agents and people",
+    names: ["agent", "ai-model", "person", "people", "organization"],
+  },
+  {
+    subject: "packaging and release",
+    names: ["package", "tag", "milestone", "dependabot", "container"],
+  },
+  {
+    subject: "files",
+    names: ["file", "file-code", "file-binary", "file-diff"],
+  },
+  {
+    subject: "notices and questions",
+    names: ["alert", "info", "light-bulb", "question", "issue-opened"],
+  },
+  {
+    subject: "configuration and search",
+    names: ["sliders", "tools", "log", "filter", "search", "link", "repo", "clock"],
+  },
 ];
+
+export const AUTHORING_ICON_NAMES: readonly string[] = AUTHORING_ICON_GROUPS.flatMap(
+  (group) => group.names,
+);
+
+/** The vocabulary as one prompt fragment: one subject per line. */
+const iconVocabulary = AUTHORING_ICON_GROUPS.map(
+  ({ subject, names }) => `${subject}: ${names.join(", ")}`,
+).join("; ");
 
 export const AUTHORING_TAG_CATALOG: readonly AuthoringTagExample[] = [
   {
     label: "section",
-    note: `A narrative section may present one changed file by carrying file="…" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no narrative file-section, and never add one just to inventory the PR. The mandatory closing files section is the verification surface, not narrative inventory. The path must be one the PR changed. nav="…" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document. icon="…" sets the section glyph in the sidebar and in the section head. Set the name that matches the section subject; a missing or unknown name renders a neutral dot. A file-section shows its file status in the sidebar, so there the icon applies to the section head only. The accepted names are ${AUTHORING_ICON_NAMES.join(", ")}. badge="…" adds a chip beside the section title, and badgeTone is "new", "mod" or "del". Without badgeTone, a file-section takes the tone of its file status and a plain section takes "mod". Add a badge only when the section carries a status the reader must see.`,
+    note: `A narrative section may present one changed file by carrying file="…" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no narrative file-section, and never add one just to inventory the PR. The mandatory closing files section is the verification surface, not narrative inventory. The path must be one the PR changed. nav="…" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document. icon="…" sets the section glyph in the sidebar and in the section head. Set an icon on every section, and pick the name that states that section's subject. Do not reuse the icon of the template you started from. A missing or unknown name renders a neutral dot. A file-section shows its file status in the sidebar, so there the icon applies to the section head only. The names, by subject — ${iconVocabulary}. badge="…" adds a chip beside the section title, and badgeTone is "new", "mod" or "del". Without badgeTone, a file-section takes the tone of its file status and a plain section takes "mod". Add a badge only when the section carries a status the reader must see.`,
     example: `{% group label="Models" %}
 {% section id="allocation-model" title="The allocation model" icon="database" file="src/models/allocation.py" related=["allocation-proof"] %}
 What this file's change does.
