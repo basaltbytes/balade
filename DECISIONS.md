@@ -1136,12 +1136,17 @@ The semantics keep the #46 invariant by construction. Groups claim files in
 authored order, first match wins, a filter-less group claims the remainder,
 and files no group claims still render ungrouped after the groups — a grouped
 closing block partitions the complete diff and structurally cannot hide a
-file, so it still satisfies the compiler's closing rule. A group that claims
-nothing warns (`filegroup-empty`) and is dropped from the payload;
-`files-empty` keys on the grouped-plus-ungrouped total. The `files` schema is
-no longer self-closing (Markdoc rejects children otherwise); both forms stay
-valid, and a stray `filegroup` outside `files` vanishes silently like a stray
-`step` — the existing child-family behavior.
+file, so it still satisfies the compiler's closing rule. Sibling tags with an
+exactly equal label coalesce after claiming: the resolved group stays at that
+label's first position, and later tags append their claimed paths in authored
+order. This keeps the partition authored because every tag still supplies its
+own label and filter; the compiler infers no theme and does not change claim
+precedence. A tag that claims nothing still warns (`filegroup-empty`) and adds
+no paths, even when another tag shares its label. `files-empty` keys on the
+grouped-plus-ungrouped total. The `files` schema is no longer self-closing
+(Markdoc rejects children otherwise); both forms stay valid, and a stray
+`filegroup` outside `files` vanishes silently like a stray `step` — the existing
+child-family behavior.
 
 In the app, groups start collapsed — the point of grouping a long browser is
 opening one theme at a time — and the group head reuses the browser's own
