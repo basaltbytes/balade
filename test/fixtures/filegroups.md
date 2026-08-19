@@ -13,10 +13,12 @@ meta:
 {% section id="grouped" title="Grouped by theme" icon="file-diff" %}
 
 {% files why={"docs/old.md": "superseded by the pool item", "i18n/fr.po": "one new label"} %}
-{% filegroup label="Translations" only="i18n/**" /%}
+{% filegroup label="Cross-cutting" only="static/**" /%}
 {% filegroup label="Models" only="models/**" /%}
-{% filegroup label="Python" only="**/*.py" /%}
-{% filegroup label="Static assets" only="static/**" /%}
+{% filegroup label="Cross-cutting" only="i18n/**" /%}
+{% filegroup label="Deleted" status="D" /%}
+{% filegroup label="Cross-cutting" only="**/*.py" /%}
+{% filegroup label="Cross-cutting" only="{views/**,controllers/**}" /%}
 {% /files %}
 
 {% /section %}

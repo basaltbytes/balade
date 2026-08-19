@@ -460,7 +460,7 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
   const whyMap = Predicate.isObject(why) ? why : {};
 
   const children = childTags(node, "files", env);
-  const groups: FileGroup[] = [];
+  const groupPathsByLabel = new Map<string, string[]>();
   let pool = env.ctx.files.filter((entry) => filter.keeps(entry));
 
   for (const child of children) {
@@ -475,6 +475,11 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
     pool = rest;
 
     const label = attrString(child, "label") ?? "";
+    /* Record even an empty first contributor so a later duplicate keeps this authored position. */
+    const priorClaims = groupPathsByLabel.get(label);
+    if (priorClaims === undefined) groupPathsByLabel.set(label, claimed);
+    else priorClaims.push(...claimed);
+
     if (claimed.length === 0) {
       env.report({
         code: "filegroup-empty",
@@ -484,11 +489,13 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
         message: `The \`filegroup\` \`${label}\` claims no file this list still holds.`,
         hint: `Check the filter: ${childFilter.text}. Earlier groups claim first; statuses are ${FILE_STATUSES.join(", ")}.`,
       });
-      continue;
     }
-    groups.push({ label, paths: claimed });
   }
 
+  const groups: readonly FileGroup[] = Array.from(groupPathsByLabel, ([label, paths]) => ({
+    label,
+    paths,
+  })).filter((group) => group.paths.length > 0);
   const paths = pool.map((entry) => entry.path);
   /* Grouping partitions the list: every held path still refs its section. */
   const heldPaths = [...groups.flatMap((group) => group.paths), ...paths];

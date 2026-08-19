@@ -277,29 +277,55 @@ describe("compile with file groups", () => {
 
   it("partitions the pool into the authored groups, leftovers in paths", () => {
     const files = firstBlock(payload, "grouped", "files");
-    expect(files.groups?.map((group) => group.label)).toEqual(["Translations", "Models", "Python"]);
-    expect(groupOf("grouped", "Translations")).toEqual(["i18n/acme.pot", "i18n/fr.po"]);
+    expect(files.groups?.map((group) => group.label)).toEqual([
+      "Cross-cutting",
+      "Models",
+      "Deleted",
+    ]);
+    expect(groupOf("grouped", "Cross-cutting")).toEqual([
+      "i18n/acme.pot",
+      "i18n/fr.po",
+      "utils/planning_helper.py",
+      "views/planning_pool_views.xml",
+    ]);
     expect(groupOf("grouped", "Models")).toEqual([
       "models/planning_allocation.py",
       "models/planning_pool_item.py",
     ]);
-    /* The Python glob overlaps the models one; the earlier group already claimed them. */
-    expect(groupOf("grouped", "Python")).toEqual(["utils/planning_helper.py"]);
-    expect([...files.paths].sort()).toEqual([
-      "docs/old.md",
-      "security/ir.model.access.csv",
-      "views/planning_pool_views.xml",
-    ]);
+    expect(groupOf("grouped", "Deleted")).toEqual(["docs/old.md"]);
+    expect([...files.paths].sort()).toEqual(["security/ir.model.access.csv"]);
     const all = [...(files.groups ?? []).flatMap((group) => group.paths), ...files.paths];
-    expect(new Set(all).size).toBe(all.length);
-    expect(all).toHaveLength(payload.files.length);
+    expect([...all].sort()).toEqual(payload.files.map((entry) => entry.path).sort());
+  });
+
+  it("coalesces non-adjacent repeated labels at the first tag's position", () => {
+    const groups = firstBlock(payload, "grouped", "files").groups;
+    expect(groups?.[0]).toEqual({
+      label: "Cross-cutting",
+      paths: [
+        "i18n/acme.pot",
+        "i18n/fr.po",
+        "utils/planning_helper.py",
+        "views/planning_pool_views.xml",
+      ],
+    });
+    // Models claimed the matching paths before the later broad Python tag ran.
+    expect(groups?.[1]?.paths).toEqual([
+      "models/planning_allocation.py",
+      "models/planning_pool_item.py",
+    ]);
   });
 
   it("warns about a group that claims nothing", () => {
+    expect(
+      loaded.diagnostics
+        .filter((diagnostic) => diagnostic.code !== "stale")
+        .map((diagnostic) => diagnostic.code),
+    ).toEqual(["filegroup-empty"]);
     const empty = loaded.diagnostics.filter((d) => d.code === "filegroup-empty");
     expect(empty).toHaveLength(1);
     expect(empty[0]?.level).toBe("warning");
-    expect(empty[0]?.message).toContain("Static assets");
+    expect(empty[0]?.message).toContain("Cross-cutting");
     expect(empty[0]?.hint).toContain('only="static/**"');
     /* Warned, then dropped: every group in the payload holds rows. */
     expect(
