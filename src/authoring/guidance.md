@@ -6,7 +6,13 @@ Use simple technichal sentences in the style of Google dev documentation. For En
 
 Start from the canonical navigation skeleton below. It lists roles, not headings: adapt the section ids and titles to the change, and omit every role the change does not carry. A changed file does not automatically deserve a narrative section.
 
-Groups are the outline of the sidebar, and a reader scans them before reading anything. Gather the sections that share a subject under one group, and label it for what those sections cover — a role name when it fits, a name drawn from the change when that reads better:
+Groups are the outline of the sidebar, and a reader scans that outline before reading anything. Every section sits in a group, so no entry hangs under the heading of the group above it. Gather the sections that share a subject under one group and label it for what those sections cover — for example Overview, Why it changed, Clarification threads, Mechanism, Reviewer surfaces, or Regression proof:
+
+{% group label="Overview" %}
+{% section id="overview" title="What changed" icon="book" %}
+The narrative of this section.
+{% /section %}
+{% /group %}
 
 {% group label="Clarification threads" %}
 {% section id="question-lifecycle" title="From selection to pinned answer" icon="workflow" %}
@@ -16,8 +22,6 @@ The narrative of this section.
 The narrative of this section.
 {% /section %}
 {% /group %}
-
-A section can also stand on its own, outside any group.
 
 Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. That group's label is the one fixed name. Keep it last; it is mandatory and does not count as inventorying the PR. That closing block should instead hold `{% filegroup /%}` children to group a large diff into collapsible thematic sections; the block itself stays attribute-free either way, and the groups only partition the changed files, so grouping never hides one.
 

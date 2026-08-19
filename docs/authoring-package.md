@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.26.0`. Its major version matches the
+The current package version is `1.27.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.26.0
+  balade-authoring: 1.27.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -136,8 +136,11 @@ name can be the label when it is the best name for what its sections cover; it
 is a starting point, not a default to copy. The one fixed label is the closing
 full-PR diff group.
 
-Sections that share a subject go under one group named after what they cover, so
-a subject with a single section carries no group header at all.
+Every section sits in a group, so the sidebar never shows an entry hanging under
+the heading above it. Sections that share a subject go under one group named
+after what they cover, and the guidance gives example labels — Overview, Why it
+changed, Mechanism, Reviewer surfaces, Regression proof — rather than a list to
+fill.
 
 | Role | Use it for |
 | --- | --- |
