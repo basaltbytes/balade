@@ -385,6 +385,11 @@ not get its own number because it happens to be large.
 **The 1px Rule.** Structure is 1px. A thicker border is a state signal, never
 emphasis or decoration.
 
+**The Full-Bleed Wash Rule.** A surface whose background states something about
+the content — a diff wash, a highlighted line — owns its container edge to
+edge. Padding that frames it in the container's own color reads as a mistake.
+Move the padding onto the washed element.
+
 **The No-Stub Rule.** Active state is carried by fill and text weight, not by a
 colored bar clipped into a rounded corner. A 2px accent border on a rounded
 list item reads as a template, not as a decision.
@@ -441,7 +446,10 @@ A 10px-radius bordered block on the page background, with a `muted` header
 carrying a collapse chevron, the monospace file path, the line range, a GitHub
 deep-link, and a three-way segmented control. Line numbers are CSS counters
 seeded from `--ln-start` so numbering matches the file, not the excerpt; the
-gutter is sticky so it survives horizontal scroll. Added lines take a 9% `added`
+gutter is sticky so it survives horizontal scroll. The block's vertical
+breathing room is carried by the first and last line rather than the `pre`, so
+a washed excerpt reaches the block's edges instead of being framed by a bare
+strip. Added lines take a 9% `added`
 wash and a `+` in the gutter. Authored `mark=` lines take a 10% `primary` wash
 and a 2px inset bar. The block caps at 520px and scrolls internally.
 

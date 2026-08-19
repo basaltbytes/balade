@@ -582,6 +582,11 @@
         "name": "The No-Stub Rule",
         "body": "Active state is carried by fill and text weight, not by a colored bar clipped into a rounded corner. A 2px accent border on a rounded list item reads as a template, not a decision.",
         "section": "shapes"
+      },
+      {
+        "name": "The Full-Bleed Wash Rule",
+        "body": "A surface whose background states something about the content — a diff wash, a highlighted line — owns its container edge to edge. Padding that frames it in the container's own color reads as a mistake. Move the padding onto the washed element.",
+        "section": "shapes"
       }
     ],
     "dos": [

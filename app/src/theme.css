@@ -177,7 +177,7 @@ section[id] {
    `--ln-start` so numbering matches the file, not the excerpt. */
 .codeblock pre.shiki {
   margin: 0;
-  padding: 12px 0;
+  padding: 0;
   font-size: 12.5px;
   line-height: 20px;
   overflow: auto;
@@ -195,6 +195,25 @@ section[id] {
   width: 100%;
   padding-right: 16px;
 }
+/* Breathing room belongs to the first and last line, not to the `pre`. Padding
+   on the `pre` shows the block's own background above and below the run, so a
+   washed excerpt gets a bare strip framing it; carried on the lines, the wash
+   reaches the block's edges. The gutter's own tint is stretched to match. */
+.codeblock .line:first-child {
+  padding-top: 12px;
+}
+.codeblock .line:first-child::before {
+  margin-top: -12px;
+  padding-top: 12px;
+}
+.codeblock .line:last-child {
+  padding-bottom: 12px;
+}
+.codeblock .line:last-child::before {
+  margin-bottom: -12px;
+  padding-bottom: 12px;
+}
+
 .codeblock .line::before {
   counter-increment: ln;
   content: counter(ln);
