@@ -13,15 +13,71 @@ export interface AuthoringTagExample {
   readonly example: string;
 }
 
+/**
+ * The octicon names a section, card or pattern may carry. The renderer maps
+ * this exact set, and a test compares the two lists, so the taught vocabulary
+ * cannot drift from what renders.
+ */
+export const AUTHORING_ICON_NAMES: readonly string[] = [
+  "alert",
+  "arrow-right",
+  "beaker",
+  "book",
+  "check",
+  "check-circle-fill",
+  "chevron-down",
+  "chevron-right",
+  "circle",
+  "code-square",
+  "columns",
+  "dash",
+  "database",
+  "diff-added",
+  "diff-modified",
+  "diff-removed",
+  "diff-renamed",
+  "dot-fill",
+  "eye",
+  "file",
+  "file-added",
+  "file-binary",
+  "file-code",
+  "file-diff",
+  "gear",
+  "git-branch",
+  "git-commit",
+  "git-compare",
+  "git-merge",
+  "git-pull-request",
+  "globe",
+  "graph",
+  "info",
+  "law",
+  "light-bulb",
+  "link",
+  "link-external",
+  "list-unordered",
+  "package",
+  "person",
+  "question",
+  "repo",
+  "rows",
+  "shield-lock",
+  "sync",
+  "table",
+  "unfold",
+  "x",
+];
+
 export const AUTHORING_TAG_CATALOG: readonly AuthoringTagExample[] = [
   {
-    label: "section (file)",
-    note: "A narrative section may present one changed file by carrying file=\"…\" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no narrative file-section, and never add one just to inventory the PR. The mandatory closing files section is the verification surface, not narrative inventory. The path must be one the PR changed. nav=\"…\" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document.",
+    label: "section",
+    note: `A narrative section may present one changed file by carrying file="…" — the sidebar then shows it as a color-coded file entry with the file's PR status instead of a plain title. This is a per-section judgment call: a file-section fits when one file's change is that section's whole story; a plain section fits concepts, behavior, and cross-cutting stories. Many walkthroughs need no narrative file-section, and never add one just to inventory the PR. The mandatory closing files section is the verification surface, not narrative inventory. The path must be one the PR changed. nav="…" shortens any entry's sidebar label. related=[…] lists the ids of other sections this one connects to, rendered as jump chips under the heading; every id must name a section in the document. icon="…" sets the section glyph in the sidebar and in the section head. Set the name that matches the section subject; a missing or unknown name renders a neutral dot. A file-section shows its file status in the sidebar, so there the icon applies to the section head only. The accepted names are ${AUTHORING_ICON_NAMES.join(", ")}. badge="…" adds a chip beside the section title, and badgeTone is "new", "mod" or "del". Without badgeTone, a file-section takes the tone of its file status and a plain section takes "mod". Add a badge only when the section carries a status the reader must see.`,
     example: `{% group label="Models" %}
-{% section id="allocation-model" title="The allocation model" file="src/models/allocation.py" related=["allocation-proof"] %}
+{% section id="allocation-model" title="The allocation model" icon="database" file="src/models/allocation.py" related=["allocation-proof"] %}
 What this file's change does.
 {% /section %}
-{% section id="allocation-proof" title="Proof" file="tests/test_allocation.py" %}
+{% section id="allocation-proof" title="Proof" icon="beaker" file="tests/test_allocation.py" %}
 The regression evidence.
 {% /section %}
 {% /group %}`,

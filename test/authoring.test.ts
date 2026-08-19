@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { AUTHORING_TAG_CATALOG } from "../src/authoring/catalog.js";
+import { AUTHORING_ICON_NAMES, AUTHORING_TAG_CATALOG } from "../src/authoring/catalog.js";
 import {
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
@@ -15,6 +15,7 @@ import { renderDraft } from "../src/commands/generate/pipeline.js";
 import { odooPreset, ODOO_AUTHORING_EXAMPLES } from "../src/preset/odoo.js";
 import { parseDocument } from "../src/walkthrough/document.js";
 import { CORE_TAG_NAMES } from "../src/walkthrough/tags.js";
+import { ICON_NAMES } from "../app/src/ui/icon-names.js";
 
 /** Wraps a taught example in the smallest valid walkthrough document. */
 function exampleDocument(body: string, preset?: string): string {
@@ -134,6 +135,18 @@ describe("the authoring package", () => {
     }
     for (const [name, example] of Object.entries(ODOO_AUTHORING_EXAMPLES)) {
       expect(exampleErrors(example, "odoo"), `odoo example ${name}`).toEqual([]);
+    }
+  });
+
+  it("teaches the icon names the renderer maps, and no others", () => {
+    expect([...AUTHORING_ICON_NAMES].sort()).toEqual([...ICON_NAMES].sort());
+  });
+
+  it("gives every section template an icon the renderer maps", () => {
+    for (const { group, template } of AUTHORING_SECTION_TEMPLATES) {
+      const icon = /icon="([^"]*)"/.exec(template)?.at(1);
+      expect(icon, `section template ${group}`).toBeDefined();
+      expect(AUTHORING_ICON_NAMES, `section template ${group}`).toContain(icon);
     }
   });
 

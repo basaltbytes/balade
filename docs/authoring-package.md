@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.21.0`. Its major version matches the
+The current package version is `1.22.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.21.0
+  balade-authoring: 1.22.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -186,9 +186,15 @@ a grouped closing block remains the complete verification surface. The guidance
 tells the agent to group that closing block once the pull request touches more
 than ten files, with labels drawn from the change itself.
 
-The catalog also teaches file-sections: a section carrying `file="…"` renders
-in the sidebar as a color-coded changed-file entry, so the navigation can read
-like a GitHub file list. `generate --lang en|fr` adds a language instruction to
+The catalog also teaches the section tag's display attributes. A section
+carrying `file="…"` renders in the sidebar as a color-coded changed-file entry,
+so the navigation can read like a GitHub file list. `icon="…"` sets the glyph
+shown in the sidebar and in the section head; the catalog names the octicons
+the renderer maps, and a test compares that list against the renderer's own map
+so the two cannot drift. A missing or unknown name renders a neutral dot, and
+every section template ships with an icon. `badge="…"` adds a chip beside the
+section title, toned by `badgeTone` — `new`, `mod` or `del`, defaulting to the
+file status for a file-section and to `mod` otherwise. `generate --lang en|fr` adds a language instruction to
 the initial request and stamps `meta.lang`; an explicit flag outranks a
 model-supplied value.
 

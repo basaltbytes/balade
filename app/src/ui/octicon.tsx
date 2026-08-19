@@ -54,9 +54,12 @@ import {
 } from "@primer/octicons-react";
 import type { ComponentType } from "react";
 import type { FileStatus } from "../contract";
+import type { IconName } from "./icon-names";
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>;
 
+/* `satisfies` makes the compiler reject a name the list does not hold, and a
+   list entry the map does not answer. */
 const ICONS = new Map<string, IconComponent>(
   Object.entries({
     alert: AlertIcon,
@@ -107,7 +110,7 @@ const ICONS = new Map<string, IconComponent>(
     table: TableIcon,
     unfold: UnfoldIcon,
     x: XIcon,
-  }),
+  } satisfies Record<IconName, IconComponent>),
 );
 
 export function Octicon({
