@@ -302,7 +302,7 @@ describe("the walkthrough route", () => {
     expect(en).toContain("Warn body");
     expect(en).toContain("octicon-alert text-modified");
     expect(en).toContain(
-      'border-border rounded-md bg-card px-4 py-3 leading-relaxed text-secondary-foreground">Neutral body',
+      'border-border rounded-lg bg-card px-4 py-3 leading-relaxed text-secondary-foreground">Neutral body',
     );
 
     const fr = render({ ...callouts, lang: "fr" }, "fr");

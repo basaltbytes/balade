@@ -157,7 +157,7 @@ export function Diagram({
           <Rich v={intro} />
         </p>
       )}
-      <div ref={containerRef} className="relative border border-border rounded-md bg-card p-4">
+      <div ref={containerRef} className="relative border border-border rounded-lg bg-card p-4">
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
           preserveAspectRatio="none"

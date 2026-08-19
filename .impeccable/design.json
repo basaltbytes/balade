@@ -1,0 +1,609 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-19T00:00:00Z",
+  "title": "Design System: balade",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Page",
+        "canonical": "#0c0c0d",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card",
+        "canonical": "#18191b",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Surface",
+        "canonical": "#232326",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "#333336",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "border-soft": {
+        "role": "neutral",
+        "displayName": "Soft Divider",
+        "canonical": "#212225",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Metadata Grey",
+        "canonical": "#919298",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "secondary-foreground": {
+        "role": "neutral",
+        "displayName": "Reading Grey",
+        "canonical": "#d0d1d5",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Heading White",
+        "canonical": "#f3f3f6",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#18191b",
+          "#232326",
+          "#333336",
+          "#797a7f",
+          "#919298",
+          "#d0d1d5",
+          "#f3f3f6"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Signal Blue",
+        "canonical": "oklch(0.6207 0.2037 267.80deg)",
+        "tonalRamp": [
+          "#050051",
+          "#110494",
+          "#2137b9",
+          "#3a5cdf",
+          "#5a81ff",
+          "#8baaff",
+          "#bdd0ff",
+          "#e7eeff"
+        ]
+      },
+      "accent-muted": {
+        "role": "primary",
+        "displayName": "Reference Blue",
+        "canonical": "oklch(0.8002 0.1048 250.06deg)",
+        "tonalRamp": [
+          "#00172f",
+          "#00315b",
+          "#154f83",
+          "#376fa6",
+          "#5890c9",
+          "#79b3ee",
+          "#aed5ff",
+          "#e3f0ff"
+        ]
+      },
+      "added": {
+        "role": "secondary",
+        "displayName": "Added Green",
+        "canonical": "oklch(0.7341 0.1892 146.06deg)",
+        "tonalRamp": [
+          "#001d04",
+          "#003c0d",
+          "#005e1a",
+          "#008328",
+          "#15a83a",
+          "#4acc5e",
+          "#72f181",
+          "#c9ffcc"
+        ]
+      },
+      "modified": {
+        "role": "secondary",
+        "displayName": "Modified Amber",
+        "canonical": "oklch(0.7796 0.1499 81.61deg)",
+        "tonalRamp": [
+          "#1f1400",
+          "#402c00",
+          "#654700",
+          "#8b6400",
+          "#b48200",
+          "#dda318",
+          "#ffc75a",
+          "#ffeccb"
+        ]
+      },
+      "removed": {
+        "role": "secondary",
+        "displayName": "Removed Red",
+        "canonical": "oklch(0.6809 0.2050 26.18deg)",
+        "tonalRamp": [
+          "#320002",
+          "#610007",
+          "#940010",
+          "#c71721",
+          "#ef4744",
+          "#ff857a",
+          "#ffbfb7",
+          "#ffe9e6"
+        ]
+      },
+      "done": {
+        "role": "secondary",
+        "displayName": "Merged Violet",
+        "canonical": "oklch(0.6992 0.1862 299.85deg)",
+        "tonalRamp": [
+          "#1f003e",
+          "#400075",
+          "#5f24a1",
+          "#7e49c5",
+          "#9f6beb",
+          "#bd96ff",
+          "#d9c6ff",
+          "#f1ebff"
+        ]
+      },
+      "open": {
+        "role": "secondary",
+        "displayName": "Open Green",
+        "canonical": "oklch(0.6589 0.1740 150.11deg)",
+        "tonalRamp": [
+          "#001d07",
+          "#003c17",
+          "#005e28",
+          "#00823a",
+          "#08a84e",
+          "#46cc70",
+          "#6ff092",
+          "#c7ffd1"
+        ]
+      },
+      "context": {
+        "role": "tertiary",
+        "displayName": "Context Grey",
+        "canonical": "oklch(0.5803 0.0077 277.08deg)",
+        "tonalRamp": [
+          "#15161a",
+          "#2f3034",
+          "#4c4d51",
+          "#6a6b70",
+          "#8b8c91",
+          "#acaeb3",
+          "#cfd1d6",
+          "#edeef4"
+        ]
+      },
+      "destructive": {
+        "role": "secondary",
+        "displayName": "Error Red",
+        "canonical": "oklch(0.6809 0.2050 26.18deg)",
+        "tonalRamp": [
+          "#320002",
+          "#610007",
+          "#940010",
+          "#c71721",
+          "#ef4744",
+          "#ff857a",
+          "#ffbfb7",
+          "#ffe9e6"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "page": {
+        "displayName": "Page",
+        "purpose": "The PR title. 28px/-0.025em, one per page."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Section titles on the rail. 24px/-0.02em, no underline."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "### headings inside authored prose. 17px."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Authored prose at 15px/1.7, capped at 72ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Chips, tags, nav group headers, counts. 11px."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Excerpts and diffs at 12.5px/20px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay-drawer",
+        "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
+        "purpose": "The clarification drawer and the section sheet."
+      },
+      {
+        "name": "overlay-float",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        "purpose": "The floating selection button and the thread hover popover."
+      },
+      {
+        "name": "scrim",
+        "value": "rgb(0 0 0 / 0.35–0.5)",
+        "purpose": "Backdrop behind an overlay. The only page-level dimming."
+      },
+      {
+        "name": "mark-bar",
+        "value": "inset 2px 0 0 var(--color-primary)",
+        "purpose": "The bar on an authored `mark=` code line. The only inset shadow."
+      },
+      {
+        "name": "rail-node-ring",
+        "value": "0 0 0 4px var(--color-background)",
+        "purpose": "Punches the rail line out from behind a section node."
+      }
+    ],
+    "motion": [
+      {
+        "name": "progress-width",
+        "value": "width 200ms",
+        "purpose": "The review progress bar's fill."
+      },
+      {
+        "name": "rail-node",
+        "value": "background-color 150ms",
+        "purpose": "A section node filling as it is marked reviewed."
+      },
+      {
+        "name": "pending-spin",
+        "value": "animate-spin",
+        "purpose": "The sync Octicon on a pending clarification."
+      },
+      {
+        "name": "diagram-opacity",
+        "value": "transition-opacity",
+        "purpose": "Diagram node dimming on hover."
+      },
+      {
+        "name": "anchor-jump",
+        "value": "scrollIntoView({ behavior: 'smooth' })",
+        "purpose": "In-page navigation, degrading to an instant jump."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      }
+    ],
+    "alphaLadder": [
+      {
+        "name": "fill-banner",
+        "value": "10%",
+        "purpose": "Banner and active-control fills."
+      },
+      {
+        "name": "fill-chip",
+        "value": "12%",
+        "purpose": "Toned chip fills."
+      },
+      {
+        "name": "fill-nav-active",
+        "value": "14%",
+        "purpose": "The active nav item."
+      },
+      {
+        "name": "fill-diff",
+        "value": "9%",
+        "purpose": "Added and deleted line washes."
+      },
+      {
+        "name": "border-chip",
+        "value": "32%",
+        "purpose": "Toned chip borders."
+      },
+      {
+        "name": "border-banner",
+        "value": "50%",
+        "purpose": "Banner and active-control borders."
+      },
+      {
+        "name": "gutter-diff",
+        "value": "20%",
+        "purpose": "Diff line-number gutter tint."
+      },
+      {
+        "name": "gutter-diff-highlight",
+        "value": "26%",
+        "purpose": "Highlighted diff line-number gutter."
+      }
+    ],
+    "radii": [
+      {
+        "name": "md",
+        "value": "6px",
+        "purpose": "Controls: chips, buttons, segmented control, nav items, inputs, tags."
+      },
+      {
+        "name": "lg",
+        "value": "10px",
+        "purpose": "Containers: cards, code blocks, banners, tables, file browser, diagrams."
+      },
+      {
+        "name": "inline",
+        "value": "4px",
+        "purpose": "Inline code only."
+      },
+      {
+        "name": "sheet",
+        "value": "16px",
+        "purpose": "The section sheet's top corners."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "chip-status",
+      "description": "Small metadata pill. Six tones; each is text at full value, fill at 12%, border at 32%.",
+      "html": "<span class=\"ds-chip ds-chip-mod\"><svg class=\"ds-chip-icon\" viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" fill=\"currentColor\"><path d=\"M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm9 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-.25-6.25v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 1.5 0Z\"></path></svg>stale · 2 commits</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; line-height: 1.3; border: 1px solid; border-radius: 6px; padding: 2px 7px; white-space: nowrap; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); } .ds-chip-icon { flex-shrink: 0; } .ds-chip-mod { color: var(--color-modified, #d29922); background: color-mix(in srgb, var(--color-modified, #d29922) 12%, transparent); border-color: color-mix(in srgb, var(--color-modified, #d29922) 32%, transparent); }"
+    },
+    {
+      "name": "Mark Reviewed Button",
+      "kind": "button",
+      "refersTo": "button-mark",
+      "description": "The app's one semantic button. Outlined when unreviewed; green text, border and fill once marked.",
+      "html": "<button class=\"ds-btn-mark\"><svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z\"></path></svg>Mark reviewed</button>\n<button class=\"ds-btn-mark ds-btn-mark-done\"><svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L6.75 9.19 5.28 7.72a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2 2a.75.75 0 0 0 1.06 0Z\"></path></svg>Reviewed</button>",
+      "css": ".ds-btn-mark { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); border: 1px solid var(--color-border, #30363d); border-radius: 6px; padding: 5px 12px; background: transparent; color: var(--color-secondary-foreground, #c9d1d9); cursor: pointer; margin-right: 8px; } .ds-btn-mark:hover { border-color: var(--color-primary, #2f81f7); color: var(--color-foreground, #e6edf3); } .ds-btn-mark:focus-visible { outline: 2px solid var(--color-ring, #2f81f7); outline-offset: 2px; } .ds-btn-mark-done { color: var(--color-added, #3fb950); border-color: color-mix(in srgb, var(--color-added, #3fb950) 40%, transparent); background: color-mix(in srgb, var(--color-added, #3fb950) 10%, transparent); } .ds-btn-mark-done:hover { border-color: color-mix(in srgb, var(--color-added, #3fb950) 40%, transparent); color: var(--color-added, #3fb950); }"
+    },
+    {
+      "name": "View Segmented Control",
+      "kind": "button",
+      "refersTo": "button-toggle",
+      "description": "Three-way view switch in the code block header. Selected takes a 10% primary fill and a 50% primary border.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-btn\">Plain</button><button class=\"ds-seg-btn ds-seg-btn-on\">Change</button><button class=\"ds-seg-btn\">Diff</button></div>",
+      "css": ".ds-seg { display: inline-flex; align-items: center; gap: 4px; } .ds-seg-btn { font-size: 11px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--color-border, #30363d); background: transparent; color: var(--color-muted-foreground, #7d8590); cursor: pointer; } .ds-seg-btn:hover { color: var(--color-foreground, #e6edf3); } .ds-seg-btn:focus-visible { outline: 2px solid var(--color-ring, #2f81f7); outline-offset: 2px; } .ds-seg-btn-on { border-color: color-mix(in srgb, var(--color-primary, #2f81f7) 50%, transparent); background: color-mix(in srgb, var(--color-primary, #2f81f7) 10%, transparent); color: var(--color-foreground, #e6edf3); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The one elevated-looking surface, which carries no shadow: card fill, 1px border, 6px radius, 16px padding.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\"><svg viewBox=\"0 0 16 16\" width=\"15\" height=\"15\" fill=\"currentColor\"><path d=\"M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z\"></path></svg>Why this matters</div><p class=\"ds-card-body\">The parser now rejects a fence nested in a blockquote instead of silently dropping it.</p></div>",
+      "css": ".ds-card { background: var(--color-card, #161b22); border: 1px solid var(--color-border, #30363d); border-radius: 10px; padding: 16px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); max-width: 380px; } .ds-card-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--color-foreground, #e6edf3); margin-bottom: 8px; } .ds-card-title svg { color: var(--color-muted-foreground, #7d8590); } .ds-card-body { font-size: 13px; line-height: 1.625; color: var(--color-secondary-foreground, #c9d1d9); margin: 0; }"
+    },
+    {
+      "name": "Banner",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Toned notice: 50% border, 10% fill, tone-colored icon, 13.5px semibold title. Four tones; authored callouts render through this same shape.",
+      "html": "<div class=\"ds-banner ds-banner-warn\"><svg class=\"ds-banner-icon\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"currentColor\"><path d=\"M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z\"></path></svg><div class=\"ds-banner-text\"><div class=\"ds-banner-title\">The head moved 2 commits</div><div class=\"ds-banner-body\">The walkthrough was written against the pinned commit. Later commits are not described here.</div></div></div>",
+      "css": ".ds-banner { display: flex; gap: 12px; border: 1px solid; border-radius: 10px; padding: 12px 16px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); max-width: 560px; } .ds-banner-warn { border-color: color-mix(in srgb, var(--color-modified, #d29922) 50%, transparent); background: color-mix(in srgb, var(--color-modified, #d29922) 10%, transparent); } .ds-banner-warn .ds-banner-icon { color: var(--color-modified, #d29922); } .ds-banner-icon { flex-shrink: 0; margin-top: 2px; } .ds-banner-title { font-size: 13.5px; font-weight: 600; color: var(--color-foreground, #e6edf3); } .ds-banner-body { font-size: 13px; line-height: 1.625; color: var(--color-secondary-foreground, #c9d1d9); margin-top: 4px; }"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Sidebar leaf. A 2px transparent left border becomes primary when active, over a 10% primary fill.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-nav-group\">Mechanism</div><div class=\"ds-nav-item ds-nav-item-on\"><svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"M4.72 3.22a.75.75 0 0 1 1.06 1.06L2.06 8l3.72 3.72a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 8.53a.75.75 0 0 1 0-1.06Zm6.56 0a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L13.94 8l-3.72-3.72a.75.75 0 0 1 0-1.06Z\"></path></svg><span>The allocation model</span></div><div class=\"ds-nav-item\"><svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z\"></path></svg><span>Repair turns</span></div></nav>",
+      "css": ".ds-nav { font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); font-size: 13px; line-height: 1.25; width: 268px; } .ds-nav-group { font-size: 11px; text-transform: uppercase; letter-spacing: 0.025em; color: var(--color-muted-foreground, #7d8590); margin-bottom: 6px; padding: 0 8px; } .ds-nav-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; color: var(--color-secondary-foreground, #c9d1d9); cursor: pointer; } .ds-nav-item svg { color: var(--color-muted-foreground, #7d8590); flex-shrink: 0; } .ds-nav-item:hover { background: color-mix(in srgb, var(--color-secondary, #21262d) 60%, transparent); } .ds-nav-item-on { background: color-mix(in srgb, var(--color-primary, #5279ff) 14%, transparent); color: var(--color-foreground, #f3f3f6); font-weight: 500; }"
+    },
+    {
+      "name": "Progress Bar",
+      "kind": "custom",
+      "description": "3px review progress. Primary fill that switches to added green at 100%. The only animated property in the app.",
+      "html": "<div class=\"ds-progress-wrap\"><span class=\"ds-progress-label\">7/12 sections reviewed</span><span class=\"ds-progress\"><span class=\"ds-progress-fill\"></span></span></div>",
+      "css": ".ds-progress-wrap { width: 268px; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); } .ds-progress-label { display: block; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--color-secondary-foreground, #c9d1d9); margin-bottom: 8px; } .ds-progress { display: block; height: 3px; border-radius: 9999px; background: var(--color-secondary, #21262d); overflow: hidden; } .ds-progress-fill { display: block; height: 100%; width: 58%; border-radius: 9999px; background: var(--color-primary, #2f81f7); transition: width 200ms; }"
+    },
+    {
+      "name": "Code Excerpt Header",
+      "kind": "custom",
+      "refersTo": "codeblock-header",
+      "description": "The signature component's chrome: 11px-radius block, muted header, monospace path, line range, view switch.",
+      "html": "<div class=\"ds-code\"><div class=\"ds-code-head\"><button class=\"ds-code-path\"><svg viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z\"></path></svg><span class=\"ds-code-file\">src/models/allocation.py</span><span class=\"ds-code-range\">L41–58</span></button><div class=\"ds-seg2\"><button class=\"ds-seg2-btn\">Plain</button><button class=\"ds-seg2-btn ds-seg2-on\">Change</button><button class=\"ds-seg2-btn\">Diff</button></div></div><pre class=\"ds-code-body\"><span class=\"ds-ln\">41</span>def allocate(self, amount):\n<span class=\"ds-ln ds-ln-add\">42 +</span>    if amount &lt;= 0:\n<span class=\"ds-ln ds-ln-add\">43 +</span>        raise ValueError(amount)\n<span class=\"ds-ln\">44</span>    return self._split(amount)</pre></div>",
+      "css": ".ds-code { border: 1px solid var(--color-border, #30363d); border-radius: 10px; overflow: hidden; background: var(--color-background, #0d1117); max-width: 560px; } .ds-code-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: var(--color-muted, #21262d); border-bottom: 1px solid var(--color-border, #30363d); } .ds-code-path { display: inline-flex; align-items: center; gap: 8px; background: none; border: none; padding: 0; cursor: pointer; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; color: var(--color-secondary-foreground, #c9d1d9); } .ds-code-path svg { color: var(--color-muted-foreground, #7d8590); } .ds-code-range { color: var(--color-muted-foreground, #7d8590); } .ds-seg2 { display: inline-flex; gap: 4px; } .ds-seg2-btn { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--color-border, #30363d); background: transparent; color: var(--color-muted-foreground, #7d8590); cursor: pointer; font-family: var(--font-sans, -apple-system, sans-serif); } .ds-seg2-btn:hover { color: var(--color-foreground, #e6edf3); } .ds-seg2-on { border-color: color-mix(in srgb, var(--color-primary, #2f81f7) 50%, transparent); background: color-mix(in srgb, var(--color-primary, #2f81f7) 10%, transparent); color: var(--color-foreground, #e6edf3); } .ds-code-body { margin: 0; padding: 12px 0; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12.5px; line-height: 20px; color: var(--color-foreground, #e6edf3); overflow-x: auto; } .ds-ln { display: inline-block; width: 56px; padding-right: 16px; text-align: right; color: var(--color-muted-foreground, #7d8590); user-select: none; } .ds-ln-add { color: var(--color-added, #3fb950); background: color-mix(in srgb, var(--color-added, #3fb950) 30%, transparent); }"
+    },
+    {
+      "name": "File Row",
+      "kind": "custom",
+      "description": "One row of the closing full-PR diff browser: status icon, muted directory with foreground basename, counts, five-square change bar, Viewed checkbox.",
+      "html": "<div class=\"ds-file\"><svg class=\"ds-file-status\" viewBox=\"0 0 16 16\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"M13.25 1c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 13.25 15H2.75A1.75 1.75 0 0 1 1 13.25V2.75C1 1.784 1.784 1 2.75 1ZM2.75 2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25Zm5.99 2.75a.75.75 0 0 0-1.48 0V7.5H4.75a.75.75 0 0 0 0 1.5H7.26v2.25a.75.75 0 0 0 1.48 0V9h2.51a.75.75 0 0 0 0-1.5H8.74Z\"></path></svg><span class=\"ds-file-path\"><span class=\"ds-file-dir\">app/src/ui/</span><span class=\"ds-file-name\">qa.tsx</span></span><span class=\"ds-file-add\">+128</span><span class=\"ds-file-del\">−14</span><span class=\"ds-bar\"><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i><i class=\"on\"></i><i></i></span><label class=\"ds-file-viewed\"><input type=\"checkbox\" checked>Viewed</label></div>",
+      "css": ".ds-file { display: flex; align-items: center; gap: 12px; padding: 7px 12px; font-size: 12.5px; border-bottom: 1px solid var(--color-border-soft, #21262d); font-family: var(--font-sans, -apple-system, sans-serif); max-width: 560px; } .ds-file-status { color: var(--color-added, #3fb950); flex-shrink: 0; } .ds-file-path { font-family: var(--font-mono, ui-monospace, Menlo, monospace); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-file-dir { color: var(--color-muted-foreground, #7d8590); } .ds-file-name { color: var(--color-foreground, #e6edf3); } .ds-file-add { font-family: var(--font-mono, ui-monospace, Menlo, monospace); color: var(--color-added, #3fb950); flex-shrink: 0; } .ds-file-del { font-family: var(--font-mono, ui-monospace, Menlo, monospace); color: var(--color-removed, #f85149); flex-shrink: 0; } .ds-bar { display: inline-flex; gap: 2px; flex-shrink: 0; } .ds-bar i { width: 8px; height: 8px; border-radius: 2px; background: var(--color-removed, #f85149); } .ds-bar i.on { background: var(--color-added, #3fb950); } .ds-file-viewed { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-secondary-foreground, #c9d1d9); cursor: pointer; user-select: none; flex-shrink: 0; } .ds-file-viewed input { accent-color: var(--color-primary, #2f81f7); }"
+    },
+    {
+      "name": "Question Composer",
+      "kind": "input",
+      "refersTo": "input-textarea",
+      "description": "The clarification composer inside the right drawer: uppercase label, selected passage as a primary-barred blockquote, textarea whose focus swaps the border to primary.",
+      "html": "<form class=\"ds-composer\"><p class=\"ds-composer-label\">Selected passage</p><blockquote class=\"ds-composer-quote\">Balade pins the PR head and gives the model read-only tools.</blockquote><label class=\"ds-composer-q\" for=\"ds-q\">Your question</label><textarea id=\"ds-q\" class=\"ds-composer-input\" rows=\"3\" placeholder=\"What would you like clarified?\"></textarea></form>",
+      "css": ".ds-composer { border: 1px solid color-mix(in srgb, var(--color-primary, #2f81f7) 50%, transparent); background: color-mix(in srgb, var(--color-muted, #21262d) 30%, transparent); border-radius: 8px; padding: 16px; font-family: var(--font-sans, -apple-system, sans-serif); max-width: 420px; } .ds-composer-label { margin: 0; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.025em; color: var(--color-muted-foreground, #7d8590); } .ds-composer-quote { margin: 8px 0 0; border-left: 2px solid var(--color-primary, #2f81f7); padding-left: 12px; font-size: 13px; color: var(--color-secondary-foreground, #c9d1d9); } .ds-composer-q { display: block; margin-top: 16px; font-size: 12px; font-weight: 500; color: var(--color-foreground, #e6edf3); } .ds-composer-input { margin-top: 6px; width: 100%; box-sizing: border-box; resize: vertical; border-radius: 6px; border: 1px solid var(--color-border, #30363d); background: var(--color-background, #0d1117); padding: 8px 12px; font-size: 13px; color: var(--color-foreground, #e6edf3); font-family: inherit; outline: none; } .ds-composer-input:focus { border-color: var(--color-primary, #2f81f7); }"
+    }
+  ],
+  "narrative": {
+    "overview": "balade is a walkthrough reader for pull requests too large to scan, and the surface is built around one commitment: a reviewer who already reads code on GitHub must need no orientation here. The layout, the Octicons, the PR header, the diff semantics and the file browser all come from that habit and stay.\n\nEverything else is balade's own. The ground is a near-neutral dark — chroma stays under 0.006 on every surface step — so the syntax and diff colors are the only chromatic things on the page. There is one blue accent, deeper and more saturated than the platform blue it replaced, and five status hues that mean exactly one thing each.\n\nThe page runs at two densities on purpose. Evidence is packed; explanation is not. Structure is flat: one tonal step, 1px borders, and a shadow only where an element has genuinely left the document plane. The one piece of geometry that is neither borrowed nor structural is the rail — a continuous line down the left margin with a node at every section, filling as sections are marked reviewed.",
+    "keyCharacteristics": [
+      "One token block, one source of truth (app/src/theme.css @theme).",
+      "A near-neutral ground; color on the page always means something.",
+      "Seven domain colors, seven meanings, zero decorative color.",
+      "Two densities: packed evidence, unhurried explanation.",
+      "Flat surfaces; borders and one tonal step do the separating.",
+      "Monospace for anything that literally exists in the repository.",
+      "Octicons only, from a fixed 48-name map the renderer owns.",
+      "No external assets of any kind — the CSP forbids them."
+    ],
+    "rules": [
+      {
+        "name": "The Meaning Rule",
+        "body": "A status color is applied because the content is that status, never because a surface needs visual interest.",
+        "section": "colors"
+      },
+      {
+        "name": "The Quiet Ground Rule",
+        "body": "Surfaces stay under 0.006 chroma. The page is deliberately colorless so syntax highlighting and diff state are the only things competing for the eye.",
+        "section": "colors"
+      },
+      {
+        "name": "The Alpha Ladder Rule",
+        "body": "Tinted surfaces use fixed alpha steps: text 100%, fills 9–14%, borders 30–50%, diff gutters 20% and highlights 26%. Pick a rung; do not invent one.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two-Job Red Rule",
+        "body": "destructive and removed are the same hex on purpose — both mean 'this is gone or broken.'",
+        "section": "colors"
+      },
+      {
+        "name": "The Blue-Is-Action Rule",
+        "body": "#5279ff marks something you can act on or are currently on. #89c3ff marks something to read.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two-Density Rule",
+        "body": "Prose is capped at 72ch at 15px/1.7; evidence keeps the full column at its own tighter scale. The two never converge.",
+        "section": "typography"
+      },
+      {
+        "name": "The Repository-Truth Rule",
+        "body": "Monospace means the string exists verbatim in the repository or in git. Prose about those things is sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every count that updates in place uses tabular-nums so the layout does not shift.",
+        "section": "typography"
+      },
+      {
+        "name": "The Nothing-Dropped Rule",
+        "body": "The compact viewport relocates controls; it never removes them. A control that exists at 1280px is reachable at 375px.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-Plane Rule",
+        "body": "A shadow means the element is not part of the document. Cards, code blocks, banners and file rows take none.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One-Step Rule",
+        "body": "There is one tonal step, not a ramp. A surface is either page or card.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Silent-Page Rule",
+        "body": "Nothing animates on load, on scroll, or on entrance. Motion responds to a state change the reader caused. None of the five shipping animations respect prefers-reduced-motion; that is a WCAG 2.2 AA gap, not a style.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Two-Radius Rule",
+        "body": "If it is a thing you press, it is 6px. If it is a thing that holds content, it is 10px. There is no third answer.",
+        "section": "shapes"
+      },
+      {
+        "name": "The 1px Rule",
+        "body": "Structure is 1px. A thicker border is a state signal, never emphasis.",
+        "section": "shapes"
+      },
+      {
+        "name": "The No-Stub Rule",
+        "body": "Active state is carried by fill and text weight, not by a colored bar clipped into a rounded corner. A 2px accent border on a rounded list item reads as a template, not a decision.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do add any new color to the @theme block in app/src/theme.css first. A hex literal in a component is a bug.",
+      "Do pick an existing rung on the alpha ladder when tinting a new surface.",
+      "Do use 6px for controls and 10px for containers.",
+      "Do use monospace for any string that exists verbatim in the repository or in git, and sans for prose about it.",
+      "Do use border-primary on hover and bg-primary/10 on active for every outlined control.",
+      "Do take icons from the map in app/src/ui/octicon.tsx.",
+      "Do put every user-visible string in app/src/i18n.ts in both en and fr, and check the layout against the French string.",
+      "Do give any control that ships as a bare icon a padded hit area."
+    ],
+    "donts": [
+      "Don't use a status color for anything but its status. There is no decorative green.",
+      "Don't raise surface chroma. The ground is quiet so the code is not.",
+      "Don't add a shadow to anything that stays in the document plane.",
+      "Don't introduce a third tonal surface value.",
+      "Don't put a colored border on the edge of a rounded item to mark state. Fill and weight carry it.",
+      "Don't load a webfont, an icon font, a remote image, or any external asset.",
+      "Don't let prose exceed 72ch or compress below 15px, and don't cap the evidence beside it to match.",
+      "Don't remove a control on the compact viewport. Relocate it.",
+      "Don't add motion without prefers-reduced-motion handling."
+    ]
+  }
+}

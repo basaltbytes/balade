@@ -17,7 +17,7 @@ export function Md({ nodes }: { nodes: ReadonlyArray<MdNode> }) {
       {nodes.map((node, index) => {
         if ("h" in node)
           return (
-            <h3 key={index} className="text-[15px] font-semibold mt-5 mb-2">
+            <h3 key={index} className="text-[17px] font-semibold mt-8 mb-2 tracking-[-0.01em]">
               {node.h}
             </h3>
           );
@@ -30,21 +30,21 @@ export function Md({ nodes }: { nodes: ReadonlyArray<MdNode> }) {
           return node.ordered === true ? (
             <ol
               key={index}
-              className="my-3 pl-6 list-decimal text-secondary-foreground leading-relaxed"
+              className="my-4 pl-6 list-decimal text-prose text-secondary-foreground marker:text-muted-foreground"
             >
               {items}
             </ol>
           ) : (
             <ul
               key={index}
-              className="my-3 pl-6 list-disc text-secondary-foreground leading-relaxed"
+              className="my-4 pl-6 list-disc text-prose text-secondary-foreground marker:text-muted-foreground"
             >
               {items}
             </ul>
           );
         }
         return (
-          <p key={index} className="my-3 leading-relaxed text-secondary-foreground">
+          <p key={index} className="my-4 text-prose text-secondary-foreground">
             <Rich v={node.p} />
           </p>
         );
@@ -63,7 +63,7 @@ export function Callout({ tone, body }: CalloutProps) {
     );
   }
   return (
-    <div className="my-4 border border-border rounded-md bg-card px-4 py-3 leading-relaxed text-secondary-foreground">
+    <div className="my-4 border border-border rounded-lg bg-card px-4 py-3 leading-relaxed text-secondary-foreground">
       <Rich v={body} />
     </div>
   );

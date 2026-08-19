@@ -3,7 +3,7 @@ import { FileStatusIcon, Octicon } from "../ui/octicon";
 import { Rich, Tag } from "../ui/rich";
 import { useStrings } from "../ui/strings";
 
-const shell = "my-4 border border-border rounded-md overflow-x-auto";
+const shell = "my-4 border border-border rounded-lg overflow-x-auto";
 const head = "bg-card text-left text-muted-foreground";
 
 export function Fields({ rows }: { rows: ReadonlyArray<FieldRow> }) {
@@ -152,7 +152,7 @@ export function I18nTable({
   const strings = useStrings();
   return (
     <div className="my-4">
-      <div className="border border-border rounded-md overflow-x-auto">
+      <div className="border border-border rounded-lg overflow-x-auto">
         <table className="w-full text-[13px] border-collapse">
           <thead>
             <tr className={head}>

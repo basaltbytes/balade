@@ -98,7 +98,7 @@ export function Banner({
   const strings = useStrings();
   const styles = BANNER_TONES[tone];
   return (
-    <div className={`my-4 border rounded-md px-4 py-3 flex gap-3 ${styles.frame}`}>
+    <div className={`my-4 border rounded-lg px-4 py-3 flex gap-3 ${styles.frame}`}>
       <Octicon name={icon} size={16} className={`${styles.icon} mt-[2px] shrink-0`} />
       <div className="min-w-0 flex-1">
         <div className="font-semibold text-foreground text-[13.5px]">{title}</div>
@@ -140,7 +140,7 @@ export function MarkButton({
         aria-pressed={reviewed}
         onClick={onToggle}
         disabled={disabled}
-        className={`shrink-0 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${reviewed ? "text-added" : "text-muted-foreground/50 hover:text-muted-foreground"}`}
+        className={`-m-2 inline-flex shrink-0 items-center justify-center p-2 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${reviewed ? "text-added" : "text-muted-foreground/50 hover:text-muted-foreground"}`}
       >
         <Octicon name={reviewed ? "check-circle-fill" : "circle"} size={13} />
       </button>

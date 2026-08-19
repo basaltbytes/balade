@@ -15,11 +15,12 @@ import {
   ResetBanner,
   StaleBanner,
 } from "../ui/chrome";
-import { JumpLink, Nav } from "../ui/nav";
+import { JumpLink, Nav, useActiveSection } from "../ui/nav";
 import { Octicon } from "../ui/octicon";
 import { PayloadProvider } from "../ui/payload-context";
 import { QaProvider } from "../ui/qa-context";
 import { QaIndicator, QaPanel, SelectionAsk } from "../ui/qa";
+import { SheetNav } from "../ui/sheet-nav";
 import {
   ReviewProvider,
   SectionProvider,
@@ -49,10 +50,12 @@ function SectionView({
   section,
   errors,
   titles,
+  active,
 }: {
   section: Section;
   errors: ErrorCard[];
   titles: Map<string, string>;
+  active: boolean;
 }) {
   const review = useReview();
   const strings = useStrings();
@@ -61,10 +64,13 @@ function SectionView({
 
   return (
     <SectionProvider id={section.id}>
-      <section id={section.id} className={`mb-12 ${reviewed ? "reviewed-section" : ""}`}>
-        <div className="section-head flex items-center flex-wrap gap-2.5 border-b border-border pb-2 mb-4">
-          <Octicon name={section.icon} size={17} className="text-muted-foreground" />
-          <h2 className="text-[18px] font-semibold">{section.title}</h2>
+      <section
+        id={section.id}
+        className={`mb-16 ${reviewed ? "reviewed-section" : ""} ${active ? "is-active" : ""}`}
+      >
+        <div className="section-head flex items-center flex-wrap gap-2.5 mb-5">
+          <Octicon name={section.icon} size={18} className="text-muted-foreground shrink-0" />
+          <h2 className="text-section font-semibold tracking-[-0.02em]">{section.title}</h2>
           {section.badge && <Chip tone={section.badge.tone}>{section.badge.label}</Chip>}
           {section.file !== undefined && (
             <span className="font-mono text-[12px] text-muted-foreground truncate">
@@ -123,6 +129,7 @@ function Document({
 }) {
   const review: ReviewApi = useReview();
   const strings = useStrings();
+  const active = useActiveSection();
   /* Rebuilt only when the payload changes, not on every mark. */
   const { titles, globalErrors, errorsBySection } = useMemo(() => {
     const titles = new Map(payload.sections.map((section) => [section.id, section.title]));
@@ -139,15 +146,15 @@ function Document({
 
   return (
     <div
-      className={`mx-auto max-w-[1280px] flex gap-8 px-6 ${review.hideReviewed ? "hide-reviewed" : ""}`}
+      className={`mx-auto max-w-[1280px] flex gap-8 px-4 sm:px-6 ${review.hideReviewed ? "hide-reviewed" : ""}`}
     >
       <aside className="w-[268px] shrink-0 hidden md:block">
         <div className="sticky top-0 max-h-screen overflow-y-auto py-8 pr-2">
-          <Nav payload={payload} />
+          <Nav payload={payload} active={active} />
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 max-w-[960px] py-8">
+      <main className="min-w-0 flex-1 max-w-[960px] py-8 pb-28 md:pb-8">
         <Header payload={payload} />
         <StaleBanner headDistance={payload.headDistance} />
         <PersistBadge />
@@ -155,14 +162,17 @@ function Document({
         <CompleteBanner />
         <ErrorCards errors={globalErrors} />
 
-        {payload.sections.map((section) => (
-          <SectionView
-            key={section.id}
-            section={section}
-            errors={errorsBySection.get(section.id) ?? []}
-            titles={titles}
-          />
-        ))}
+        <div className="sections-rail mt-10">
+          {payload.sections.map((section) => (
+            <SectionView
+              key={section.id}
+              section={section}
+              errors={errorsBySection.get(section.id) ?? []}
+              titles={titles}
+              active={active === section.id}
+            />
+          ))}
+        </div>
 
         <footer className="border-t border-border pt-4 text-[12.5px] text-muted-foreground flex items-center gap-3 flex-wrap">
           <span className="font-mono">{payload.sourcePath}</span>
@@ -180,6 +190,8 @@ function Document({
           )}
         </footer>
       </main>
+
+      <SheetNav payload={payload} active={active} />
     </div>
   );
 }
