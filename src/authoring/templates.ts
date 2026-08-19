@@ -1,74 +1,68 @@
 /**
- * The canonical navigation skeleton: five narrative groups the author adapts
- * and prunes, followed by one mandatory review group. Tests parse every
- * template against the real Markdoc config.
+ * The canonical navigation skeleton: five narrative roles the author selects
+ * from and names from the change, followed by one mandatory review group.
+ * Tests parse every template against the real Markdoc config.
  *
- * A narrative template carries no `icon`: the author sets one per section from
- * the catalog's vocabulary, and an icon shipped here gets copied by position
- * instead. The closing section is the one fixed subject, so it keeps its own.
+ * A role is not a heading. The templates carry no `{% group %}` wrapper and no
+ * `icon`, because both get copied verbatim: earlier packages shipped them and
+ * every walkthrough came back with the same five headings and the same icon in
+ * the same position, whatever the pull request contained. The author names the
+ * groups, writes the titles, and picks the icons from the change itself. The
+ * closing section is the one fixed subject, so it keeps its group and its icon.
  */
 
 export interface AuthoringSectionTemplate {
-  readonly group: "Orientation" | "Mechanism" | "Models" | "Surface" | "Quality" | "Full PR diff";
+  /** What this part of the walkthrough does. It names nothing the reader sees. */
+  readonly role: "Orientation" | "Mechanism" | "Models" | "Surface" | "Quality" | "Full PR diff";
   readonly selectWhen: string;
   readonly template: string;
 }
 
 export const AUTHORING_SECTION_TEMPLATES: readonly AuthoringSectionTemplate[] = [
   {
-    group: "Orientation",
+    role: "Orientation",
     selectWhen:
       "Always. State what changed, why a reviewer should care, and the constraint that shapes the implementation.",
-    template: `{% group label="Orientation" %}
-{% section id="overview" title="Overview" %}
+    template: `{% section id="overview" title="Overview" %}
 Replace this line with the review frame.
-{% /section %}
-{% /group %}`,
+{% /section %}`,
   },
   {
-    group: "Mechanism",
+    role: "Mechanism",
     selectWhen:
-      "Use when the change carries an algorithm or non-obvious logic worth explaining. Explain the solution in several sentences, add a mermaid fence when a picture makes the logic clearer, add a pseudo fence for a pseudo-code simplified explaination, then show the code range that proves each critical claim under that claim, in full form or as a collapsed block. Skip the group for a documentation, configuration, or mechanical change.",
-    template: `{% group label="Mechanism" %}
-{% section id="mechanism" title="Mechanism" %}
+      "Use when the change carries an algorithm or non-obvious logic worth explaining. Explain the solution in several sentences, add a mermaid fence when a picture makes the logic clearer, add a pseudo fence for a pseudo-code simplified explaination, then show the code range that proves each critical claim under that claim, in full form or as a collapsed block. Skip this role for a documentation, configuration, or mechanical change.",
+    template: `{% section id="mechanism" title="Mechanism" %}
 Replace this paragraph with the explanation of the solution: what it does, the inputs it accepts, the decisions it makes, the order of the steps, and the cases it rejects. Add a mermaid fence when a picture makes the logic clearer.
 
 Then state one critical claim per paragraph, and show the code range that proves it under the claim, in full form or pinned with collapsed=true.
-{% /section %}
-{% /group %}`,
+{% /section %}`,
   },
   {
-    group: "Models",
+    role: "Models",
     selectWhen:
       "Use for domain types, persisted state, components, or services whose structure carries the change.",
-    template: `{% group label="Models" %}
-{% section id="implementation" title="Implementation" %}
+    template: `{% section id="implementation" title="Implementation" %}
 Replace this line with the state or component anatomy.
-{% /section %}
-{% /group %}`,
+{% /section %}`,
   },
   {
-    group: "Surface",
+    role: "Surface",
     selectWhen:
       "Use for behavior that a caller, operator, or user can observe: UI, API, CLI, configuration, or documentation.",
-    template: `{% group label="Surface" %}
-{% section id="interface" title="Interface" %}
+    template: `{% section id="interface" title="Interface" %}
 Replace this line with the observable behavior.
-{% /section %}
-{% /group %}`,
+{% /section %}`,
   },
   {
-    group: "Quality",
+    role: "Quality",
     selectWhen:
       "Use when tests, security, migrations, or translations provide evidence a reviewer needs. Keep each selected topic in its own section.",
-    template: `{% group label="Quality" %}
-{% section id="proof" title="Proof" %}
+    template: `{% section id="proof" title="Proof" %}
 Replace this line with the safety or test evidence.
-{% /section %}
-{% /group %}`,
+{% /section %}`,
   },
   {
-    group: "Full PR diff",
+    role: "Full PR diff",
     selectWhen:
       "Always, and always last. This unfiltered diff browser lets the reviewer inspect every changed file and mark each one as viewed. When the pull request touches more than ten files, group that browser by giving the block `{% filegroup /%}` children with labels drawn from the change itself, such as Tests, Traductions, Models, Security, UI, Controllers, or Misc; the groups only partition the diff, so every changed file stays reachable. For a smaller change, drop the children and keep a bare `{% files /%}`.",
     template: `{% group label="Full PR diff" %}
@@ -85,7 +79,7 @@ Replace this line with the safety or test evidence.
 
 /** The templates as one prompt or skill fragment. */
 export const sectionTemplatesText = AUTHORING_SECTION_TEMPLATES.map(
-  ({ group, selectWhen, template }) => `### ${group}
+  ({ role, selectWhen, template }) => `### ${role}
 ${selectWhen}
 
 ${template}`,

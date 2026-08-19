@@ -74,7 +74,7 @@ describe("the authoring package", () => {
   });
 
   it("ships the canonical templates and four rubric axes", () => {
-    expect(AUTHORING_SECTION_TEMPLATES.map((template) => template.group)).toEqual([
+    expect(AUTHORING_SECTION_TEMPLATES.map((template) => template.role)).toEqual([
       "Orientation",
       "Mechanism",
       "Models",
@@ -125,13 +125,13 @@ describe("the authoring package", () => {
     for (const { label, example } of AUTHORING_TAG_CATALOG) {
       expect(exampleErrors(example), `catalog example ${label}`).toEqual([]);
     }
-    for (const { group, template } of AUTHORING_SECTION_TEMPLATES) {
+    for (const { role, template } of AUTHORING_SECTION_TEMPLATES) {
       /* Templates carry their own group/section skeleton; wrap frontmatter only. */
       const errors = parseDocument(
         `---\nwalkthrough: 1\ntitle: Template\npr: 1\ncommit: abcdef1\n---\n\n${template}\n`,
         "template.md",
       ).diagnostics.filter((diagnostic) => diagnostic.level === "error");
-      expect(errors, `section template ${group}`).toEqual([]);
+      expect(errors, `section template ${role}`).toEqual([]);
     }
     for (const [name, example] of Object.entries(ODOO_AUTHORING_EXAMPLES)) {
       expect(exampleErrors(example, "odoo"), `odoo example ${name}`).toEqual([]);
@@ -148,7 +148,7 @@ describe("the authoring package", () => {
 
   it("writes only taught icon names in its templates and examples", () => {
     const sources = [
-      ...AUTHORING_SECTION_TEMPLATES.map(({ group, template }) => [group, template] as const),
+      ...AUTHORING_SECTION_TEMPLATES.map(({ role, template }) => [role, template] as const),
       ...AUTHORING_TAG_CATALOG.map(({ label, example }) => [label, example] as const),
     ];
     for (const [label, text] of sources) {

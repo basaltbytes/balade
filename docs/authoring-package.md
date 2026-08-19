@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.23.0`. Its major version matches the
+The current package version is `1.24.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.23.0
+  balade-authoring: 1.24.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -128,19 +128,26 @@ the existing decisions and objective checks green.
 
 ## Section selection
 
-The package starts from the pr-96 navigation skeleton. It selects only the
-narrative groups that add review signal, then appends the mandatory full-PR diff.
+The package starts from the pr-96 navigation skeleton, which it teaches as
+roles rather than headings. A role says what a part of the walkthrough does; the
+author selects the roles the change carries, decides how many sections each
+needs, and names every section title and group label from the change itself. The
+role names below never reach the reader. The one fixed label is the closing
+full-PR diff group.
 
-| Group | Use it for |
+Sections that share a subject go under one group named after what they cover, so
+a subject with a single section carries no group header at all.
+
+| Role | Use it for |
 | --- | --- |
-| Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This group is always present. |
-| Mechanism | An algorithm or non-obvious logic worth explaining. It follows Orientation directly, and its explanation carries the section. |
+| Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This role is always present. |
+| Mechanism | An algorithm or non-obvious logic worth explaining. It follows the orientation directly, and its explanation carries the section. |
 | Models | Domain types, persisted state, components, or services whose structure carries the change. |
 | Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |
 | Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
-| Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block, optionally holding `{% filegroup /%}` children that group the browser. |
+| Full PR diff | The final verification sweep. This group is always last, and keeps its name and its closing section contains a bare `{% files /%}` block, optionally holding `{% filegroup /%}` children that group the browser. |
 
-The Mechanism group or section is there to help a human have a real understanding of the 
+The Mechanism sections are there to help a human have a real understanding of the 
 code produced in this PR. Explain the overall concepts, the logic, models, actors and
 algorithms that are in this PR. This section doesn't need to go over translation files, or 
 documentation updates or other transversal or trivial changes, it is used to understand 
