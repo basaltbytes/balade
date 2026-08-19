@@ -183,15 +183,28 @@ what-to-hunt checklist that maps Odoo anatomy to blocks.
 
 The catalog teaches `filegroup`, the self-closing child of `{% files %}` that
 groups the rendered diff browser into collapsible thematic sections. A group
-carries a required `label`, an optional `only` glob using the same syntax as
-`files`, and an optional `status` list of A, M, D and R. Groups claim files in
-authored order: each one takes the changed files its filter matches among those
-no earlier group claimed, and a group with no filter takes everything left.
-Files that no group claims render after the groups. Grouping therefore
-partitions the diff instead of filtering it, and cannot hide a changed file, so
-a grouped closing block remains the complete verification surface. The guidance
-tells the agent to group that closing block once the pull request touches more
-than ten files, with labels drawn from the change itself.
+carries a required `label`, an optional `only` glob, and an optional `status`
+list of A, M, D and R. Path globs support `*` within one segment, `**` across
+directories, `?` for one character, and `{a,b}` alternatives. Each brace entry
+may be a complete path pattern, so one group can cover several parts of the
+tree:
+
+```markdoc
+{% files %}
+{% filegroup label="Agent and CLI" only="{src/agent/**,src/commands/**,src/cli.ts}" /%}
+{% /files %}
+```
+
+Tags claim files in authored order: each one takes the changed files its filter
+matches among those no earlier tag claimed, and a tag with no filter takes
+everything left. Sibling tags with the same exact label resolve to one group at
+that label's first position; their claimed paths append in tag order. An empty
+tag still warns and adds no paths. Files that no group claims render after the
+groups. Grouping therefore partitions the diff instead of filtering it, and
+cannot hide a changed file, so a grouped closing block remains the complete
+verification surface. The guidance tells the agent to group that closing block
+once the pull request touches more than ten files, with labels drawn from the
+change itself.
 
 The catalog also teaches the section tag's display attributes. A section
 carrying `file="…"` renders in the sidebar as a color-coded changed-file entry,
