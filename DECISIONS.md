@@ -1513,3 +1513,27 @@ The drawer's mutually exclusive closed, section, thread and composer locations
 are one tagged UI state rather than independently nullable coordinates. If the
 server refuses a follow-up before accepting it as pending, the drawer stays
 open and preserves the draft for retry.
+
+## The authoring package teaches a language, never a finished document
+
+Six prompt revisions in one day taught the same lesson from both directions:
+generation copies the artifact it is shown and pattern-matches past the prose
+around it. A `file-diff` icon shipped in one template appeared verbatim in
+every draft while a documented 48-name vocabulary went unused; five group
+labels shipped as skeleton wrappers appeared verbatim in every sidebar while
+the paragraph above them said to adapt. Rules written against the copying
+accumulated into prose that the skeleton below it contradicted. A complete
+exemplar walkthrough was tried and rejected for the same reason: any finished
+document, however framed, is a shape to copy.
+
+The shared guidance therefore teaches the tag set as a language and shows only
+constructs: one example per block family in the catalog, and small composition
+moves in the guidance — such as two sidebar entries declared under one group —
+that tests parse against the real Markdoc config. It dictates no outline. The
+prompt addresses the model as the senior engineer explaining its own work;
+composition is the model's judgment. Structure that must hold unconditionally
+is enforced by `check` (`overview-section-missing`, `closing-files-missing`)
+and stated in one line each, not argued for, alongside the two owner-chosen
+pushes: every section sits in a change-named group and carries a subject icon.
+The offline evaluation asserts that structure on every fixture draft, so a
+prompt regression fails `pnpm test` instead of a paid generation run.

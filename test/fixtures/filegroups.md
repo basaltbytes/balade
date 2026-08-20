@@ -8,9 +8,9 @@ meta:
   lang: en
 ---
 
-{% group label="Files" %}
+{% group label="Overview" %}
 
-{% section id="grouped" title="Grouped by theme" icon="file-diff" %}
+{% section id="overview" title="Grouped by theme" icon="file-diff" %}
 
 {% files why={"docs/old.md": "superseded by the pool item", "i18n/fr.po": "one new label"} %}
 {% filegroup label="Cross-cutting" only="static/**" /%}
@@ -22,6 +22,10 @@ meta:
 {% /files %}
 
 {% /section %}
+
+{% /group %}
+
+{% group label="Files" %}
 
 {% section id="closing" title="Files changed" icon="file-diff" %}
 

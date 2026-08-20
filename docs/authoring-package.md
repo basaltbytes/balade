@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.22.0`. Its major version matches the
+The current package version is `1.33.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.22.0
+  balade-authoring: 1.33.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -128,19 +128,28 @@ the existing decisions and objective checks green.
 
 ## Section selection
 
-The package starts from the pr-96 navigation skeleton. It selects only the
-narrative groups that add review signal, then appends the mandatory full-PR diff.
+The package teaches its tags as a language and dictates no outline. It never
+shows a finished walkthrough: each tag family carries one example in the block
+catalog, and the shared guidance shows small composition moves — such as two
+sidebar entries declared under one group — that tests parse against the real
+Markdoc config. The prompt addresses the model as the senior engineer
+explaining its own work: decide what the reviewer must understand, in what
+order, and at what depth.
 
-| Group | Use it for |
-| --- | --- |
-| Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This group is always present. |
-| Mechanism | An algorithm or non-obvious logic worth explaining. It follows Orientation directly, and its explanation carries the section. |
-| Models | Domain types, persisted state, components, or services whose structure carries the change. |
-| Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |
-| Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
-| Full PR diff | The final verification sweep. This group is always last and its closing section contains a bare `{% files /%}` block, optionally holding `{% filegroup /%}` children that group the browser. |
+Two boundaries are fixed and `check` enforces both — the walkthrough opens
+with a group holding only the overview section (`id="overview"`,
+`overview-group-shared` otherwise) and closes with the Full PR diff group and
+its bare `{% files /%}` block. `check` also rejects a group label used twice
+(`group-label-duplicate`). Between them, sections that share a subject sit
+under one group labelled in the change's own words, and every section carries
+an icon naming its subject.
 
-The Mechanism group or section is there to help a human have a real understanding of the 
+The same offline evaluation that replays scripted transcripts asserts this
+structure on every fixture: an expected draft whose first section is not the
+overview, whose sections sit ungrouped or without icons, or whose closing
+diff is filtered fails `pnpm test` before any paid generation runs.
+
+The Mechanism sections are there to help a human have a real understanding of the 
 code produced in this PR. Explain the overall concepts, the logic, models, actors and
 algorithms that are in this PR. This section doesn't need to go over translation files, or 
 documentation updates or other transversal or trivial changes, it is used to understand 
@@ -199,9 +208,21 @@ verification surface. The guidance tells the agent to group that closing block
 once the pull request touches more than ten files, with labels drawn from the
 change itself.
 
-The catalog also teaches file-sections: a section carrying `file="…"` renders
-in the sidebar as a color-coded changed-file entry, so the navigation can read
-like a GitHub file list. `generate --lang en|fr` adds a language instruction to
+The catalog also teaches the section tag's display attributes. A section
+carrying `file="…"` renders in the sidebar as a color-coded changed-file entry,
+so the navigation can read like a GitHub file list. `icon="…"` sets the glyph
+shown in the sidebar and in the section head. The catalog teaches the icon
+vocabulary grouped by the subject each name states — behavior and interfaces,
+data and state, flow and history, security, tests, and so on — because a flat
+list of names makes the model match an icon to a template position instead of
+to the section's subject. For the same reason no narrative template carries an
+icon; only the closing full-PR-diff section does, since its subject is fixed.
+The renderer maps every taught name plus the chrome and file-status glyphs an
+author never writes, the compiler holds the map to that list, and a test holds
+the taught vocabulary inside it. A missing or unknown name renders a neutral
+dot. `badge="…"` adds a chip beside the
+section title, toned by `badgeTone` — `new`, `mod` or `del`, defaulting to the
+file status for a file-section and to `mod` otherwise. `generate --lang en|fr` adds a language instruction to
 the initial request and stamps `meta.lang`; an explicit flag outranks a
 model-supplied value.
 

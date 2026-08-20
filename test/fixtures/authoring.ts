@@ -102,7 +102,7 @@ it("stops on a non-retryable status", () => {
           meta: { lang: "en", area: "runtime" },
           body: `{% group label="Orientation" %}
 
-{% section id="overview" title="Retry decision" %}
+{% section id="overview" title="Retry decision" icon="sync" %}
 
 The retry policy now checks the response status as well as the attempt count. A caller can stop on permanent failures without changing the shared retry loop.
 
@@ -112,7 +112,7 @@ The retry policy now checks the response status as well as the attempt count. A 
 
 {% group label="Models" %}
 
-{% section id="policy" title="Policy inputs" %}
+{% section id="policy" title="Policy inputs" icon="database" %}
 
 The policy names the retryable statuses. The function returns true only while both limits allow another request.
 
@@ -124,7 +124,7 @@ The policy names the retryable statuses. The function returns true only while bo
 
 {% group label="Quality" %}
 
-{% section id="tests" title="Boundary tests" %}
+{% section id="tests" title="Boundary tests" icon="beaker" %}
 
 {% tests %}
 {% test name="stops on a non-retryable status" kind="unit" ref="test/retries.test.ts" asserts=["HTTP 400 does not retry.", "HTTP 503 retries before the attempt limit.", "HTTP 503 stops at the attempt limit."] %}
@@ -197,7 +197,7 @@ export function formatInvoice(lines: readonly number[]): string {
           meta: { lang: "en", area: "billing" },
           body: `{% group label="Orientation" %}
 
-{% section id="overview" title="One calculation boundary" %}
+{% section id="overview" title="One calculation boundary" icon="graph" %}
 
 Invoice totals no longer live inside string formatting. Callers can reuse the numeric total without parsing display text.
 
@@ -209,7 +209,7 @@ Invoice totals no longer live inside string formatting. Callers can reuse the nu
 
 {% group label="Mechanism" %}
 
-{% section id="split" title="Calculation before presentation" %}
+{% section id="split" title="Calculation before presentation" icon="gear" %}
 
 The old function accepted the line amounts and returned one display string, so the sum and the currency text were computed in the same pass. The change gives each job its own function and fixes their order. invoiceTotal accepts the line amounts and returns the numeric total; it applies no rounding, no symbol, and no locale. formatInvoice calls invoiceTotal first, rounds the returned number to two decimals, and only then builds the currency text. A caller that needs the amount stops after the first function and never parses display text. No path produces the text without the number, so the two results cannot disagree.
 
@@ -303,7 +303,7 @@ it("caps a short final batch at the last index", () => {
           meta: { lang: "en", area: "pagination" },
           body: `{% group label="Orientation" %}
 
-{% section id="bug" title="Inclusive batch end" %}
+{% section id="overview" title="Inclusive batch end" icon="bug" %}
 
 The old expression could describe the boundary in two coordinate systems. The new expression computes an exclusive end first, then converts it to the final included index.
 
@@ -315,7 +315,7 @@ The old expression could describe the boundary in two coordinate systems. The ne
 
 {% group label="Quality" %}
 
-{% section id="regression" title="Regression cases" %}
+{% section id="regression" title="Regression cases" icon="beaker" %}
 
 {% tests %}
 {% test name="batch end boundaries" kind="unit" ref="test/batches.test.ts" asserts=["A complete batch includes its last item.", "A short final batch stops at the last available index."] %}
@@ -384,7 +384,7 @@ export const header = (name: string): string => clientLabel(name);
           meta: { lang: "en", area: "naming" },
           body: `{% group label="Orientation" %}
 
-{% section id="overview" title="Terminology rename" %}
+{% section id="overview" title="Terminology rename" icon="pencil" %}
 
 The public helper and its caller now use client instead of customer. Behavior and arguments do not change.
 
@@ -441,7 +441,7 @@ Set \`retries: 0\` to disable retries.
           meta: { lang: "en", area: "docs" },
           body: `{% group label="Orientation" %}
 
-{% section id="overview" title="Documented operating limits" %}
+{% section id="overview" title="Documented operating limits" icon="book" %}
 
 The guide now names the retry count, status codes, delay, and opt-out setting. It gives operators one complete policy instead of an open-ended promise to retry.
 
@@ -451,7 +451,7 @@ The guide now names the retry count, status codes, delay, and opt-out setting. I
 
 {% group label="Surface" %}
 
-{% section id="policy" title="Published retry contract" %}
+{% section id="policy" title="Published retry contract" icon="code-square" %}
 
 {% code file="docs/retries.md" from=1 to=7 expect="# Retry policy" /%}
 

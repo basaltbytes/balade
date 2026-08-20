@@ -46,8 +46,8 @@ describe("compile", () => {
   });
 
   it("derives the nav tree from groups and sections", () => {
-    expect(payload.nav.map((node) => node.kind)).toEqual(["group", "group", "group"]);
-    const models = payload.nav[1];
+    expect(payload.nav.map((node) => node.kind)).toEqual(["group", "group", "group", "group"]);
+    const models = payload.nav[2];
     if (models?.kind !== "group") throw new Error("expected a group");
     expect(models.label).toBe("Models");
     expect(models.children).toEqual([
@@ -276,30 +276,30 @@ describe("compile with file groups", () => {
   });
 
   it("partitions the pool into the authored groups, leftovers in paths", () => {
-    const files = firstBlock(payload, "grouped", "files");
+    const files = firstBlock(payload, "overview", "files");
     expect(files.groups?.map((group) => group.label)).toEqual([
       "Cross-cutting",
       "Models",
       "Deleted",
     ]);
-    expect(groupOf("grouped", "Cross-cutting")).toEqual([
+    expect(groupOf("overview", "Cross-cutting")).toEqual([
       "i18n/acme.pot",
       "i18n/fr.po",
       "utils/planning_helper.py",
       "views/planning_pool_views.xml",
     ]);
-    expect(groupOf("grouped", "Models")).toEqual([
+    expect(groupOf("overview", "Models")).toEqual([
       "models/planning_allocation.py",
       "models/planning_pool_item.py",
     ]);
-    expect(groupOf("grouped", "Deleted")).toEqual(["docs/old.md"]);
+    expect(groupOf("overview", "Deleted")).toEqual(["docs/old.md"]);
     expect([...files.paths].sort()).toEqual(["security/ir.model.access.csv"]);
     const all = [...(files.groups ?? []).flatMap((group) => group.paths), ...files.paths];
     expect([...all].sort()).toEqual(payload.files.map((entry) => entry.path).sort());
   });
 
   it("coalesces non-adjacent repeated labels at the first tag's position", () => {
-    const groups = firstBlock(payload, "grouped", "files").groups;
+    const groups = firstBlock(payload, "overview", "files").groups;
     expect(groups?.[0]).toEqual({
       label: "Cross-cutting",
       paths: [
@@ -329,7 +329,7 @@ describe("compile with file groups", () => {
     expect(empty[0]?.hint).toContain('only="static/**"');
     /* Warned, then dropped: every group in the payload holds rows. */
     expect(
-      firstBlock(payload, "grouped", "files").groups?.some((group) => group.paths.length === 0),
+      firstBlock(payload, "overview", "files").groups?.some((group) => group.paths.length === 0),
     ).toBe(false);
   });
 
@@ -355,10 +355,10 @@ describe("compile with file groups", () => {
 
   it("refs and explains a grouped path like an ungrouped one", () => {
     const grouped = payload.files.find((entry) => entry.path === "i18n/fr.po");
-    expect(grouped?.ref).toBe("grouped");
+    expect(grouped?.ref).toBe("overview");
     expect(grouped?.why).toBe("one new label");
     const leftover = payload.files.find((entry) => entry.path === "docs/old.md");
-    expect(leftover?.ref).toBe("grouped");
+    expect(leftover?.ref).toBe("overview");
     expect(leftover?.why).toBe("superseded by the pool item");
   });
 });

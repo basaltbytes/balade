@@ -334,6 +334,79 @@ commit: ${repo.pin}
     }),
   );
 
+  it.effect("requires the first section to be the overview", () =>
+    Effect.gen(function* () {
+      const path = join(repo.dir, "walkthroughs/no-overview.md");
+      repo.write(
+        "walkthroughs/no-overview.md",
+        `---
+walkthrough: 1
+title: No overview
+pr: 42
+commit: ${repo.pin}
+---
+
+{% group label="Mechanism" %}
+{% section id="mechanism" title="How it works" %}
+The narrative.
+{% /section %}
+{% /group %}
+{% section id="files" title="Full PR diff" %}
+{% files /%}
+{% /section %}
+`,
+      );
+      const rejected = yield* provideLive(checkOne({ cwd: repo.dir, path, useGh: false }));
+
+      expect(find(rejected, "overview-section-missing")).toMatchObject({
+        level: "error",
+        message: expect.stringContaining("first section"),
+        hint: expect.stringContaining("frames the change"),
+      });
+      expect(codes(valid.diagnostics)).not.toContain("overview-section-missing");
+    }),
+  );
+
+  it.effect("rejects a repeated group label", () =>
+    Effect.gen(function* () {
+      const path = join(repo.dir, "walkthroughs/repeated-group.md");
+      repo.write(
+        "walkthroughs/repeated-group.md",
+        `---
+walkthrough: 1
+title: Repeated group
+pr: 42
+commit: ${repo.pin}
+---
+
+{% group label="Threads" %}
+{% section id="overview" title="Overview" %}
+The frame.
+{% /section %}
+{% /group %}
+{% group label="Threads" %}
+{% section id="detail" title="Detail" %}
+The detail.
+{% /section %}
+{% /group %}
+{% group label="Full PR diff" %}
+{% section id="files" title="Full PR diff" %}
+{% files /%}
+{% /section %}
+{% /group %}
+`,
+      );
+      const rejected = yield* provideLive(checkOne({ cwd: repo.dir, path, useGh: false }));
+
+      expect(find(rejected, "group-label-duplicate")).toMatchObject({
+        level: "error",
+        message: expect.stringContaining("Threads"),
+        hint: expect.stringContaining("one subject"),
+      });
+      expect(codes(valid.diagnostics)).not.toContain("group-label-duplicate");
+    }),
+  );
+
   it.effect("discovers every tracked walkthrough with no argument", () =>
     Effect.gen(function* () {
       const outcome = yield* provideLive(runCheck({ cwd: repo.dir, useGh: false }));

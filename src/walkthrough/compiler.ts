@@ -108,6 +108,8 @@ export function compileDocument(input: CompileInput): CompileResult {
   const seen = new Map<string, number>();
   const relatedRefs: { ids: readonly string[]; line: number }[] = [];
   let closingSection: Node | undefined;
+  let openingSection: Node | undefined;
+  const groupLabels = new Map<string, number>();
 
   const sectionOf = (node: Node): NavNode | null => {
     const id = String(node.attributes["id"] ?? "");
@@ -208,14 +210,29 @@ export function compileDocument(input: CompileInput): CompileResult {
     const nav: NavNode[] = [];
     for (const node of nodes) {
       if (node.type === "tag" && node.tag === "group") {
+        const label = String(node.attributes["label"] ?? "");
+        const first = groupLabels.get(label);
+        if (first === undefined) {
+          groupLabels.set(label, lineOf(node));
+        } else {
+          diagnostics.push({
+            code: "group-label-duplicate",
+            level: "error",
+            file: sourcePath,
+            line: lineOf(node),
+            message: `The group label \`${label}\` is already used on line ${first}.`,
+            hint: "Each group is one subject: move these sections into the existing group, or rename this label.",
+          });
+        }
         nav.push({
           kind: "group",
-          label: String(node.attributes["label"] ?? ""),
+          label,
           children: walk(node.children),
         });
         continue;
       }
       if (node.type === "tag" && node.tag === "section") {
+        openingSection ??= node;
         closingSection = node;
         const entry = sectionOf(node);
         if (entry !== null) nav.push(entry);
@@ -262,6 +279,42 @@ export function compileDocument(input: CompileInput): CompileResult {
       line: closingSection === undefined ? 1 : lineOf(closingSection),
       message: "The last section must contain a bare `{% files /%}` block.",
       hint: "End the walkthrough with an unfiltered full-PR diff block that has no attributes.",
+    });
+  }
+
+  if (
+    openingSection !== undefined &&
+    String(openingSection.attributes["id"] ?? "") !== "overview"
+  ) {
+    diagnostics.push({
+      code: "overview-section-missing",
+      level: "error",
+      file: sourcePath,
+      line: lineOf(openingSection),
+      message: 'The first section must be the overview, with `id="overview"`.',
+      hint: "Open the walkthrough with the section that frames the change for the reviewer.",
+    });
+  }
+
+  const firstNav = nav[0];
+  if (
+    openingSection !== undefined &&
+    String(openingSection.attributes["id"] ?? "") === "overview" &&
+    !(
+      firstNav !== undefined &&
+      firstNav.kind === "group" &&
+      firstNav.children.length === 1 &&
+      firstNav.children[0]?.kind !== "group" &&
+      firstNav.children[0]?.ref === "overview"
+    )
+  ) {
+    diagnostics.push({
+      code: "overview-group-shared",
+      level: "error",
+      file: sourcePath,
+      line: lineOf(openingSection),
+      message: "The walkthrough must open with a group holding only the overview section.",
+      hint: "Wrap the overview in its own opening group; the thematic groups start after it.",
     });
   }
 

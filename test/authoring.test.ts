@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { AUTHORING_TAG_CATALOG } from "../src/authoring/catalog.js";
+import { AUTHORING_ICON_NAMES, AUTHORING_TAG_CATALOG } from "../src/authoring/catalog.js";
 import {
   AUTHORING_META_KEY,
   AUTHORING_PACKAGE_VERSION,
@@ -9,12 +9,12 @@ import {
   inspectionBudget,
 } from "../src/authoring/package.js";
 import { AUTHORING_RUBRIC } from "../src/authoring/rubric.js";
-import { AUTHORING_SECTION_TEMPLATES } from "../src/authoring/templates.js";
 import { authoringSystemPrompt, initialAuthoringPrompt } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/pipeline.js";
 import { odooPreset, ODOO_AUTHORING_EXAMPLES } from "../src/preset/odoo.js";
 import { parseDocument } from "../src/walkthrough/document.js";
 import { CORE_TAG_NAMES } from "../src/walkthrough/tags.js";
+import { ICON_NAMES } from "../app/src/ui/icon-names.js";
 
 /** Wraps a taught example in the smallest valid walkthrough document. */
 function exampleDocument(body: string, preset?: string): string {
@@ -66,21 +66,36 @@ const source: PullSnapshot = {
   notices: [],
 };
 
+/** Top-level `{% group %}…{% /group %}` fragments taught in the shared guidance. */
+function guidanceFragments(): readonly string[] {
+  const text = readFileSync(new URL("../src/authoring/guidance.md", import.meta.url), "utf8");
+  const fragments: string[] = [];
+  let current: string[] | null = null;
+  let depth = 0;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("{% group")) {
+      current ??= [];
+      depth++;
+    }
+    if (current !== null) current.push(line);
+    if (line.startsWith("{% /group")) {
+      depth--;
+      if (depth === 0 && current !== null) {
+        fragments.push(current.join("\n"));
+        current = null;
+      }
+    }
+  }
+  return fragments;
+}
+
 describe("the authoring package", () => {
   it("couples its major version to the walkthrough schema", () => {
     const major = Number(AUTHORING_PACKAGE_VERSION.split(".").at(0));
     expect(major).toBe(AUTHORING_WALKTHROUGH_SCHEMA_VERSION);
   });
 
-  it("ships the canonical templates and four rubric axes", () => {
-    expect(AUTHORING_SECTION_TEMPLATES.map((template) => template.group)).toEqual([
-      "Orientation",
-      "Mechanism",
-      "Models",
-      "Surface",
-      "Quality",
-      "Full PR diff",
-    ]);
+  it("ships four rubric axes", () => {
     expect(AUTHORING_RUBRIC.map((criterion) => criterion.id)).toEqual([
       "factual-accuracy",
       "section-selection",
@@ -124,16 +139,40 @@ describe("the authoring package", () => {
     for (const { label, example } of AUTHORING_TAG_CATALOG) {
       expect(exampleErrors(example), `catalog example ${label}`).toEqual([]);
     }
-    for (const { group, template } of AUTHORING_SECTION_TEMPLATES) {
-      /* Templates carry their own group/section skeleton; wrap frontmatter only. */
+    const fragments = guidanceFragments();
+    expect(fragments.length).toBeGreaterThan(0);
+    for (const [index, fragment] of fragments.entries()) {
+      /* Guidance fragments carry their own group; wrap frontmatter only. */
       const errors = parseDocument(
-        `---\nwalkthrough: 1\ntitle: Template\npr: 1\ncommit: abcdef1\n---\n\n${template}\n`,
-        "template.md",
+        `---\nwalkthrough: 1\ntitle: Fragment\npr: 1\ncommit: abcdef1\n---\n\n${fragment}\n`,
+        "fragment.md",
       ).diagnostics.filter((diagnostic) => diagnostic.level === "error");
-      expect(errors, `section template ${group}`).toEqual([]);
+      expect(errors, `guidance fragment ${index}`).toEqual([]);
     }
     for (const [name, example] of Object.entries(ODOO_AUTHORING_EXAMPLES)) {
       expect(exampleErrors(example, "odoo"), `odoo example ${name}`).toEqual([]);
+    }
+  });
+
+  it("teaches only icon names the renderer maps", () => {
+    for (const name of AUTHORING_ICON_NAMES) expect(ICON_NAMES).toContain(name);
+  });
+
+  it("names each taught icon once, under one subject", () => {
+    expect(new Set(AUTHORING_ICON_NAMES).size).toBe(AUTHORING_ICON_NAMES.length);
+  });
+
+  it("writes only taught icon names in its fragments and examples", () => {
+    const sources = [
+      ...guidanceFragments().map(
+        (fragment, index) => [`guidance fragment ${index}`, fragment] as const,
+      ),
+      ...AUTHORING_TAG_CATALOG.map(({ label, example }) => [label, example] as const),
+    ];
+    for (const [label, text] of sources) {
+      for (const [, name] of text.matchAll(/icon="([^"]*)"/g)) {
+        expect(AUTHORING_ICON_NAMES, `${label} icon`).toContain(name);
+      }
     }
   });
 
