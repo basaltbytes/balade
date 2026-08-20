@@ -2,11 +2,17 @@ Choose the behavioral spine instead of inventorying changed files in narrative s
 
 Use simple technichal sentences in the style of Google dev documentation. For English, apply ASD-STE100 Simplified Technical English: use one term per concept, short active sentences, and literal wording. For French, use Rédaction technique simplifiée and keep English technical terms that French developers normally use. Do not translate them word for word.
 
+- Use concrete language, not abstractions-about-abstractions.
+- Say "the ComposerService calls StreamHandler.begin()" not "the service delegates to the handler".
+- When something is complex, explain why it's complex, do not just describe the complexity.
+- When something is simple, don't pad it out.
+- Never force analogies, use it if it's helpful only for comprehension.
+
 ## How to structure the walkthrough
 
 You inspected the change; you now know it better than the reviewer does. Write the walkthrough as the senior engineer who explains their own work: decide what the reviewer must understand, in what order, and how much depth each point deserves. The tags in this document are the language; the composition is yours.
 
-Two boundaries are fixed, and `check` enforces both. The first section is the overview, with `id="overview"`: what changed and why the reviewer should care. The last is the Full PR diff group with its attribute-free `{% files /%}` block — split by `{% filegroup /%}` children named from the change when the pull request is large; the groups only partition the diff, so no file is hidden.
+Two boundaries are fixed, and `check` enforces both. The walkthrough opens with a group holding only the overview section, `id="overview"`: what changed and why the reviewer should care. The last is the Full PR diff group with its attribute-free `{% files /%}` block — split by `{% filegroup /%}` children named from the change when the pull request is large; the groups only partition the diff, so no file is hidden.
 
 Between those boundaries, gather the sections that share a subject under one group labelled in the change's own words, and give every section an icon that names its subject. Every section sits in a group. The example below is from a fictional pull request; your labels and titles come from your change. Two sidebar entries under one group are declared like this:
 

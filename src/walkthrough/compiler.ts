@@ -296,6 +296,28 @@ export function compileDocument(input: CompileInput): CompileResult {
     });
   }
 
+  const firstNav = nav[0];
+  if (
+    openingSection !== undefined &&
+    String(openingSection.attributes["id"] ?? "") === "overview" &&
+    !(
+      firstNav !== undefined &&
+      firstNav.kind === "group" &&
+      firstNav.children.length === 1 &&
+      firstNav.children[0]?.kind !== "group" &&
+      firstNav.children[0]?.ref === "overview"
+    )
+  ) {
+    diagnostics.push({
+      code: "overview-group-shared",
+      level: "error",
+      file: sourcePath,
+      line: lineOf(openingSection),
+      message: "The walkthrough must open with a group holding only the overview section.",
+      hint: "Wrap the overview in its own opening group; the thematic groups start after it.",
+    });
+  }
+
   for (const pending of relatedRefs) {
     for (const id of pending.ids) {
       if (!seen.has(id)) {

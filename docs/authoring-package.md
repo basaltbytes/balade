@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.32.0`. Its major version matches the
+The current package version is `1.33.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.32.0
+  balade-authoring: 1.33.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -137,8 +137,10 @@ explaining its own work: decide what the reviewer must understand, in what
 order, and at what depth.
 
 Two boundaries are fixed and `check` enforces both — the walkthrough opens
-with the overview (`id="overview"`) and closes with the Full PR diff group and
-its bare `{% files /%}` block. Between them, sections that share a subject sit
+with a group holding only the overview section (`id="overview"`,
+`overview-group-shared` otherwise) and closes with the Full PR diff group and
+its bare `{% files /%}` block. `check` also rejects a group label used twice
+(`group-label-duplicate`). Between them, sections that share a subject sit
 under one group labelled in the change's own words, and every section carries
 an icon naming its subject.
 

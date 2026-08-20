@@ -13,4 +13,4 @@ short list for parallel points that do not warrant a block. They also state
 the one deliberate absence: hyperlinks render as their text, because the app
 links no external URL from walkthrough prose.
 
-Authoring package 1.32.0.
+Authoring package 1.33.0.

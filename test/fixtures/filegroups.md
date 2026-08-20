@@ -8,7 +8,7 @@ meta:
   lang: en
 ---
 
-{% group label="Files" %}
+{% group label="Overview" %}
 
 {% section id="overview" title="Grouped by theme" icon="file-diff" %}
 
@@ -22,6 +22,10 @@ meta:
 {% /files %}
 
 {% /section %}
+
+{% /group %}
+
+{% group label="Files" %}
 
 {% section id="closing" title="Files changed" icon="file-diff" %}
 

@@ -8,7 +8,7 @@ meta:
   lang: en
 ---
 
-{% group label="Orientation" %}
+{% group label="Overview" %}
 
 {% section id="overview" title="Overview" icon="list-unordered" %}
 
@@ -34,6 +34,10 @@ They cover the grain and the live recomputation.
 {% /callout %}
 
 {% /section %}
+
+{% /group %}
+
+{% group label="Orientation" %}
 
 {% section id="map" title="Model map" icon="git-branch" %}
 

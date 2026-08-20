@@ -15,4 +15,4 @@ broken outline, reported as an error on the second occurrence, so a generated
 draft that repeats a label is repaired in the generation loop instead of
 reaching the reviewer.
 
-Authoring package 1.32.0.
+Authoring package 1.33.0.

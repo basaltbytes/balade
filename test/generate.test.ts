@@ -142,31 +142,39 @@ function submitted(body: string, title = "Live planning pool") {
   );
 }
 
-const validBody = `{% section id="overview" title="Pool model" %}
+const validBody = `{% group label="Overview" %}
+{% section id="overview" title="Pool model" %}
 
 The pool model computes live placement from slots.
 
 {% code file="models/planning_pool_item.py" from=1 to=8 expect="${PINNED_LINE}" /%}
 
 {% /section %}
+{% /group %}
 
+{% group label="Full PR diff" %}
 {% section id="files" title="Full PR diff" %}
 
 {% files /%}
 
-{% /section %}`;
+{% /section %}
+{% /group %}`;
 
-const invalidBody = `{% section id="overview" title="Pool model" %}
+const invalidBody = `{% group label="Overview" %}
+{% section id="overview" title="Pool model" %}
 
 {% code file="models/planning_pool_item.py" from=999 to=1000 expect="not there" /%}
 
 {% /section %}
+{% /group %}
 
+{% group label="Full PR diff" %}
 {% section id="files" title="Full PR diff" %}
 
 {% files /%}
 
-{% /section %}`;
+{% /section %}
+{% /group %}`;
 
 const fauxModel = Effect.fn("test.fauxModel")(function* () {
   const author = yield* WalkthroughAuthor;

@@ -46,8 +46,8 @@ describe("compile", () => {
   });
 
   it("derives the nav tree from groups and sections", () => {
-    expect(payload.nav.map((node) => node.kind)).toEqual(["group", "group", "group"]);
-    const models = payload.nav[1];
+    expect(payload.nav.map((node) => node.kind)).toEqual(["group", "group", "group", "group"]);
+    const models = payload.nav[2];
     if (models?.kind !== "group") throw new Error("expected a group");
     expect(models.label).toBe("Models");
     expect(models.children).toEqual([
