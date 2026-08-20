@@ -1,5 +1,100 @@
 # balade
 
+## 0.16.0
+
+### Minor Changes
+
+- 9774de5: Teach walkthrough structure as a language, never as a document to copy.
+  
+  The authoring package shipped a canonical skeleton of five named groups, and
+  generated walkthroughs copied it: the same five headings in every sidebar,
+  each above a single section, whatever the pull request contained. Rules added
+  against that copying accumulated into prose the skeleton itself contradicted.
+  
+  The package now teaches its tags as a language and dictates no outline. It
+  never shows a finished walkthrough: the block catalog carries one example per
+  tag family, and the guidance shows small composition moves, such as two
+  sidebar entries declared under one group. The prompt addresses the model as
+  the senior engineer explaining its own work, with two enforced boundaries (the
+  overview opens, the bare full-PR diff closes) and two standing expectations
+  (every section sits in a change-named group and carries a subject icon). The
+  offline evaluation asserts that structure on every fixture, so a prompt
+  regression fails `pnpm test` instead of a paid run.
+  
+  Authoring package 1.33.0.
+- 9774de5: Reject a repeated group label, and teach composition from a fictional domain.
+  
+  A generated walkthrough came back with every narrative group labeled with the
+  guidance's own example label: the composition example was drawn from a real
+  walkthrough, so when a pull request matched its domain the model took the
+  example label as the sanctioned answer and repeated it. The example now comes
+  from a fictional pull request and says so.
+  
+  `check` also gains `group-label-duplicate`: two groups sharing a label is a
+  broken outline, reported as an error on the second occurrence, so a generated
+  draft that repeats a label is repaired in the generation loop instead of
+  reaching the reviewer.
+  
+  Authoring package 1.33.0.
+- 9774de5: Teach the inline Markdown vocabulary in walkthrough narrative.
+  
+  The renderer has always carried bold, italic, inline code, bulleted and
+  numbered lists, and headings through the payload, but the authoring package
+  never named them, so generated narrative came out as bare paragraphs. The
+  Markdoc rules now state the vocabulary and its documentation idiom: inline
+  code for identifiers and paths, bold for the term a paragraph introduces, a
+  short list for parallel points that do not warrant a block. They also state
+  the one deliberate absence: hyperlinks render as their text, because the app
+  links no external URL from walkthrough prose.
+  
+  Authoring package 1.33.0.
+- 9774de5: Open every walkthrough with a standalone overview group, and state the voice.
+  
+  The overview rule required only the id, so a generated walkthrough could fold
+  its overview into the first thematic group and the sidebar lost its anchor.
+  `check` now requires the walkthrough to open with a group holding only the
+  overview section (`overview-group-shared`), so the generation loop repairs a
+  draft that buries it.
+  
+  The guidance also gains the authoring voice rules: concrete language over
+  abstractions-about-abstractions, named calls over role descriptions, explain
+  why complexity exists instead of describing it, no padding for simple things,
+  no forced analogies.
+  
+  Authoring package 1.33.0.
+- 9774de5: Require a walkthrough to open with its overview.
+  
+  `check` already refuses a walkthrough that does not end with the unfiltered
+  full-PR diff. It now refuses one that does not start with the overview: the
+  first section carries `id="overview"`, and anything else reports
+  `overview-section-missing` with the line of the offending section.
+  
+  The authoring package states the rule in the same place it states the closing
+  one, so a generated draft that opens with something else is repaired in the
+  generation loop rather than reaching the reviewer.
+  
+  Authoring package 1.30.0.
+- 9774de5: Teach section icons and badges in the authoring package, so a generated
+  walkthrough's navigation shows what each section is about.
+  
+  The section tag has always accepted `icon=`, `badge=` and `badgeTone=`, but the
+  authoring package named none of them. A generated walkthrough therefore carried
+  an icon only on the closing full-PR-diff section, whose template ships one, and
+  every other entry in the sidebar rendered the neutral `dot-fill` fallback.
+  
+  The catalog now teaches the three attributes. The icon vocabulary is grouped by
+  the subject each name states, so the model picks by meaning; no narrative
+  template carries an icon, because an icon shipped in a template gets copied by
+  position instead of chosen. The renderer's map grew from 48 names to 89 to cover
+  the subjects walkthroughs actually have — state, workflow, agents, defects,
+  translations, packaging — and the compiler holds the map to the canonical list
+  while a test holds the taught vocabulary inside it.
+  
+  `check` is unchanged: an icon stays optional, and an unrecognized name still
+  falls back to a dot.
+  
+  Authoring package 1.23.0.
+
 ## 0.15.0
 
 ### Minor Changes
