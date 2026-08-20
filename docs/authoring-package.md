@@ -130,7 +130,10 @@ the existing decisions and objective checks green.
 
 The package teaches structure with two complete exemplar walkthroughs and a
 four-step procedure, in that order, instead of a skeleton of named groups to
-fill. The exemplars — one feature change, one documentation-only change — are
+fill. Each exemplar is a Markdown document beside the module
+([`src/authoring/exemplar-feature.md`](../src/authoring/exemplar-feature.md),
+[`src/authoring/exemplar-documentation.md`](../src/authoring/exemplar-documentation.md)):
+a one-line pull-request context, then the walkthrough body. The exemplars — one feature change, one documentation-only change — are
 parsed against the real Markdoc config by tests, which also pin their
 structure: the overview opens, every section sits in a labelled group and
 carries an icon, evidence sits under its claim, and the bare full-PR diff

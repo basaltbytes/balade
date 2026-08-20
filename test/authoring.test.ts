@@ -87,13 +87,13 @@ describe("the authoring package", () => {
   });
 
   it("keeps every exemplar in the taught structure", () => {
-    for (const { name, document } of AUTHORING_EXEMPLARS) {
-      const sections = [...document.matchAll(/\{% section id="([a-z0-9-]+)"[^%]*%\}/g)];
+    for (const { name, text } of AUTHORING_EXEMPLARS) {
+      const sections = [...text.matchAll(/\{% section id="([a-z0-9-]+)"[^%]*%\}/g)];
       expect(sections.at(0)?.at(1), `${name} opens with the overview`).toBe("overview");
-      expect(document, `${name} closes with the bare diff`).toContain("{% files /%}");
+      expect(text, `${name} closes with the bare diff`).toContain("{% files /%}");
       /* Every section sits in a group: a section tag opens only inside an open group. */
       let depth = 0;
-      for (const tag of document.matchAll(/\{% (\/?)(group|section)[^%]*%\}/g)) {
+      for (const tag of text.matchAll(/\{% (\/?)(group|section)[^%]*%\}/g)) {
         if (tag[2] === "group") depth += tag[1] === "/" ? -1 : 1;
         else if (tag[1] !== "/") expect(depth, `${name} groups every section`).toBeGreaterThan(0);
       }
@@ -138,10 +138,10 @@ describe("the authoring package", () => {
     for (const { label, example } of AUTHORING_TAG_CATALOG) {
       expect(exampleErrors(example), `catalog example ${label}`).toEqual([]);
     }
-    for (const { name, document } of AUTHORING_EXEMPLARS) {
+    for (const { name, text } of AUTHORING_EXEMPLARS) {
       /* Exemplars are complete bodies; wrap frontmatter only. */
       const errors = parseDocument(
-        `---\nwalkthrough: 1\ntitle: Exemplar\npr: 1\ncommit: abcdef1\n---\n\n${document}\n`,
+        `---\nwalkthrough: 1\ntitle: Exemplar\npr: 1\ncommit: abcdef1\n---\n\n${text}\n`,
         "exemplar.md",
       ).diagnostics.filter((diagnostic) => diagnostic.level === "error");
       expect(errors, `exemplar ${name}`).toEqual([]);
@@ -161,7 +161,7 @@ describe("the authoring package", () => {
 
   it("writes only taught icon names in its exemplars and examples", () => {
     const sources = [
-      ...AUTHORING_EXEMPLARS.map(({ name, document }) => [name, document] as const),
+      ...AUTHORING_EXEMPLARS.map(({ name, text }) => [name, text] as const),
       ...AUTHORING_TAG_CATALOG.map(({ label, example }) => [label, example] as const),
     ];
     for (const [label, text] of sources) {
