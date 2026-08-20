@@ -187,30 +187,68 @@ interface DraftProfile {
   readonly sections: number;
   readonly codeRanges: number;
   readonly codeFiles: ReadonlySet<string>;
+  /** id of the document's first section. */
+  readonly firstSection: string | undefined;
+  /** Section ids found outside any group. */
+  readonly ungrouped: readonly string[];
+  /** Section ids carrying no icon attribute. */
+  readonly unlabelled: readonly string[];
+  /** Whether an attribute-free files block closes the draft. */
+  readonly bareFiles: boolean;
 }
 
 function draftProfile(body: string): DraftProfile {
   const groups: string[] = [];
   const codeFiles = new Set<string>();
+  const ungrouped: string[] = [];
+  const unlabelled: string[] = [];
   let sections = 0;
   let codeRanges = 0;
-  const visit = (nodes: readonly Node[]): void => {
+  let firstSection: string | undefined;
+  let bareFiles = false;
+  const visit = (nodes: readonly Node[], inGroup: boolean): void => {
     for (const node of nodes) {
       if (node.type === "tag" && node.tag === "group") {
         const label = node.attributes["label"];
         if (Predicate.isString(label)) groups.push(label);
+        visit(node.children, true);
+        continue;
       }
-      if (node.type === "tag" && node.tag === "section") sections++;
+      if (node.type === "tag" && node.tag === "section") {
+        sections++;
+        const id = node.attributes["id"];
+        if (Predicate.isString(id)) {
+          firstSection ??= id;
+          if (!inGroup) ungrouped.push(id);
+          if (!Predicate.isString(node.attributes["icon"])) unlabelled.push(id);
+        }
+      }
       if (node.type === "tag" && node.tag === "code") {
         codeRanges++;
         const file = node.attributes["file"];
         if (Predicate.isString(file)) codeFiles.add(file);
       }
-      visit(node.children);
+      if (
+        node.type === "tag" &&
+        node.tag === "files" &&
+        Object.keys(node.attributes).length === 0
+      ) {
+        bareFiles = true;
+      }
+      visit(node.children, inGroup);
     }
   };
-  visit(Markdoc.parse(body).children);
-  return { groups, sections, codeRanges, codeFiles };
+  visit(Markdoc.parse(body).children, false);
+  return {
+    groups,
+    sections,
+    codeRanges,
+    codeFiles,
+    firstSection,
+    ungrouped,
+    unlabelled,
+    bareFiles,
+  };
 }
 
 export function authoringDecisionFailures(
@@ -220,6 +258,11 @@ export function authoringDecisionFailures(
 ): readonly string[] {
   const profile = draftProfile(body);
   const failures: string[] = [];
+  /* Structure the package teaches unconditionally, asserted on every fixture. */
+  if (profile.firstSection !== "overview") failures.push("first section is not the overview");
+  if (!profile.bareFiles) failures.push("missing the bare closing files block");
+  for (const id of profile.ungrouped) failures.push(`section ${id} sits outside a group`);
+  for (const id of profile.unlabelled) failures.push(`section ${id} carries no icon`);
   for (const group of expected.groups) {
     if (!profile.groups.includes(group)) failures.push(`missing group ${group}`);
   }

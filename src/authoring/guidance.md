@@ -2,32 +2,18 @@ Choose the behavioral spine instead of inventorying changed files in narrative s
 
 Use simple technichal sentences in the style of Google dev documentation. For English, apply ASD-STE100 Simplified Technical English: use one term per concept, short active sentences, and literal wording. For French, use Rédaction technique simplifiée and keep English technical terms that French developers normally use. Do not translate them word for word.
 
-## Section templates
+## How to structure the walkthrough
 
-Start from the canonical navigation skeleton below. It lists roles, not headings: adapt the section ids and titles to the change, and omit every role the change does not carry. A changed file does not automatically deserve a narrative section.
+Work through these steps once per pull request:
 
-Groups are the outline of the sidebar, and a reader scans that outline before reading anything. Every section sits in a group, so no entry hangs under the heading of the group above it. Gather the sections that share a subject under one group and label it for what those sections cover — for example Overview, Why it changed, Clarification threads, Mechanism, Reviewer surfaces, or Regression proof:
+1. Read the diff. Write one sentence: what changed and why a reviewer should care. That sentence opens the overview — the first section, with `id="overview"`. `check` rejects a walkthrough that opens with any other section.
+2. List the subjects a reviewer must understand to approve the change. Candidate subjects: the algorithm or non-obvious logic; the domain types, state, or services whose structure carries the change; the behavior a caller, operator, or user can observe; the evidence — tests, security, migrations, translations. Most changes carry one to three subjects beyond the overview. A mechanical or documentation-only change may carry none.
+3. Give each subject one group, labelled in the change's own words, and write its sections. Every section sits in a group and carries an icon that names its subject. Explanation comes first; the code range that proves a claim sits directly under that claim.
+4. Close with the Full PR diff group and its attribute-free `{% files /%}` block. `check` rejects a walkthrough without it. When the pull request touches more than ten files, split that closing browser with `{% filegroup /%}` children named from the change; the groups only partition the diff, so no file is hidden.
 
-{% group label="Overview" %}
-{% section id="overview" title="What changed" icon="book" %}
-The narrative of this section.
-{% /section %}
-{% /group %}
+## Exemplars
 
-{% group label="Clarification threads" %}
-{% section id="question-lifecycle" title="From selection to pinned answer" icon="workflow" %}
-The narrative of this section.
-{% /section %}
-{% section id="thread-state" title="Generation-bound thread state" icon="versions" %}
-The narrative of this section.
-{% /section %}
-{% /group %}
-
-Every walkthrough opens with the overview: the first section carries `id="overview"` and frames the change for the reviewer. `check` rejects a walkthrough that starts with anything else.
-
-Every walkthrough ends with the Full PR diff group and its closing section containing an attribute-free `{% files /%}` block. That group's label is the one fixed name. Keep it last; it is mandatory and does not count as inventorying the PR. That closing block should instead hold `{% filegroup /%}` children to group a large diff into collapsible thematic sections; the block itself stays attribute-free either way, and the groups only partition the changed files, so grouping never hides one.
-
-{{section-templates}}
+{{exemplars}}
 
 When the change carries an algorithm or non-obvious logic, explain the solution in the Mechanism sections, directly after the orientation. The explanation is the primary content of the section, human comprehension is the goal. Explain the overall concepts, the logic, models, actors and algorithms that are in this PR. This section doesn't need to go over translation files, or documentation updates or other transversal or trivial changes, it is used to understand pieces of code that are introduced in the PR. Feel free to use pseudo-code (A markdown fence tagged `pseudo`) to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding. If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free to give link for reading materials and explaination of the software engineering concept. When explaining the code feel free to directly have the code block shown in-between, in full form or pinned with `collapsed=true` to disclose it as a 'If you want to dive deeper' section.
 

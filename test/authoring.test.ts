@@ -9,7 +9,7 @@ import {
   inspectionBudget,
 } from "../src/authoring/package.js";
 import { AUTHORING_RUBRIC } from "../src/authoring/rubric.js";
-import { AUTHORING_SECTION_TEMPLATES } from "../src/authoring/templates.js";
+import { AUTHORING_EXEMPLARS } from "../src/authoring/exemplars.js";
 import { authoringSystemPrompt, initialAuthoringPrompt } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/pipeline.js";
 import { odooPreset, ODOO_AUTHORING_EXAMPLES } from "../src/preset/odoo.js";
@@ -73,14 +73,10 @@ describe("the authoring package", () => {
     expect(major).toBe(AUTHORING_WALKTHROUGH_SCHEMA_VERSION);
   });
 
-  it("ships the canonical templates and four rubric axes", () => {
-    expect(AUTHORING_SECTION_TEMPLATES.map((template) => template.role)).toEqual([
-      "Orientation",
-      "Mechanism",
-      "Models",
-      "Surface",
-      "Quality",
-      "Full PR diff",
+  it("ships one exemplar per pull-request shape and four rubric axes", () => {
+    expect(AUTHORING_EXEMPLARS.map((exemplar) => exemplar.name)).toEqual([
+      "feature",
+      "documentation",
     ]);
     expect(AUTHORING_RUBRIC.map((criterion) => criterion.id)).toEqual([
       "factual-accuracy",
@@ -88,6 +84,23 @@ describe("the authoring package", () => {
       "reviewer-usefulness",
       "prose-quality",
     ]);
+  });
+
+  it("keeps every exemplar in the taught structure", () => {
+    for (const { name, document } of AUTHORING_EXEMPLARS) {
+      const sections = [...document.matchAll(/\{% section id="([a-z0-9-]+)"[^%]*%\}/g)];
+      expect(sections.at(0)?.at(1), `${name} opens with the overview`).toBe("overview");
+      expect(document, `${name} closes with the bare diff`).toContain("{% files /%}");
+      /* Every section sits in a group: a section tag opens only inside an open group. */
+      let depth = 0;
+      for (const tag of document.matchAll(/\{% (\/?)(group|section)[^%]*%\}/g)) {
+        if (tag[2] === "group") depth += tag[1] === "/" ? -1 : 1;
+        else if (tag[1] !== "/") expect(depth, `${name} groups every section`).toBeGreaterThan(0);
+      }
+      for (const section of sections) {
+        expect(section[0], `${name} icons every section`).toContain('icon="');
+      }
+    }
   });
 
   it("scales inspection budgets with the pull request and honors the tier", () => {
@@ -125,13 +138,13 @@ describe("the authoring package", () => {
     for (const { label, example } of AUTHORING_TAG_CATALOG) {
       expect(exampleErrors(example), `catalog example ${label}`).toEqual([]);
     }
-    for (const { role, template } of AUTHORING_SECTION_TEMPLATES) {
-      /* Templates carry their own group/section skeleton; wrap frontmatter only. */
+    for (const { name, document } of AUTHORING_EXEMPLARS) {
+      /* Exemplars are complete bodies; wrap frontmatter only. */
       const errors = parseDocument(
-        `---\nwalkthrough: 1\ntitle: Template\npr: 1\ncommit: abcdef1\n---\n\n${template}\n`,
-        "template.md",
+        `---\nwalkthrough: 1\ntitle: Exemplar\npr: 1\ncommit: abcdef1\n---\n\n${document}\n`,
+        "exemplar.md",
       ).diagnostics.filter((diagnostic) => diagnostic.level === "error");
-      expect(errors, `section template ${role}`).toEqual([]);
+      expect(errors, `exemplar ${name}`).toEqual([]);
     }
     for (const [name, example] of Object.entries(ODOO_AUTHORING_EXAMPLES)) {
       expect(exampleErrors(example, "odoo"), `odoo example ${name}`).toEqual([]);
@@ -146,9 +159,9 @@ describe("the authoring package", () => {
     expect(new Set(AUTHORING_ICON_NAMES).size).toBe(AUTHORING_ICON_NAMES.length);
   });
 
-  it("writes only taught icon names in its templates and examples", () => {
+  it("writes only taught icon names in its exemplars and examples", () => {
     const sources = [
-      ...AUTHORING_SECTION_TEMPLATES.map(({ role, template }) => [role, template] as const),
+      ...AUTHORING_EXEMPLARS.map(({ name, document }) => [name, document] as const),
       ...AUTHORING_TAG_CATALOG.map(({ label, example }) => [label, example] as const),
     ];
     for (const [label, text] of sources) {

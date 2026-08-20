@@ -13,4 +13,4 @@ The authoring package states the rule in the same place it states the closing
 one, so a generated draft that opens with something else is repaired in the
 generation loop rather than reaching the reviewer.
 
-Authoring package 1.28.0.
+Authoring package 1.29.0.

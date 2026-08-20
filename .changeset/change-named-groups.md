@@ -2,23 +2,20 @@
 "balade": minor
 ---
 
-Name walkthrough groups from the change instead of the canonical skeleton.
+Teach walkthrough structure by exemplar and procedure instead of a skeleton.
 
-The skeleton's five narrative names — Orientation, Mechanism, Models, Surface,
-Quality — shipped as `{% group %}` wrappers inside the section templates, so the
-model copied them verbatim into every walkthrough. A pull request that carried
-no domain models still got a Models heading, and a heading sat above a single
-section whatever that section was about.
+The authoring package shipped a canonical skeleton of five named groups, and
+generated walkthroughs copied it: the same five headings in every sidebar,
+each above a single section, whatever the pull request contained. Rules added
+against that copying accumulated into prose the skeleton itself contradicted.
 
-The package now teaches those five as roles the author selects from, not as
-headings. A role name stays available as a group label when it is the best name
-for what its sections cover; it is no longer supplied as the default. The
-guidance shows the Markdoc for grouped sections, with example labels rather
-than a list to fill, and every section sits in a group so the sidebar never
-shows an entry hanging under the heading above it. The narrative templates carry no group wrapper; the author gathers the
-sections that share a subject under one group named from the change, the way the
-closing diff's `{% filegroup /%}` children are already named, and a subject with
-one section carries no group header at all. The closing Full PR diff group keeps
-its fixed name.
+The package now leads with two complete exemplar walkthroughs — a feature
+change and a documentation-only change — in which every structural convention
+appears correct: the overview opens, every section sits in a group labelled in
+the change's own words and carries a subject icon, evidence sits under its
+claim, the bare full-PR diff closes. A four-step procedure replaces the
+skeleton prose, and the five former group names survive only as the list of
+candidate subjects. The offline evaluation now asserts that structure on every
+fixture, so a prompt regression fails `pnpm test` instead of a paid run.
 
-Authoring package 1.28.0.
+Authoring package 1.29.0.

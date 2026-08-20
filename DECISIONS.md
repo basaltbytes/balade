@@ -1513,3 +1513,25 @@ The drawer's mutually exclusive closed, section, thread and composer locations
 are one tagged UI state rather than independently nullable coordinates. If the
 server refuses a follow-up before accepting it as pending, the drawer stays
 open and preserves the draft for retry.
+
+## The authoring package teaches by exemplar, then procedure, then reference
+
+Six prompt revisions in one day taught the same lesson from both directions:
+generation copies the artifact it is shown and pattern-matches past the prose
+around it. A `file-diff` icon shipped in one template appeared verbatim in
+every draft while a documented 48-name vocabulary went unused; five group
+labels shipped as skeleton wrappers appeared verbatim in every sidebar while
+the paragraph above them said to adapt. Rules written against the copying
+accumulated into prose that the skeleton below it contradicted.
+
+The shared guidance therefore leads with two complete exemplar walkthroughs —
+a feature change and a documentation-only change — in which every structural
+convention simply is correct, followed by a four-step editorial procedure, with
+the tag catalog and Markdoc mechanics kept as reference behind them. Structure
+that must hold unconditionally is enforced by `check` (`overview-section-missing`,
+`closing-files-missing`) and stated in one line each, not argued for. The five
+former group names survive as the procedure's list of candidate subjects, valid
+as labels when they fit. Tests parse both exemplars against the real Markdoc
+config and pin their structure, and the offline evaluation asserts the same
+structure on every fixture draft, so a prompt regression fails `pnpm test`
+instead of a paid generation run.

@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.28.0`. Its major version matches the
+The current package version is `1.29.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.28.0
+  balade-authoring: 1.29.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -128,28 +128,34 @@ the existing decisions and objective checks green.
 
 ## Section selection
 
-The package starts from the pr-96 navigation skeleton, which it teaches as
-roles rather than headings. A role says what a part of the walkthrough does; the
-author selects the roles the change carries, decides how many sections each
-needs, and writes every section title and group label for that change. A role
-name can be the label when it is the best name for what its sections cover; it
-is a starting point, not a default to copy. The one fixed label is the closing
-full-PR diff group.
+The package teaches structure with two complete exemplar walkthroughs and a
+four-step procedure, in that order, instead of a skeleton of named groups to
+fill. The exemplars — one feature change, one documentation-only change — are
+parsed against the real Markdoc config by tests, which also pin their
+structure: the overview opens, every section sits in a labelled group and
+carries an icon, evidence sits under its claim, and the bare full-PR diff
+closes. Every convention the package expects appears in them correct, because
+generation copies the artifact it is shown more reliably than it follows a
+rule about that artifact.
 
-Every section sits in a group, so the sidebar never shows an entry hanging under
-the heading above it. Sections that share a subject go under one group named
-after what they cover, and the guidance gives example labels — Overview, Why it
-changed, Mechanism, Reviewer surfaces, Regression proof — rather than a list to
-fill.
+The procedure the guidance states:
 
-| Role | Use it for |
-| --- | --- |
-| Orientation | The review frame: what changed, why it matters, and the constraint that shapes it. This role is always present and always first; its section keeps the id `overview`, which `check` requires. |
-| Mechanism | An algorithm or non-obvious logic worth explaining. It follows the orientation directly, and its explanation carries the section. |
-| Models | Domain types, persisted state, components, or services whose structure carries the change. |
-| Surface | UI, API, CLI, configuration, or documentation behavior that a caller, operator, or user can observe. |
-| Quality | Tests, security, migrations, or translations that provide review evidence. Each selected topic gets its own section. |
-| Full PR diff | The final verification sweep. This group is always last, and keeps its name and its closing section contains a bare `{% files /%}` block, optionally holding `{% filegroup /%}` children that group the browser. |
+1. Read the diff; one sentence on what changed and why a reviewer cares opens
+   the overview — the first section, `id="overview"`, which `check` requires.
+2. List the subjects a reviewer must understand: the algorithm or non-obvious
+   logic; the types, state, or services whose structure carries the change; the
+   observable behavior; the evidence. Most changes carry one to three beyond
+   the overview; a mechanical change may carry none.
+3. Each subject becomes one group, labelled in the change's own words. Every
+   section sits in a group and carries an icon naming its subject; explanation
+   first, the proving code range under its claim.
+4. The Full PR diff group closes the walkthrough, which `check` also requires,
+   split by `{% filegroup /%}` children when the pull request is large.
+
+The same offline evaluation that replays scripted transcripts asserts this
+structure on every fixture: an expected draft whose first section is not the
+overview, whose sections sit ungrouped or without icons, or whose closing
+diff is filtered fails `pnpm test` before any paid generation runs.
 
 The Mechanism sections are there to help a human have a real understanding of the 
 code produced in this PR. Explain the overall concepts, the logic, models, actors and
