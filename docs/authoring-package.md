@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.29.0`. Its major version matches the
+The current package version is `1.30.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.29.0
+  balade-authoring: 1.30.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file
@@ -128,32 +128,19 @@ the existing decisions and objective checks green.
 
 ## Section selection
 
-The package teaches structure with two complete exemplar walkthroughs and a
-four-step procedure, in that order, instead of a skeleton of named groups to
-fill. Each exemplar is a Markdown document beside the module
-([`src/authoring/exemplar-feature.md`](../src/authoring/exemplar-feature.md),
-[`src/authoring/exemplar-documentation.md`](../src/authoring/exemplar-documentation.md)):
-a one-line pull-request context, then the walkthrough body. The exemplars — one feature change, one documentation-only change — are
-parsed against the real Markdoc config by tests, which also pin their
-structure: the overview opens, every section sits in a labelled group and
-carries an icon, evidence sits under its claim, and the bare full-PR diff
-closes. Every convention the package expects appears in them correct, because
-generation copies the artifact it is shown more reliably than it follows a
-rule about that artifact.
+The package teaches its tags as a language and dictates no outline. It never
+shows a finished walkthrough: each tag family carries one example in the block
+catalog, and the shared guidance shows small composition moves — such as two
+sidebar entries declared under one group — that tests parse against the real
+Markdoc config. The prompt addresses the model as the senior engineer
+explaining its own work: decide what the reviewer must understand, in what
+order, and at what depth.
 
-The procedure the guidance states:
-
-1. Read the diff; one sentence on what changed and why a reviewer cares opens
-   the overview — the first section, `id="overview"`, which `check` requires.
-2. List the subjects a reviewer must understand: the algorithm or non-obvious
-   logic; the types, state, or services whose structure carries the change; the
-   observable behavior; the evidence. Most changes carry one to three beyond
-   the overview; a mechanical change may carry none.
-3. Each subject becomes one group, labelled in the change's own words. Every
-   section sits in a group and carries an icon naming its subject; explanation
-   first, the proving code range under its claim.
-4. The Full PR diff group closes the walkthrough, which `check` also requires,
-   split by `{% filegroup /%}` children when the pull request is large.
+Two boundaries are fixed and `check` enforces both — the walkthrough opens
+with the overview (`id="overview"`) and closes with the Full PR diff group and
+its bare `{% files /%}` block. Between them, sections that share a subject sit
+under one group labelled in the change's own words, and every section carries
+an icon naming its subject.
 
 The same offline evaluation that replays scripted transcripts asserts this
 structure on every fixture: an expected draft whose first section is not the

@@ -4,16 +4,20 @@ Use simple technichal sentences in the style of Google dev documentation. For En
 
 ## How to structure the walkthrough
 
-Work through these steps once per pull request:
+You inspected the change; you now know it better than the reviewer does. Write the walkthrough as the senior engineer who explains their own work: decide what the reviewer must understand, in what order, and how much depth each point deserves. The tags in this document are the language; the composition is yours.
 
-1. Read the diff. Write one sentence: what changed and why a reviewer should care. That sentence opens the overview — the first section, with `id="overview"`. `check` rejects a walkthrough that opens with any other section.
-2. List the subjects a reviewer must understand to approve the change. Candidate subjects: the algorithm or non-obvious logic; the domain types, state, or services whose structure carries the change; the behavior a caller, operator, or user can observe; the evidence — tests, security, migrations, translations. Most changes carry one to three subjects beyond the overview. A mechanical or documentation-only change may carry none.
-3. Give each subject one group, labelled in the change's own words, and write its sections. Every section sits in a group and carries an icon that names its subject. Explanation comes first; the code range that proves a claim sits directly under that claim.
-4. Close with the Full PR diff group and its attribute-free `{% files /%}` block. `check` rejects a walkthrough without it. When the pull request touches more than ten files, split that closing browser with `{% filegroup /%}` children named from the change; the groups only partition the diff, so no file is hidden.
+Two boundaries are fixed, and `check` enforces both. The first section is the overview, with `id="overview"`: what changed and why the reviewer should care. The last is the Full PR diff group with its attribute-free `{% files /%}` block — split by `{% filegroup /%}` children named from the change when the pull request is large; the groups only partition the diff, so no file is hidden.
 
-## Exemplars
+Between those boundaries, gather the sections that share a subject under one group labelled in the change's own words, and give every section an icon that names its subject. Every section sits in a group. Two sidebar entries under one group are declared like this:
 
-{{exemplars}}
+{% group label="Clarification threads" %}
+{% section id="question-lifecycle" title="From selection to pinned answer" icon="workflow" %}
+The narrative of this section.
+{% /section %}
+{% section id="thread-state" title="Generation-bound thread state" icon="versions" %}
+The narrative of this section.
+{% /section %}
+{% /group %}
 
 When the change carries an algorithm or non-obvious logic, explain the solution in the Mechanism sections, directly after the orientation. The explanation is the primary content of the section, human comprehension is the goal. Explain the overall concepts, the logic, models, actors and algorithms that are in this PR. This section doesn't need to go over translation files, or documentation updates or other transversal or trivial changes, it is used to understand pieces of code that are introduced in the PR. Feel free to use pseudo-code (A markdown fence tagged `pseudo`) to explain difficult logic, to use mermaid diagram flows (A Markdown fence tagged `mermaid` renders as a diagram), UML or any other illustration that may perfectly represent the logic of the code in the PR and help understanding. If the PR introduce known algorithms, encryption techniques, modelization techniques, feel free to give link for reading materials and explaination of the software engineering concept. When explaining the code feel free to directly have the code block shown in-between, in full form or pinned with `collapsed=true` to disclose it as a 'If you want to dive deeper' section.
 

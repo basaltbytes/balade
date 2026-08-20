@@ -9,7 +9,6 @@ import {
   inspectionBudget,
 } from "../src/authoring/package.js";
 import { AUTHORING_RUBRIC } from "../src/authoring/rubric.js";
-import { AUTHORING_EXEMPLARS } from "../src/authoring/exemplars.js";
 import { authoringSystemPrompt, initialAuthoringPrompt } from "../src/pi/authoring.js";
 import { renderDraft } from "../src/commands/generate/pipeline.js";
 import { odooPreset, ODOO_AUTHORING_EXAMPLES } from "../src/preset/odoo.js";
@@ -67,40 +66,42 @@ const source: PullSnapshot = {
   notices: [],
 };
 
+/** Top-level `{% group %}…{% /group %}` fragments taught in the shared guidance. */
+function guidanceFragments(): readonly string[] {
+  const text = readFileSync(new URL("../src/authoring/guidance.md", import.meta.url), "utf8");
+  const fragments: string[] = [];
+  let current: string[] | null = null;
+  let depth = 0;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("{% group")) {
+      current ??= [];
+      depth++;
+    }
+    if (current !== null) current.push(line);
+    if (line.startsWith("{% /group")) {
+      depth--;
+      if (depth === 0 && current !== null) {
+        fragments.push(current.join("\n"));
+        current = null;
+      }
+    }
+  }
+  return fragments;
+}
+
 describe("the authoring package", () => {
   it("couples its major version to the walkthrough schema", () => {
     const major = Number(AUTHORING_PACKAGE_VERSION.split(".").at(0));
     expect(major).toBe(AUTHORING_WALKTHROUGH_SCHEMA_VERSION);
   });
 
-  it("ships one exemplar per pull-request shape and four rubric axes", () => {
-    expect(AUTHORING_EXEMPLARS.map((exemplar) => exemplar.name)).toEqual([
-      "feature",
-      "documentation",
-    ]);
+  it("ships four rubric axes", () => {
     expect(AUTHORING_RUBRIC.map((criterion) => criterion.id)).toEqual([
       "factual-accuracy",
       "section-selection",
       "reviewer-usefulness",
       "prose-quality",
     ]);
-  });
-
-  it("keeps every exemplar in the taught structure", () => {
-    for (const { name, text } of AUTHORING_EXEMPLARS) {
-      const sections = [...text.matchAll(/\{% section id="([a-z0-9-]+)"[^%]*%\}/g)];
-      expect(sections.at(0)?.at(1), `${name} opens with the overview`).toBe("overview");
-      expect(text, `${name} closes with the bare diff`).toContain("{% files /%}");
-      /* Every section sits in a group: a section tag opens only inside an open group. */
-      let depth = 0;
-      for (const tag of text.matchAll(/\{% (\/?)(group|section)[^%]*%\}/g)) {
-        if (tag[2] === "group") depth += tag[1] === "/" ? -1 : 1;
-        else if (tag[1] !== "/") expect(depth, `${name} groups every section`).toBeGreaterThan(0);
-      }
-      for (const section of sections) {
-        expect(section[0], `${name} icons every section`).toContain('icon="');
-      }
-    }
   });
 
   it("scales inspection budgets with the pull request and honors the tier", () => {
@@ -138,13 +139,15 @@ describe("the authoring package", () => {
     for (const { label, example } of AUTHORING_TAG_CATALOG) {
       expect(exampleErrors(example), `catalog example ${label}`).toEqual([]);
     }
-    for (const { name, text } of AUTHORING_EXEMPLARS) {
-      /* Exemplars are complete bodies; wrap frontmatter only. */
+    const fragments = guidanceFragments();
+    expect(fragments.length).toBeGreaterThan(0);
+    for (const [index, fragment] of fragments.entries()) {
+      /* Guidance fragments carry their own group; wrap frontmatter only. */
       const errors = parseDocument(
-        `---\nwalkthrough: 1\ntitle: Exemplar\npr: 1\ncommit: abcdef1\n---\n\n${text}\n`,
-        "exemplar.md",
+        `---\nwalkthrough: 1\ntitle: Fragment\npr: 1\ncommit: abcdef1\n---\n\n${fragment}\n`,
+        "fragment.md",
       ).diagnostics.filter((diagnostic) => diagnostic.level === "error");
-      expect(errors, `exemplar ${name}`).toEqual([]);
+      expect(errors, `guidance fragment ${index}`).toEqual([]);
     }
     for (const [name, example] of Object.entries(ODOO_AUTHORING_EXAMPLES)) {
       expect(exampleErrors(example, "odoo"), `odoo example ${name}`).toEqual([]);
@@ -159,9 +162,11 @@ describe("the authoring package", () => {
     expect(new Set(AUTHORING_ICON_NAMES).size).toBe(AUTHORING_ICON_NAMES.length);
   });
 
-  it("writes only taught icon names in its exemplars and examples", () => {
+  it("writes only taught icon names in its fragments and examples", () => {
     const sources = [
-      ...AUTHORING_EXEMPLARS.map(({ name, text }) => [name, text] as const),
+      ...guidanceFragments().map(
+        (fragment, index) => [`guidance fragment ${index}`, fragment] as const,
+      ),
       ...AUTHORING_TAG_CATALOG.map(({ label, example }) => [label, example] as const),
     ];
     for (const [label, text] of sources) {

@@ -11,7 +11,6 @@
 import { tagCatalogText } from "./catalog.js";
 import { plainHeadings, proseTemplate, renderProse } from "./prose.js";
 import { rubricText } from "./rubric.js";
-import { exemplarsText } from "./exemplars.js";
 
 /** How a host surface renders the document's `##` section headings. */
 export type GuidanceHeadings = "markdown" | "plain";
@@ -21,7 +20,6 @@ export function sharedGuidance(headings: GuidanceHeadings): string {
   const template = proseTemplate(import.meta.url, "guidance.md");
   /* Both hosts embed the guidance mid-document, so the file's trailing newline is trimmed. */
   return renderProse(headings === "plain" ? plainHeadings(template) : template, {
-    exemplars: exemplarsText,
     "tag-catalog": tagCatalogText,
     rubric: rubricText,
   }).trimEnd();
