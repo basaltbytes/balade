@@ -25,7 +25,9 @@ When an absence is a deliberate product rule, explain it with ordinary Markdown 
 
 ## Markdoc rules
 
-Use ordinary Markdown for narrative inside group and section tags. Reference pinned code with a self-closing tag:
+Use ordinary Markdown for narrative inside group and section tags, with its full inline vocabulary: **bold**, *italic*, `inline code`, bulleted and numbered lists, and `###` headings for sub-structure inside a long section. Write it the way good developer documentation does — `inline code` for identifiers, paths, and values; bold for the term a paragraph introduces or the fact a reviewer must retain; a short list for a run of parallel points that does not warrant a block. Hyperlinks render as their text only; the app links no external URL from walkthrough prose.
+
+Reference pinned code with a self-closing tag:
 
 {% code file="src/example.ts" from=10 to=24 expect="exact first-line prefix" /%}
 

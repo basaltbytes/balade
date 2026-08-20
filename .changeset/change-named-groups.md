@@ -19,4 +19,4 @@ overview opens, the bare full-PR diff closes) and two standing expectations
 offline evaluation asserts that structure on every fixture, so a prompt
 regression fails `pnpm test` instead of a paid run.
 
-Authoring package 1.31.0.
+Authoring package 1.32.0.
