@@ -21,7 +21,7 @@ reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric.
 
-The current package version is `1.30.0`. Its major version matches the
+The current package version is `1.31.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +89,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.30.0
+  balade-authoring: 1.31.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file

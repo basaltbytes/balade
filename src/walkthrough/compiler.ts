@@ -109,6 +109,7 @@ export function compileDocument(input: CompileInput): CompileResult {
   const relatedRefs: { ids: readonly string[]; line: number }[] = [];
   let closingSection: Node | undefined;
   let openingSection: Node | undefined;
+  const groupLabels = new Map<string, number>();
 
   const sectionOf = (node: Node): NavNode | null => {
     const id = String(node.attributes["id"] ?? "");
@@ -209,9 +210,23 @@ export function compileDocument(input: CompileInput): CompileResult {
     const nav: NavNode[] = [];
     for (const node of nodes) {
       if (node.type === "tag" && node.tag === "group") {
+        const label = String(node.attributes["label"] ?? "");
+        const first = groupLabels.get(label);
+        if (first === undefined) {
+          groupLabels.set(label, lineOf(node));
+        } else {
+          diagnostics.push({
+            code: "group-label-duplicate",
+            level: "error",
+            file: sourcePath,
+            line: lineOf(node),
+            message: `The group label \`${label}\` is already used on line ${first}.`,
+            hint: "Each group is one subject: move these sections into the existing group, or rename this label.",
+          });
+        }
         nav.push({
           kind: "group",
-          label: String(node.attributes["label"] ?? ""),
+          label,
           children: walk(node.children),
         });
         continue;

@@ -8,13 +8,13 @@ You inspected the change; you now know it better than the reviewer does. Write t
 
 Two boundaries are fixed, and `check` enforces both. The first section is the overview, with `id="overview"`: what changed and why the reviewer should care. The last is the Full PR diff group with its attribute-free `{% files /%}` block — split by `{% filegroup /%}` children named from the change when the pull request is large; the groups only partition the diff, so no file is hidden.
 
-Between those boundaries, gather the sections that share a subject under one group labelled in the change's own words, and give every section an icon that names its subject. Every section sits in a group. Two sidebar entries under one group are declared like this:
+Between those boundaries, gather the sections that share a subject under one group labelled in the change's own words, and give every section an icon that names its subject. Every section sits in a group. The example below is from a fictional pull request; your labels and titles come from your change. Two sidebar entries under one group are declared like this:
 
-{% group label="Clarification threads" %}
-{% section id="question-lifecycle" title="From selection to pinned answer" icon="workflow" %}
+{% group label="Upload retries" %}
+{% section id="backoff" title="Backoff and give-up decisions" icon="iterations" %}
 The narrative of this section.
 {% /section %}
-{% section id="thread-state" title="Generation-bound thread state" icon="versions" %}
+{% section id="chunk-order" title="Order kept within one file" icon="workflow" %}
 The narrative of this section.
 {% /section %}
 {% /group %}
