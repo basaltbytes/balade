@@ -1,6 +1,6 @@
 {
   "name": "balade",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Human-readable walkthroughs for agent-scale pull requests. A bring-your-own-agent CLI that turns walkthrough files into interactive review apps.",
   "keywords": [
     "agentic-development",
