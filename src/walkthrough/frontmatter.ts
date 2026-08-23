@@ -29,7 +29,7 @@ const INVALID_FIELDS = [
   {
     key: "walkthrough",
     message: (value: string) => `Unsupported schema version \`${value}\`.`,
-    hint: `This build reads schema version ${SCHEMA_VERSION}. Write \`walkthrough: ${SCHEMA_VERSION}\`, or run a newer balade.`,
+    hint: `This version of balade supports schema version ${SCHEMA_VERSION}. Write \`walkthrough: ${SCHEMA_VERSION}\`, or upgrade balade.`,
   },
   {
     key: "title",
@@ -115,7 +115,7 @@ export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
       file,
       line: 1,
       message: "The walkthrough file has no frontmatter.",
-      hint: "Start the file with a `---` block that holds walkthrough: 1, title, pr and commit.",
+      hint: "Start the file with a `---` block containing walkthrough: 1, title, pr and commit.",
     });
     return { frontmatter: null, diagnostics };
   }
@@ -130,7 +130,7 @@ export function parseFrontmatter(raw: string, file: string): FrontmatterResult {
       file,
       line: 1,
       message: `The frontmatter is not valid YAML: ${error instanceof Error ? error.message : String(error)}`,
-      hint: "Quote values that hold a colon, and keep the indentation consistent.",
+      hint: "Quote values that contain a colon, and keep the indentation consistent.",
     });
     return { frontmatter: null, diagnostics };
   }

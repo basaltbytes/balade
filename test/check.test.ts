@@ -361,7 +361,7 @@ The narrative.
       expect(find(rejected, "overview-section-missing")).toMatchObject({
         level: "error",
         message: expect.stringContaining("first section"),
-        hint: expect.stringContaining("frames the change"),
+        hint: expect.stringContaining("introduces the change"),
       });
       expect(codes(valid.diagnostics)).not.toContain("overview-section-missing");
     }),

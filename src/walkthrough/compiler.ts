@@ -125,7 +125,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         file: sourcePath,
         line,
         message: `The section id \`${id}\` is already used on line ${first}.`,
-        hint: "Section ids key the review state; give this one its own kebab-case id.",
+        hint: "Section ids identify the review state; give this one a unique kebab-case id.",
       });
     }
     seen.set(id, line);
@@ -150,7 +150,7 @@ export function compileDocument(input: CompileInput): CompileResult {
           file: sourcePath,
           line,
           message: `The section file \`${filePath}\` does not exist at ${short(ctx.pin)}.`,
-          hint: "Use a path relative to the repository root, as git spells it.",
+          hint: "Use a path relative to the repository root, as git reports it.",
         });
         sectionEnv.card({
           code: "file-unresolvable",
@@ -166,7 +166,7 @@ export function compileDocument(input: CompileInput): CompileResult {
           file: sourcePath,
           line,
           message: `The section file \`${filePath}\` is not part of this PR.`,
-          hint: "A file-section marks a changed file; use a plain section for context files.",
+          hint: "A file section is for a changed file; use a plain section for context files.",
         });
       }
     }
@@ -244,8 +244,8 @@ export function compileDocument(input: CompileInput): CompileResult {
           level: "error",
           file: sourcePath,
           line: lineOf(node),
-          message: `The tag \`${node.tag ?? ""}\` sits outside a section.`,
-          hint: "The document body holds sections and groups only; move the tag inside a `section`.",
+          message: `The tag \`${node.tag ?? ""}\` is outside a section.`,
+          hint: "Only sections and groups are allowed at the top level; move the tag inside a `section`.",
         });
         continue;
       }
@@ -255,8 +255,8 @@ export function compileDocument(input: CompileInput): CompileResult {
           level: "warning",
           file: sourcePath,
           line: lineOf(node),
-          message: "Prose outside a section does not reach the payload.",
-          hint: "Move it into a `section`; the document body holds sections and groups only.",
+          message: "Text outside a section is ignored.",
+          hint: "Move it into a `section`; only sections and groups are allowed at the top level.",
         });
       }
     }
@@ -292,7 +292,7 @@ export function compileDocument(input: CompileInput): CompileResult {
       file: sourcePath,
       line: lineOf(openingSection),
       message: 'The first section must be the overview, with `id="overview"`.',
-      hint: "Open the walkthrough with the section that frames the change for the reviewer.",
+      hint: "The first section introduces the change to the reviewer.",
     });
   }
 
@@ -313,8 +313,8 @@ export function compileDocument(input: CompileInput): CompileResult {
       level: "error",
       file: sourcePath,
       line: lineOf(openingSection),
-      message: "The walkthrough must open with a group holding only the overview section.",
-      hint: "Wrap the overview in its own opening group; the thematic groups start after it.",
+      message: "The walkthrough must start with a group containing only the overview section.",
+      hint: "Wrap the overview in its own group; the thematic groups come after it.",
     });
   }
 
@@ -326,7 +326,7 @@ export function compileDocument(input: CompileInput): CompileResult {
           level: "error",
           file: sourcePath,
           line: pending.line,
-          message: `\`related\` names \`${id}\`, which no section in this file defines.`,
+          message: `\`related\` references \`${id}\`, but no section in this file has that id.`,
           hint: "Each `related` entry is a section id; its chip jumps to that section.",
         });
       }
@@ -342,7 +342,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         level: "error",
         file: sourcePath,
         line,
-        message: `The PR head moved ${ctx.headDistance} commit${ctx.headDistance === 1 ? "" : "s"} past the stamp, and it touches ${overlap.join(", ")}.`,
+        message: `The PR head is ${ctx.headDistance} commit${ctx.headDistance === 1 ? "" : "s"} ahead of the stamped commit and changes ${overlap.join(", ")}.`,
         hint: `Re-read the changed files, update the ranges, then re-stamp: commit: ${short(ctx.headSha)}.`,
       });
     } else {
@@ -351,7 +351,7 @@ export function compileDocument(input: CompileInput): CompileResult {
         level: "warning",
         file: sourcePath,
         line,
-        message: `The PR head moved ${ctx.headDistance} commit${ctx.headDistance === 1 ? "" : "s"} past the stamp, but touches no file this walkthrough shows.`,
+        message: `The PR head is ${ctx.headDistance} commit${ctx.headDistance === 1 ? "" : "s"} ahead of the stamped commit, but changes no file shown in this walkthrough.`,
         hint: `Re-stamp when convenient: commit: ${short(ctx.headSha)}.`,
       });
     }

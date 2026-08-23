@@ -67,7 +67,7 @@ export function parseDocument(source: string, file: string): ParsedDocument {
         file,
         line: frontmatterLine(raw, "preset"),
         message: `Unknown preset \`${frontmatter.preset}\`.`,
-        hint: `This build ships: ${presetNames().join(", ")}. Remove the key to stay on the core catalog.`,
+        hint: `Available presets: ${presetNames().join(", ")}. Remove the key to use the core catalog only.`,
       });
     }
   }
