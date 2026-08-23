@@ -115,7 +115,7 @@ export function compileBlocks(
         level: "warning",
         file: env.file,
         line: lineOf(fence),
-        message: "A fenced code block reaches the payload only at a section's top level.",
+        message: "Fenced code blocks are only supported at the top level of a section.",
         hint: "Move the fence out of the blockquote or list. A ```mermaid fence renders as a diagram; any other fence renders as read-only text.",
       });
     }
@@ -177,8 +177,8 @@ function compileTag(node: Node, env: CompileEnv, sectionId: string): Block[] {
       level: "error",
       file: env.file,
       line: lineOf(node),
-      message: `The tag \`${tag}\` cannot stand on its own.`,
-      hint: `Put it inside its parent tag, as \`field\` goes inside \`fields\`.`,
+      message: `The tag \`${tag}\` must be inside a parent tag.`,
+      hint: `Put it inside its parent tag (for example \`field\` inside \`fields\`).`,
     });
     return [];
   }
@@ -278,7 +278,7 @@ function childTags(node: Node, family: string, env: CompileEnv): Node[] {
       level: "error",
       file: env.file,
       line: lineOf(child),
-      message: `\`${family}\` cannot hold a \`${tag}\` tag.`,
+      message: `\`${tag}\` is not allowed inside \`${family}\`.`,
       hint: `Use ${allowed.map((name) => `\`${name}\``).join(" or ")} inside \`${family}\`.`,
     });
   }
@@ -417,7 +417,7 @@ function matrixBlock(node: Node, env: CompileEnv): Block {
       level: "error",
       file: env.file,
       line: lineOf(node),
-      message: "`matrix` holds no table.",
+      message: "`matrix` contains no table.",
       hint: "Put a markdown table inside `matrix` — the first column is the row label.",
     });
     return { b: "matrix", head: [], rows: [] };
@@ -486,8 +486,8 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
         level: "warning",
         file: env.file,
         line: lineOf(child),
-        message: `The \`filegroup\` \`${label}\` claims no file this list still holds.`,
-        hint: `Check the filter: ${childFilter.text}. Earlier groups claim first; statuses are ${FILE_STATUSES.join(", ")}.`,
+        message: `The \`filegroup\` \`${label}\` matches no file.`,
+        hint: `Check the filter: ${childFilter.text}. Files already taken by an earlier \`filegroup\` are not available again. Statuses are ${FILE_STATUSES.join(", ")}.`,
       });
     }
   }
@@ -510,8 +510,8 @@ function filesBlock(node: Node, env: CompileEnv, sectionId: string): Block {
         level: "error",
         file: env.file,
         line: lineOf(node),
-        message: `\`why\` names \`${path}\`, which this file list does not hold.`,
-        hint: "Name a path the PR changed, and keep it inside the `only`/`status` filter.",
+        message: `\`why\` references \`${path}\`, which is not in this file list.`,
+        hint: "Use a path the PR changed that also matches the `only`/`status` filter.",
       });
       continue;
     }
@@ -577,7 +577,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
       file: env.file,
       line,
       message: `\`${file}\` does not exist at the stamped commit ${short(env.ctx.pin)}.`,
-      hint: "Check the path — it is relative to the repository root — or re-stamp the walkthrough against a commit that holds the file.",
+      hint: "Check the path (relative to the repository root), or re-stamp the walkthrough against a commit that contains the file.",
     });
     env.card({
       code: "file-unresolvable",
@@ -601,12 +601,12 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
       level: "error",
       file: env.file,
       line,
-      message: `Lines ${from}-${to} fall outside \`${file}\`, which holds ${blob.value.length} lines at ${short(env.ctx.pin)}.`,
+      message: `Lines ${from}-${to} are out of range: \`${file}\` has ${blob.value.length} lines at ${short(env.ctx.pin)}.`,
       hint: `Use a range inside 1-${blob.value.length}.`,
     });
     env.card({
       code: "range-unresolvable",
-      message: `Lines ${from}-${to} fall outside \`${file}\` (${blob.value.length} lines).`,
+      message: `Lines ${from}-${to} are out of range: \`${file}\` has ${blob.value.length} lines.`,
       reference,
       sectionId,
       line,
@@ -635,7 +635,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
       level: "warning",
       file: env.file,
       line,
-      message: `\`mark\` names ${outside.join(", ")}, outside the range ${from}-${to}.`,
+      message: `\`mark\` lists ${outside.join(", ")}, outside the range ${from}-${to}.`,
       hint: `Mark lines are absolute file line numbers; keep them inside ${from}-${to}.`,
     });
   }
@@ -650,8 +650,8 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
       level: "warning",
       file: env.file,
       line,
-      message: `The code reference \`${reference}\` carries no \`expect\`.`,
-      hint: `Add expect="${quoteFragment(first)}" — a literal fragment of line ${from}, so a miscounted range fails loudly.`,
+      message: `The code reference \`${reference}\` has no \`expect\` attribute.`,
+      hint: `Add expect="${quoteFragment(first)}", a literal fragment of line ${from}, so a wrong range is reported as an error.`,
     });
   } else if (first.includes(expected)) {
     expect = { value: expected, status: "ok" };
@@ -662,7 +662,7 @@ function codeBlock(node: Node, env: CompileEnv, sectionId: string): Block[] {
       level: "error",
       file: env.file,
       line,
-      message: `Line ${from} of \`${file}\` does not hold the expected fragment.`,
+      message: `Line ${from} of \`${file}\` does not contain the expected fragment.`,
       hint: "Recount the range, then quote a fragment of its first line.",
       expected,
       actual: first,

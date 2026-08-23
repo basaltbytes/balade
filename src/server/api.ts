@@ -300,7 +300,7 @@ export function apiErrorResponse(error: ApiError): ApiErrorResponse {
     }),
     ApiReviewStateMismatch: ({ statePath, requestPath }): ApiErrorResponse => ({
       status: 400,
-      message: `The body names \`${statePath}\`, but the request names \`${requestPath}\`.`,
+      message: `The body is for \`${statePath}\`, but the request is for \`${requestPath}\`.`,
     }),
     ApiTargetNotServed: ({ path }): ApiErrorResponse => ({
       status: 404,
@@ -312,7 +312,7 @@ export function apiErrorResponse(error: ApiError): ApiErrorResponse {
     }),
     ApiStampUnreadable: ({ path }): ApiErrorResponse => ({
       status: 404,
-      message: `\`${path}\` carries no readable stamp.`,
+      message: `\`${path}\` has no readable stamp.`,
     }),
     ApiStampUnresolvable: ({ pin }): ApiErrorResponse => ({
       status: 404,

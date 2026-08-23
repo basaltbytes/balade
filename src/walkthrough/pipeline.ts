@@ -120,7 +120,7 @@ export function loadErrorDiagnostic(error: LoadError): CheckDiagnostic {
       level: "error",
       file: cwd,
       message: "This directory is not inside a git repository.",
-      hint: "Run balade from the repository that holds the walkthrough.",
+      hint: "Run balade from the repository that contains the walkthrough.",
     }),
     CommitUnresolvable: ({ commit, file }): CheckDiagnostic => ({
       code: "commit-unresolvable",
