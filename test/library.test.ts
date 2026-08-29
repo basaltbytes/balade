@@ -99,7 +99,7 @@ describe("the library entry", () => {
         origin.write("AGENTS.md", "PINNED HEAD INSTRUCTIONS\n");
         const pin = origin.commit("docs: instructions changed by the pull request");
         const clone = yield* cloneOf(origin, 42);
-        const harness = yield* Effect.promise(() => piHarness(true, undefined, libraryShell));
+        const harness = yield* Effect.promise(() => piHarness({ shell: libraryShell }));
         const systemPrompts: string[] = [];
         harness.faux.setResponses([
           (context) => {
@@ -184,7 +184,7 @@ describe("the library entry", () => {
 
   it.effect("resolves the model without a picker, before the pull request is touched", () =>
     Effect.gen(function* () {
-      const harness = yield* Effect.promise(() => piHarness(true, undefined, libraryShell));
+      const harness = yield* Effect.promise(() => piHarness({ shell: libraryShell }));
       const nowhere = join(tmpdir(), "balade-library-no-repository");
       const unresolved = yield* Effect.flip(
         generateWalkthrough({
@@ -210,7 +210,7 @@ describe("the library entry", () => {
       expect(unsaved.requested).toBe("the saved model preference");
 
       const unauthenticated = yield* Effect.promise(() =>
-        piHarness(false, undefined, libraryShell),
+        piHarness({ faux: false, shell: libraryShell }),
       );
       const missing = yield* Effect.flip(
         generateWalkthrough({ repository: nowhere, pullRequest: 42, model: FAUX_MODEL }).pipe(

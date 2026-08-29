@@ -532,7 +532,7 @@ describe("the Pi adapter", () => {
           throw new Error("settings unavailable");
         },
       });
-      const harness = yield* Effect.promise(() => piHarness(true, brokenSettings));
+      const harness = yield* Effect.promise(() => piHarness({ settingsManager: brokenSettings }));
       const failures = yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         const read = yield* Effect.flip(author.modelPreference);
@@ -678,7 +678,7 @@ describe("the Pi adapter", () => {
 
   it.effect("exposes missing authentication without reading the user's Pi store", () =>
     Effect.gen(function* () {
-      const harness = yield* Effect.promise(() => piHarness(false));
+      const harness = yield* Effect.promise(() => piHarness({ faux: false }));
       const { methods, models } = yield* Effect.gen(function* () {
         const author = yield* WalkthroughAuthor;
         return {
@@ -701,7 +701,7 @@ describe("the Pi adapter", () => {
 
   it.effect("keeps an unavailable model as a typed startup failure", () =>
     Effect.gen(function* () {
-      const harness = yield* Effect.promise(() => piHarness(false));
+      const harness = yield* Effect.promise(() => piHarness({ faux: false }));
       const unavailable = yield* Schema.decodeUnknownEffect(AuthorModelSchema)({
         providerId: "missing-provider",
         providerName: "Missing provider",

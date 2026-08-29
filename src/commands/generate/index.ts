@@ -5,10 +5,10 @@ import { Effect, Option, Schema, Terminal } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
 import {
   AgentModelManager,
+  agentModelErrorMessage,
   modelSelectionFromFlags,
   type AgentModelConfigurationError,
 } from "../../agent/model.js";
-import { agentModelErrorMessage } from "../../agent/terminal.js";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import { langOfMeta } from "../../contract/schema.js";
 import type { Lang } from "../../contract/types.js";

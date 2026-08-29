@@ -2,8 +2,11 @@
 
 import { Effect } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { AgentModelManager, modelSelectionFromFlags } from "../../agent/model.js";
-import { agentModelErrorMessage } from "../../agent/terminal.js";
+import {
+  AgentModelManager,
+  agentModelErrorMessage,
+  modelSelectionFromFlags,
+} from "../../agent/model.js";
 import { stdoutTheme, stopMessage, writeStdout } from "../../terminal.js";
 
 const provider = Flag.string("provider").pipe(

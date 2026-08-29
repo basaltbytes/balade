@@ -1,6 +1,7 @@
 /** Provider/model lifecycle shared by generation, live Q&A, setup and logout. */
 
 import { Context, Effect, Option, Schema, Semaphore } from "effect";
+import { sanitizeTerminalText } from "../terminal.js";
 import {
   AuthorModel as AuthorModelSchema,
   type AuthorLoginMethod,
@@ -347,4 +348,43 @@ function loginRank(method: AuthorLoginMethod): number {
 
 function requestedModel(filter: ModelFilter): string {
   return `${filter.providerId ?? "any provider"}/${filter.modelId ?? "any model"}`;
+}
+
+/** The sentences every boundary — terminal or promise — prints for these failures. */
+export function noProviderMessage(requested: string): string {
+  return (
+    `No authenticated agent model matches ${requested}. ` +
+    "Run `balade agent setup` interactively to authenticate and choose one."
+  );
+}
+
+export function loginErrorMessage(error: LoginFailed): string {
+  switch (error.reason) {
+    case "oauth":
+      return `The ${error.provider} subscription login did not complete. Retry \`balade agent setup\`.`;
+    case "auth":
+      return `The ${error.provider} credential was rejected. Check the account or API key and retry \`balade agent setup\`.`;
+    case "provider":
+      return `The ${error.provider} provider could not start. Check its configuration and retry \`balade agent setup\`.`;
+    case "unknown":
+      return `The ${error.provider} provider could not authenticate. Retry \`balade agent setup\`.`;
+  }
+}
+
+export function agentModelErrorMessage(error: AgentModelError): string {
+  switch (error._tag) {
+    case "AuthorDiscoveryFailed":
+      return "Agent providers and models could not be loaded. Check the installation and try again.";
+    case "LoginFailed":
+      return loginErrorMessage(error);
+    case "LoginCancelled":
+    case "AgentModelSelectionCancelled":
+      return "Agent setup cancelled.";
+    case "NoProviderAuthenticated":
+      return noProviderMessage(error.requested);
+    case "AuthorCredentialReadFailed":
+      return "Stored agent logins could not be read. Check ~/.balade/pi/auth.json and try again.";
+    case "AuthorLogoutFailed":
+      return `The stored ${sanitizeTerminalText(error.provider)} login could not be removed. Check ~/.balade/pi/auth.json and try again.`;
+  }
 }

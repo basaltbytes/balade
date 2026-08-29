@@ -101,7 +101,8 @@ A rejected promise carries the tagged error itself — `_tag`, fields,
 its `message` at the boundary (`withMessage`), because the error classes are
 shared with the CLI, whose messages live at *its* boundary, and `message` is
 what every promise consumer reads. The result is the CLI's `GenerationResult`
-plus the pull-request `notices` the command prints as warnings.
+unchanged; the pull-request `notices` the command prints as warnings ride in
+it, so a script sees a degraded `gh` the way an operator does.
 
 The build emits declarations (`tsconfig.build.json`, `declaration: true`),
 which forced one explicit return type in `src/pi/inspection.ts`: Pi's tool

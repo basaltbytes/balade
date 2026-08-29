@@ -10,11 +10,11 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, Layer, Option, Schema } from "effect";
 import {
+  agentModelErrorMessage,
   resolveAgentModel,
   type AgentModelResolutionError,
   type ExplicitModel,
 } from "./agent/model.js";
-import { agentModelErrorMessage } from "./agent/terminal.js";
 import type { InspectionTier } from "./authoring/package.js";
 import {
   buildErrorMessage,
@@ -37,7 +37,6 @@ import type { GenerationProgress } from "./commands/generate/progress.js";
 import { langOfMeta } from "./contract/schema.js";
 import type { CheckReport, Lang } from "./contract/types.js";
 import { contextResolverLive } from "./git/git.js";
-import type { PullNotice } from "./git/intent.js";
 import { parsePrTarget, resolvePullHead } from "./git/pr.js";
 import {
   WalkthroughAuthor,
@@ -133,9 +132,6 @@ export interface GenerateOptions {
   readonly onProgress?: (event: GenerationProgress) => void;
 }
 
-/** The CLI's result, plus the pull-request notices it would have printed as warnings. */
-export type GenerateResult = GenerationResult & { readonly notices: readonly PullNotice[] };
-
 export type GenerateError =
   | PullTargetInvalid
   | PresetUnknown
@@ -159,10 +155,9 @@ const noProgress = (): void => {};
  */
 export const generateWalkthrough = Effect.fn("generateWalkthrough")(
   function* (options: GenerateOptions) {
-    const target = parsePrTarget(String(options.pullRequest));
-    if (target === null) {
-      return yield* new PullTargetInvalid({ target: String(options.pullRequest) });
-    }
+    const reference = String(options.pullRequest);
+    const target = parsePrTarget(reference);
+    if (target === null) return yield* new PullTargetInvalid({ target: reference });
     const preset = options.preset === undefined ? undefined : getPreset(options.preset);
     if (options.preset !== undefined && preset === undefined) {
       return yield* new PresetUnknown({ preset: options.preset, available: presetNames() });
@@ -189,7 +184,7 @@ export const generateWalkthrough = Effect.fn("generateWalkthrough")(
     if (options.lang !== undefined) facets.lang = options.lang;
     if (options.guidance !== undefined) facets.guidance = options.guidance;
     if (options.budget !== undefined) facets.budget = options.budget;
-    const result = yield* runGeneration({
+    return yield* runGeneration({
       source,
       model,
       directory,
@@ -198,12 +193,11 @@ export const generateWalkthrough = Effect.fn("generateWalkthrough")(
       progress: options.onProgress ?? noProgress,
       ...facets,
     });
-    return { ...result, notices: source.notices } satisfies GenerateResult;
   },
   Effect.mapError((error) => withMessage(error, generateErrorMessage(error))),
 );
 
-export function generate(options: GenerateOptions): Promise<GenerateResult> {
+export function generate(options: GenerateOptions): Promise<GenerationResult> {
   return Effect.runPromise(generateWalkthrough(options).pipe(Effect.provide(liveLayer)));
 }
 

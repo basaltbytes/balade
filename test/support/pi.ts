@@ -2,6 +2,7 @@
 
 import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
+import type { SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { NodeServices } from "@effect/platform-node";
 import { Layer } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -24,11 +25,16 @@ export function releasePiHarnesses(): void {
   for (const cleanup of harnessCleanups.splice(0)) cleanup();
 }
 
-export async function piHarness(
-  registerFaux = true,
-  settingsManager = coding.SettingsManager.inMemory(),
-  shell: Layer.Layer<CommandExecutor | NodeServices.NodeServices> = shellLayer,
-) {
+export interface PiHarnessOptions {
+  /** `false` leaves no provider registered: the authenticated-model list is empty. */
+  readonly faux?: boolean;
+  readonly settingsManager?: SettingsManager;
+  /** The shell the author layer runs on; swap it to fake `gh` or the file system. */
+  readonly shell?: Layer.Layer<CommandExecutor | NodeServices.NodeServices>;
+}
+
+export async function piHarness(options: PiHarnessOptions = {}) {
+  const settingsManager = options.settingsManager ?? coding.SettingsManager.inMemory();
   const snapshotCacheRoot = mkdtempSync(join(tmpdir(), "balade-pi-snapshots-"));
   harnessCleanups.push(() =>
     rmSync(snapshotCacheRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
@@ -40,7 +46,7 @@ export async function piHarness(
     allowModelNetwork: false,
   });
   const faux = ai.fauxProvider();
-  if (registerFaux) {
+  if (options.faux !== false) {
     modelRuntime.registerNativeProvider(faux.provider);
     await modelRuntime.refresh({ allowNetwork: false });
   }
@@ -50,6 +56,6 @@ export async function piHarness(
       load: async () => ({ coding, ai, modelRuntime, settingsManager }),
     }),
     contextResolverLive,
-  ).pipe(Layer.provideMerge(shell));
+  ).pipe(Layer.provideMerge(options.shell ?? shellLayer));
   return { credentials, faux, layer, modelRuntime, settingsManager, snapshotCacheRoot };
 }

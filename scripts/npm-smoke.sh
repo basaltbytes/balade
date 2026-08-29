@@ -88,9 +88,9 @@ grep -Fqi "Not inside a git repository" "$GENERATE_STDERR"
 # consumer project, rejections are the tagged errors with a sentence attached,
 # and a finished call leaves nothing keeping the process alive.
 cat >"$PROJECT/consumer.ts" <<'EOF_CONSUMER'
-import { build, check, generate, type GenerateResult } from "balade";
+import { build, check, generate, type GenerationResult } from "balade";
 
-export async function walkthrough(pullRequest: number): Promise<GenerateResult> {
+export async function walkthrough(pullRequest: number): Promise<GenerationResult> {
   const result = await generate({
     pullRequest,
     model: { providerId: "openai-codex", modelId: "gpt-5.4" },
