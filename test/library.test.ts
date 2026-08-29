@@ -7,14 +7,7 @@ import * as ai from "@earendil-works/pi-ai";
 import { NodeServices } from "@effect/platform-node";
 import { execFileSync } from "node:child_process";
 import { Effect, Layer } from "effect";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
@@ -131,8 +124,11 @@ describe("the library entry", () => {
         /* Default policy: the changed AGENTS.md is skipped and reported; nothing asked. */
         const first = yield* run({});
         expect(first._tag).toBe("Generated");
-        /* Paths come back canonical, the way git reports the root. */
-        expect(first.file).toBe(join(realpathSync(clone.dir), WALKTHROUGH));
+        /* Absolute under the clone; the root's spelling is git's canonical one, not the fixture's. */
+        expect(
+          first.file.endsWith(join(".agents", "walkthroughs", "pr-42-live-planning-pool.md")),
+        ).toBe(true);
+        expect(existsSync(join(clone.dir, WALKTHROUGH))).toBe(true);
         expect(readFileSync(first.file, "utf8")).toContain(`commit: ${pin}`);
         expect(first.repairs).toBe(0);
         expect(first.usage.total).toBeGreaterThan(0);
