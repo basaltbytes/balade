@@ -37,6 +37,9 @@ function importsOf(file: string): string[] {
   return found;
 }
 
+/** The two roots: the executable and the library. They compose freely, and nothing imports them. */
+const ENTRIES = ["cli.ts", "library.ts"];
+
 /** The layer a module belongs to: a concept folder, `commands/<verb>`, or its root file. */
 function layerOf(module: string): string {
   const [head, verb] = module.split("/");
@@ -72,7 +75,7 @@ describe("the src/ dependency law", () => {
   const edges = files.flatMap((file) => importsOf(file).map((target) => ({ file, target })));
 
   it("finds the modules it polices", () => {
-    expect(files).toContain("cli.ts");
+    for (const entry of ENTRIES) expect(files).toContain(entry);
     expect(files).toContain("walkthrough/pipeline.ts");
     expect(edges.length).toBeGreaterThan(50);
   });
@@ -86,18 +89,23 @@ describe("the src/ dependency law", () => {
   it("keeps concepts and root utils on their allowed imports", () => {
     const violations = edges.filter(({ file, target }) => {
       const allowed = CONCEPT_EDGES.get(layerOf(file));
-      if (allowed === undefined) return false; // cli.ts, commands/, server/ compose freely
+      if (allowed === undefined) return false; // entries, commands/, server/ compose freely
       return !allowed.includes(layerOf(target));
     });
     expect(violations).toEqual([]);
   });
 
-  it("keeps the command boundary private to cli.ts and its own verb", () => {
+  it("keeps the command boundary private to the entries and its own verb", () => {
     const violations = edges.filter(({ file, target }) => {
       if (!target.startsWith("commands/")) return false;
-      return file !== "cli.ts" && layerOf(file) !== layerOf(target);
+      return !ENTRIES.includes(file) && layerOf(file) !== layerOf(target);
     });
     expect(violations).toEqual([]);
+  });
+
+  it("keeps the entries as roots: importing cli.ts would run it, importing library.ts would wire a second stack", () => {
+    const inbound = edges.filter(({ target }) => ENTRIES.includes(target));
+    expect(inbound).toEqual([]);
   });
 
   it("mounts verbs only at the boundary", () => {

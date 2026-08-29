@@ -294,6 +294,39 @@ balade; if the installed skill is stale, `check` reports the version mismatch.
 
 Use `--out <dir>` for another skill layout (other coding agent harnesses). The npm package also includes the rendered skill under `dist/skill/`.
 
+## Library
+
+The package exports the three commands as functions, so a script or a CI job
+calls them instead of spawning the executable and parsing its output:
+
+```ts
+import { build, check, generate } from "balade";
+
+const result = await generate({
+  repository: "/path/to/clone", // defaults to the working directory
+  pullRequest: 96, // a number, "#96", or the PR URL
+  model: { providerId: "openai-codex", modelId: "gpt-5.4" },
+  onProgress: (event) => console.log(event._tag),
+});
+// result.file, result.report, result.usage, result.repairs, result.timing,
+// result.superseded, result.siblings, result.notices
+
+const report = await check(result.file); // the report `check --json` prints
+const outcome = await build(result.file, { out: "review.html" });
+```
+
+`generate` takes the same options as the command: `preset`, `lang`,
+`guidance`, `budget`, `directory`, `force` and `headInstructions`
+(`"omit-changed"` by default; `"trust-changed"` is the flag's opt-in). `model`
+is optional: without it, the preference saved by `balade agent setup` applies.
+
+Nothing on this path prompts. A model that isn't authenticated, an existing
+walkthrough for the same head without `force: true`, or a pull request that
+can't be resolved rejects the promise with a tagged error — `error._tag` names
+the case, its fields carry the details, and `error.message` is the sentence
+the command would have printed. `onProgress` receives the events the command
+renders, in order.
+
 ## CI
 
 This workflow validates walkthroughs changed by a pull request:

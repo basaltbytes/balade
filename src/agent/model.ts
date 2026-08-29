@@ -26,6 +26,15 @@ export class AgentModelSelectionCancelled extends Schema.TaggedErrorClass<AgentM
   {},
 ) {}
 
+/**
+ * Authenticated models exist, but none is the one named. `available` lists
+ * what a caller could name instead.
+ */
+export class AgentModelUnresolved extends Schema.TaggedErrorClass<AgentModelUnresolved>()(
+  "AgentModelUnresolved",
+  { requested: Schema.String, available: Schema.Array(AuthorModelSchema) },
+) {}
+
 export class AgentModelReady extends Schema.TaggedClass<AgentModelReady>()("AgentModelReady", {
   model: AuthorModelSchema,
 }) {}
@@ -45,6 +54,12 @@ export interface ModelFilter {
 export type ModelSelection =
   | { readonly _tag: "UsePreference" }
   | { readonly _tag: "Choose"; readonly filter: ModelFilter };
+
+/** A provider and model named outright — what a script passes; nothing partial, nothing to pick from. */
+export interface ExplicitModel {
+  readonly providerId: string;
+  readonly modelId: string;
+}
 
 export type AgentModelNotice =
   | { readonly _tag: "SetupRequired" }
@@ -73,6 +88,13 @@ export type AgentModelConfigurationError =
   | LoginCancelled
   | NoProviderAuthenticated
   | AgentModelSelectionCancelled;
+
+/** The non-interactive resolution's failures: nothing here can be answered by a prompt. */
+export type AgentModelResolutionError =
+  | AuthorDiscoveryFailed
+  | AuthorPreferenceReadFailed
+  | NoProviderAuthenticated
+  | AgentModelUnresolved;
 
 export type AgentLogoutError = AuthorCredentialReadFailed | AuthorLogoutFailed;
 export type AgentModelError = AgentModelConfigurationError | AgentLogoutError;
@@ -170,6 +192,31 @@ export const readAgentModelState = Effect.fn("readAgentModelState")(function* (
   return Option.isSome(selected)
     ? new AgentModelReady({ model: selected.value })
     : new AgentModelSetupRequired();
+});
+
+/**
+ * The resolution a script gets: an explicit model matches one authenticated
+ * model or fails naming the available ones; absent, the saved preference
+ * stands or fails the same way. Nothing here prompts, logs in or rewrites the
+ * preference — that workflow is `configure`, behind a terminal.
+ */
+export const resolveAgentModel = Effect.fn("resolveAgentModel")(function* (
+  author: WalkthroughAuthorPort,
+  requested: Option.Option<ExplicitModel>,
+) {
+  const available = yield* author.availableModels;
+  const wanted = Option.match(requested, {
+    onNone: () => "the saved model preference",
+    onSome: (model) => `${model.providerId}/${model.modelId}`,
+  });
+  if (available.length === 0) return yield* new NoProviderAuthenticated({ requested: wanted });
+  const selected = Option.isSome(requested)
+    ? Option.fromNullishOr(matchingModels(available, requested.value)[0])
+    : preferredModel(available, yield* author.modelPreference);
+  if (Option.isNone(selected)) {
+    return yield* new AgentModelUnresolved({ requested: wanted, available });
+  }
+  return selected.value;
 });
 
 export const makeAgentModelManager = Effect.fn("makeAgentModelManager")(function* (

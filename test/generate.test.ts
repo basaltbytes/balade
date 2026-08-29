@@ -2,7 +2,7 @@
 
 import * as ai from "@earendil-works/pi-ai";
 import * as coding from "@earendil-works/pi-coding-agent";
-import { Effect, Fiber, Layer, Option, Redacted, Schema, Terminal } from "effect";
+import { Effect, Fiber, Option, Redacted, Schema, Terminal } from "effect";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +15,6 @@ import {
   type AuthoringRequest,
   type AuthorProgress,
 } from "../src/pi/author.js";
-import { piWalkthroughAuthorLayer } from "../src/pi/client.js";
 import { authoringSystemPrompt } from "../src/pi/authoring.js";
 import { inspectionBudget } from "../src/authoring/package.js";
 import { renderDraft, runGeneration } from "../src/commands/generate/pipeline.js";
@@ -26,8 +25,7 @@ import {
 } from "../src/commands/generate/progress-terminal.js";
 import { slugifyTitle, type ExistingWalkthrough } from "../src/commands/generate/output.js";
 import { makeAgentModelManager, type AgentModelNotice } from "../src/agent/model.js";
-import { shellLayer } from "./support/effect.js";
-import { contextResolverLive } from "../src/git/git.js";
+import { deferCleanup, piHarness, releasePiHarnesses } from "./support/pi.js";
 import type { PullSnapshot } from "../src/git/pr.js";
 import { createFixtureRepo } from "./support/repo.js";
 import { scriptedTerminal } from "./support/terminal.js";
@@ -41,36 +39,7 @@ const CHANGED_FILE = {
   deletions: 1,
 };
 
-async function piHarness(registerFaux = true, settingsManager = coding.SettingsManager.inMemory()) {
-  const snapshotCacheRoot = mkdtempSync(join(tmpdir(), "balade-pi-snapshots-"));
-  harnessCleanups.push(() =>
-    rmSync(snapshotCacheRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
-  );
-  const credentials = new ai.InMemoryCredentialStore();
-  const modelRuntime = await coding.ModelRuntime.create({
-    credentials,
-    modelsPath: null,
-    allowModelNetwork: false,
-  });
-  const faux = ai.fauxProvider();
-  if (registerFaux) {
-    modelRuntime.registerNativeProvider(faux.provider);
-    await modelRuntime.refresh({ allowNetwork: false });
-  }
-  const layer = Layer.mergeAll(
-    piWalkthroughAuthorLayer({
-      snapshotCacheRoot,
-      load: async () => ({ coding, ai, modelRuntime, settingsManager }),
-    }),
-    contextResolverLive,
-  ).pipe(Layer.provideMerge(shellLayer));
-  return { credentials, faux, layer, modelRuntime, settingsManager, snapshotCacheRoot };
-}
-
-const harnessCleanups: Array<() => void> = [];
-afterEach(() => {
-  for (const cleanup of harnessCleanups.splice(0)) cleanup();
-});
+afterEach(releasePiHarnesses);
 
 const fixture = Effect.acquireRelease(Effect.sync(createFixtureRepo), (repo) =>
   Effect.sync(() => repo.cleanup()),
@@ -412,7 +381,7 @@ describe("the Pi adapter", () => {
       const repo = yield* fixture;
       const harness = yield* Effect.promise(() => piHarness());
       const outside = mkdtempSync(join(tmpdir(), "balade-outside-"));
-      harnessCleanups.push(() =>
+      deferCleanup(() =>
         rmSync(outside, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
       );
       writeFileSync(
@@ -426,7 +395,7 @@ describe("the Pi adapter", () => {
       const userConfiguration = join(outside, "rg.conf");
       writeFileSync(userConfiguration, "--follow\n--glob=!models/*\n", "utf8");
       const previous = process.env.RIPGREP_CONFIG_PATH;
-      harnessCleanups.push(() => {
+      deferCleanup(() => {
         if (previous === undefined) delete process.env.RIPGREP_CONFIG_PATH;
         else process.env.RIPGREP_CONFIG_PATH = previous;
       });

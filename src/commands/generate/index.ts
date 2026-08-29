@@ -38,6 +38,7 @@ import {
   type GenerationProgressMode,
 } from "./progress-terminal.js";
 import {
+  DEFAULT_WALKTHROUGH_DIRECTORY,
   inspectExistingWalkthroughs,
   planSupersession,
   type ExistingWalkthrough,
@@ -75,7 +76,7 @@ const lang = Flag.choice("lang", ["en", "fr"]).pipe(
 
 const directory = Flag.string("dir").pipe(
   Flag.withDescription("Repository-relative directory for the generated walkthrough"),
-  Flag.withDefault(".agents/walkthroughs"),
+  Flag.withDefault(DEFAULT_WALKTHROUGH_DIRECTORY),
 );
 
 const guidance = Flag.string("prompt").pipe(
