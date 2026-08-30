@@ -8,6 +8,9 @@ import type { Lang } from "../../contract/types.js";
 import { gitOut } from "../../shell.js";
 import { frontmatterBlock, parseFrontmatter } from "../../walkthrough/frontmatter.js";
 
+/** Where a generated walkthrough lands unless `--dir` (or the library's `directory`) says otherwise. */
+export const DEFAULT_WALKTHROUGH_DIRECTORY = ".agents/walkthroughs";
+
 export class OutputOutsideRepository extends Schema.TaggedErrorClass<OutputOutsideRepository>()(
   "OutputOutsideRepository",
   { directory: Schema.String, root: Schema.String },

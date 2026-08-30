@@ -8,6 +8,7 @@ import { checkOne } from "../../walkthrough/checker.js";
 import { discoveryErrorMessage } from "../../walkthrough/discovery.js";
 import { CheckReport as CheckReportSchema } from "../../contract/schema.js";
 import type { Lang, CheckReport } from "../../contract/types.js";
+import type { PullNotice } from "../../git/intent.js";
 import type { PullHeadError, PullSnapshot } from "../../git/pr.js";
 import {
   DraftMalformed,
@@ -78,6 +79,8 @@ interface GenerationSummary {
   readonly repairs: number;
   readonly siblings: readonly string[];
   readonly superseded: readonly SupersededWalkthrough[];
+  /** What resolving the pull request wanted the operator to know — the CLI prints these as warnings. */
+  readonly notices: readonly PullNotice[];
   readonly timing: GenerationTiming;
 }
 
@@ -167,6 +170,7 @@ export const runGeneration = Effect.fn("runGeneration")((options: RunGenerationO
       repairs,
       siblings: output.siblings,
       superseded: output.superseded,
+      notices: options.source.notices,
       timing: progress.finish(),
     };
     return report.ok

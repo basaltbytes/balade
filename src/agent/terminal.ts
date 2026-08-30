@@ -181,44 +181,6 @@ function announceModel(model: AuthorModel, source?: string): void {
   if (model.providerId === "anthropic") writeStdout(`${anthropicBillingCaveat()}\n`);
 }
 
-export function noProviderMessage(requested: string): string {
-  return (
-    `No authenticated agent model matches ${requested}. ` +
-    "Run `balade agent setup` interactively to authenticate and choose one."
-  );
-}
-
-export function loginErrorMessage(error: import("../pi/author.js").LoginFailed): string {
-  switch (error.reason) {
-    case "oauth":
-      return `The ${error.provider} subscription login did not complete. Retry \`balade agent setup\`.`;
-    case "auth":
-      return `The ${error.provider} credential was rejected. Check the account or API key and retry \`balade agent setup\`.`;
-    case "provider":
-      return `The ${error.provider} provider could not start. Check its configuration and retry \`balade agent setup\`.`;
-    case "unknown":
-      return `The ${error.provider} provider could not authenticate. Retry \`balade agent setup\`.`;
-  }
-}
-
-export function agentModelErrorMessage(error: import("./model.js").AgentModelError): string {
-  switch (error._tag) {
-    case "AuthorDiscoveryFailed":
-      return "Agent providers and models could not be loaded. Check the installation and try again.";
-    case "LoginFailed":
-      return loginErrorMessage(error);
-    case "LoginCancelled":
-    case "AgentModelSelectionCancelled":
-      return "Agent setup cancelled.";
-    case "NoProviderAuthenticated":
-      return noProviderMessage(error.requested);
-    case "AuthorCredentialReadFailed":
-      return "Stored agent logins could not be read. Check ~/.balade/pi/auth.json and try again.";
-    case "AuthorLogoutFailed":
-      return `The stored ${sanitizeTerminalText(error.provider)} login could not be removed. Check ~/.balade/pi/auth.json and try again.`;
-  }
-}
-
 function anthropicBillingCaveat(): string {
   return (
     "Anthropic subscription login in third-party tools is billed per token as extra usage; " +

@@ -12,12 +12,13 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 `authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the Pi adapter and agent sessions), `agent/` (shared provider/model
 configuration), `server/` (live session runtime) — and the root files `cli.ts`,
-`shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`, `submission.ts`.
+`library.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
+`submission.ts`.
 
 All imports flow one direction; peers never import each other:
 
 ```
-cli.ts                      entry + layer wiring
+cli.ts  library.ts          entries + layer wiring — the executable and the package export
 commands/    server/        orchestrators — the ONLY places product concepts compose
 agent/                      → pi, presence, terminal
 pi/                         → authoring, git (type imports), contract, shell
@@ -33,9 +34,11 @@ shell.ts  state.ts  terminal.ts  failure.ts  presence.ts  submission.ts
 1. `Command.make` appears only in `commands/<verb>/index.ts` (plus the root
    `balade` command in `cli.ts`). `ls src/commands` **is** the CLI surface.
 2. A file lives in `commands/<verb>/` only if that verb is its sole importer.
-   Nothing outside `commands/` may import from `commands/` (except `cli.ts`).
-   The review lifecycle shared by `open` and a successful generation therefore
-   lives in `server/review.ts`, not under either verb.
+   Nothing outside `commands/` may import from `commands/` (except the two
+   entries, `cli.ts` and `library.ts`). The review lifecycle shared by `open`
+   and a successful generation therefore lives in `server/review.ts`, not
+   under either verb. Nothing imports an entry: importing `cli.ts` would run
+   it, importing `library.ts` would wire a second service stack.
 3. `walkthrough/`, `git/`, `preset/` are autonomous: they import only
    `contract/` and root ports (`walkthrough/` may additionally import
    `preset/` — the tag catalog is an extension of the format). Concepts compose
@@ -58,8 +61,56 @@ translate them, and `contract/` must import nothing internal, in that order.
 
 Enforced two ways: oxlint's `import/no-cycle` (import plugin, `.oxlintrc.json`)
 rejects file cycles, and `test/architecture.test.ts` walks the real `src/`
-import graph and asserts the rules above. What would move this: a second
-renderer or a published API, which would force `contract/` to version.
+import graph and asserts the rules above. The published API (`library.ts`,
+below) did not version `contract/`: the package's own 0.x version is the API
+version, and `src/contract/types.ts` reaches consumers only as re-exported
+types. What would still move this: a second renderer.
+
+## The library entry composes the command pipelines without a terminal
+
+Decided on [#153](https://github.com/basaltbytes/balade/issues/153).
+`src/library.ts` is the package's `exports["."]`: `generate`, `check` and
+`build` as promises, each with an Effect-returning variant
+(`generateWalkthrough`, `checkWalkthrough`, `buildWalkthrough`) and one
+`liveLayer` — Node services, the process executor, the Pi author adapter and
+the live context resolver; no terminal, browser or agent presence. The layer
+is provided per call rather than held in a `ManagedRuntime`, so a finished
+call leaves no handle open and a script exits on its own; the CLI never had
+to care because `NodeRuntime.runMain` exits the process.
+
+The paid pipeline is shared: `runGeneration`, `checkOne` and `runBuild` are
+the same functions the commands run, and `GenerationProgress` reaches
+`onProgress` unfiltered — the terminal renderer is one consumer of those
+events. What the library does not share is the command's *interactive*
+pre-flight, and the CLI is therefore not a literal wrapper over `generate()`:
+the replace prompt sits between inspecting existing walkthroughs and the paid
+turn, and the model picker between the plan and the run. Both pre-flights are
+composed from the same functions (`parsePrTarget`, `resolvePullHead`,
+`inspectExistingWalkthroughs`, `planSupersession`); the library answers the
+two questions with typed errors instead — `ExistingWalkthroughUndecided`
+naming the files (`force: true` replaces, keeping the superseded copy), and
+model resolution through `resolveAgentModel` in `agent/model.ts`, which
+matches an explicit `{ providerId, modelId }` or the saved preference and
+fails `AgentModelUnresolved` (listing what is available) or
+`NoProviderAuthenticated`. It never logs in and never rewrites the preference:
+a CI job naming a model must not become the user's default. Local checks fail
+before the pull request head is fetched.
+
+A rejected promise carries the tagged error itself — `_tag`, fields,
+`instanceof` — and the library attaches the sentence the CLI would print as
+its `message` at the boundary (`withMessage`), because the error classes are
+shared with the CLI, whose messages live at *its* boundary, and `message` is
+what every promise consumer reads. The result is the CLI's `GenerationResult`
+unchanged; the pull-request `notices` the command prints as warnings ride in
+it, so a script sees a degraded `gh` the way an operator does.
+
+The build emits declarations (`tsconfig.build.json`, `declaration: true`),
+which forced one explicit return type in `src/pi/inspection.ts`: Pi's tool
+definitions carry typebox parameter types that a `.d.ts` cannot name
+portably. The package smoke test type-checks and runs a consumer against the
+packed tarball. What would move this: an Effect caller needing services
+beyond `liveLayer`, or a `--progress json` flag, which would consume the same
+events from the CLI side.
 
 ## The payload contract is Effect Schema
 
@@ -1092,7 +1143,10 @@ preview keeps the source package version instead of using `--previewVersion`:
 the executable reports a build-time version synced by the release flow, while
 the preview is selected by its pkg.pr.new URL and does not enter a dependency
 range or project lockfile. What would move this: publishing a library API whose
-preview must participate in dependency resolution.
+preview must participate in dependency resolution. [#153](https://github.com/basaltbytes/balade/issues/153)
+published that API (`exports["."]`), so the trigger now exists; the workflow
+stays as it is until a preview actually needs to enter a consumer's lockfile,
+which a `pnpm dlx`/`npx` trial of the preview does not.
 
 ## Mermaid draws the logic; the sink does not trust mermaid
 

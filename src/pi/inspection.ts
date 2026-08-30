@@ -1,8 +1,8 @@
 /** Shared, pinned, read-only repository tools for every Pi review run. */
 
-import type { GrepToolDetails } from "@earendil-works/pi-coding-agent";
+import type { GrepToolDetails, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Effect, FileSystem, Path } from "effect";
-import type { InspectionTier } from "../authoring/package.js";
+import type { InspectionBudget, InspectionTier } from "../authoring/package.js";
 import { inspectionBudget } from "../authoring/package.js";
 import { CommandExecutor, gitOut } from "../shell.js";
 import type { AuthorChangedFile } from "./author.js";
@@ -28,6 +28,13 @@ interface PiInspectionDependencies {
   readonly ai: typeof import("@earendil-works/pi-ai");
 }
 
+/** Named so the declaration emit never has to spell Pi's typebox parameter types. */
+export interface PiInspectionTools {
+  readonly budget: InspectionBudget;
+  readonly tools: readonly ToolDefinition[];
+  readonly reset: () => void;
+}
+
 const MAX_TREE_FILES = 2_000;
 const MAX_SOURCE_LINES = 400;
 const MAX_DIFF_LINES = 800;
@@ -39,7 +46,7 @@ export async function createInspectionTools(
   request: PiInspectionRequest,
   runSessionEffect: RunSessionEffect,
   snapshot: PinnedRepositorySnapshot,
-) {
+): Promise<PiInspectionTools> {
   let diffReads = 0;
   let searches = 0;
   let sourceReads = 0;

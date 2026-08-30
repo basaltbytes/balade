@@ -69,7 +69,9 @@ PR head. An instruction file changed by the PR is omitted and reported unless
 the reviewer passes `--trust-head-instructions` after inspecting it. Files that
 contain a project-context closing tag are rejected regardless of that flag
 (`src/pi/authoring.ts`, `src/pi/project-context.ts`; see
-[#61](https://github.com/basaltbytes/balade/issues/61)).
+[#61](https://github.com/basaltbytes/balade/issues/61)). The library entry
+(`src/library.ts`) keeps the same default: `headInstructions` is
+`"omit-changed"` unless the caller writes `"trust-changed"`.
 
 Linked issues are fetched with the reviewer's own GitHub token. Same-repository
 issues stay under author-stated intent; cross-repository issues remain available
@@ -385,8 +387,8 @@ they describe.
   provenance is classified. A malformed location drops the optional GitHub
   enrichment with a notice instead of becoming a guessed third-party label.
 - Generation admits changed PR-head `AGENTS.md` and `CLAUDE.md` files only when
-  explicitly trusted with `--trust-head-instructions`; clarification always
-  omits them. Project-context closing tags are rejected before interpolation in
+  explicitly trusted with `--trust-head-instructions` (the library's
+  `headInstructions: "trust-changed"`); clarification always omits them. Project-context closing tags are rejected before interpolation in
   both workflows.
 - The snapshot is `git archive <pin>` with lexical, symlink and realpath
   containment (`src/pi/snapshot.ts:135-172`, tested in

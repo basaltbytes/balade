@@ -1,6 +1,7 @@
 /** Provider/model lifecycle shared by generation, live Q&A, setup and logout. */
 
 import { Context, Effect, Option, Schema, Semaphore } from "effect";
+import { sanitizeTerminalText } from "../terminal.js";
 import {
   AuthorModel as AuthorModelSchema,
   type AuthorLoginMethod,
@@ -26,6 +27,15 @@ export class AgentModelSelectionCancelled extends Schema.TaggedErrorClass<AgentM
   {},
 ) {}
 
+/**
+ * Authenticated models exist, but none is the one named. `available` lists
+ * what a caller could name instead.
+ */
+export class AgentModelUnresolved extends Schema.TaggedErrorClass<AgentModelUnresolved>()(
+  "AgentModelUnresolved",
+  { requested: Schema.String, available: Schema.Array(AuthorModelSchema) },
+) {}
+
 export class AgentModelReady extends Schema.TaggedClass<AgentModelReady>()("AgentModelReady", {
   model: AuthorModelSchema,
 }) {}
@@ -45,6 +55,12 @@ export interface ModelFilter {
 export type ModelSelection =
   | { readonly _tag: "UsePreference" }
   | { readonly _tag: "Choose"; readonly filter: ModelFilter };
+
+/** A provider and model named outright — what a script passes; nothing partial, nothing to pick from. */
+export interface ExplicitModel {
+  readonly providerId: string;
+  readonly modelId: string;
+}
 
 export type AgentModelNotice =
   | { readonly _tag: "SetupRequired" }
@@ -73,6 +89,13 @@ export type AgentModelConfigurationError =
   | LoginCancelled
   | NoProviderAuthenticated
   | AgentModelSelectionCancelled;
+
+/** The non-interactive resolution's failures: nothing here can be answered by a prompt. */
+export type AgentModelResolutionError =
+  | AuthorDiscoveryFailed
+  | AuthorPreferenceReadFailed
+  | NoProviderAuthenticated
+  | AgentModelUnresolved;
 
 export type AgentLogoutError = AuthorCredentialReadFailed | AuthorLogoutFailed;
 export type AgentModelError = AgentModelConfigurationError | AgentLogoutError;
@@ -170,6 +193,31 @@ export const readAgentModelState = Effect.fn("readAgentModelState")(function* (
   return Option.isSome(selected)
     ? new AgentModelReady({ model: selected.value })
     : new AgentModelSetupRequired();
+});
+
+/**
+ * The resolution a script gets: an explicit model matches one authenticated
+ * model or fails naming the available ones; absent, the saved preference
+ * stands or fails the same way. Nothing here prompts, logs in or rewrites the
+ * preference — that workflow is `configure`, behind a terminal.
+ */
+export const resolveAgentModel = Effect.fn("resolveAgentModel")(function* (
+  author: WalkthroughAuthorPort,
+  requested: Option.Option<ExplicitModel>,
+) {
+  const available = yield* author.availableModels;
+  const wanted = Option.match(requested, {
+    onNone: () => "the saved model preference",
+    onSome: (model) => `${model.providerId}/${model.modelId}`,
+  });
+  if (available.length === 0) return yield* new NoProviderAuthenticated({ requested: wanted });
+  const selected = Option.isSome(requested)
+    ? Option.fromNullishOr(matchingModels(available, requested.value)[0])
+    : preferredModel(available, yield* author.modelPreference);
+  if (Option.isNone(selected)) {
+    return yield* new AgentModelUnresolved({ requested: wanted, available });
+  }
+  return selected.value;
 });
 
 export const makeAgentModelManager = Effect.fn("makeAgentModelManager")(function* (
@@ -300,4 +348,43 @@ function loginRank(method: AuthorLoginMethod): number {
 
 function requestedModel(filter: ModelFilter): string {
   return `${filter.providerId ?? "any provider"}/${filter.modelId ?? "any model"}`;
+}
+
+/** The sentences every boundary — terminal or promise — prints for these failures. */
+export function noProviderMessage(requested: string): string {
+  return (
+    `No authenticated agent model matches ${requested}. ` +
+    "Run `balade agent setup` interactively to authenticate and choose one."
+  );
+}
+
+export function loginErrorMessage(error: LoginFailed): string {
+  switch (error.reason) {
+    case "oauth":
+      return `The ${error.provider} subscription login did not complete. Retry \`balade agent setup\`.`;
+    case "auth":
+      return `The ${error.provider} credential was rejected. Check the account or API key and retry \`balade agent setup\`.`;
+    case "provider":
+      return `The ${error.provider} provider could not start. Check its configuration and retry \`balade agent setup\`.`;
+    case "unknown":
+      return `The ${error.provider} provider could not authenticate. Retry \`balade agent setup\`.`;
+  }
+}
+
+export function agentModelErrorMessage(error: AgentModelError): string {
+  switch (error._tag) {
+    case "AuthorDiscoveryFailed":
+      return "Agent providers and models could not be loaded. Check the installation and try again.";
+    case "LoginFailed":
+      return loginErrorMessage(error);
+    case "LoginCancelled":
+    case "AgentModelSelectionCancelled":
+      return "Agent setup cancelled.";
+    case "NoProviderAuthenticated":
+      return noProviderMessage(error.requested);
+    case "AuthorCredentialReadFailed":
+      return "Stored agent logins could not be read. Check ~/.balade/pi/auth.json and try again.";
+    case "AuthorLogoutFailed":
+      return `The stored ${sanitizeTerminalText(error.provider)} login could not be removed. Check ~/.balade/pi/auth.json and try again.`;
+  }
 }
