@@ -20,6 +20,16 @@ same. Current source adds a 15-second bound to the catalog refresh that follows
 without that new timeout. Balade stays on the exact published package and calls
 `getAvailable()` again after login, so the picker sees the refreshed model set.
 
+Rechecked on 2026-10-08 when balade moved from the 0.83.0 pin to 1.1.0
+(published 2026-10-07; Node engine still >=22.19.0). Of the breaking changes
+logged between the two versions, one reached balade: provider stream inputs are
+`TranscriptContext` values, so a fake provider reads the system prompt and tool
+list with `getCurrentSystemPrompt(messages)` and `getCurrentTools(messages)`
+instead of `context.systemPrompt` and `context.tools`. The SDK, auth and tool
+contracts used below are otherwise unchanged. The bundled catalog gains the
+current Anthropic models (Claude Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5)
+and the GPT-6 family on the OpenAI and OpenAI Codex providers.
+
 File paths below are relative to the repo root at that commit.
 
 ## TL;DR verdicts

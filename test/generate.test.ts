@@ -181,7 +181,10 @@ describe("the Pi adapter", () => {
           { stopReason: "toolUse" },
         ),
         (context) => {
-          secondRequest = JSON.stringify({ messages: context.messages, tools: context.tools });
+          secondRequest = JSON.stringify({
+            messages: context.messages,
+            tools: ai.getCurrentTools(context.messages),
+          });
           return submitted(validBody);
         },
       ]);
@@ -255,7 +258,10 @@ describe("the Pi adapter", () => {
           { stopReason: "toolUse" },
         ),
         (context) => {
-          searchContext = JSON.stringify({ messages: context.messages, tools: context.tools });
+          searchContext = JSON.stringify({
+            messages: context.messages,
+            tools: ai.getCurrentTools(context.messages),
+          });
           return ai.fauxAssistantMessage(
             [
               ai.fauxToolCall("read_base_source", {
@@ -456,7 +462,7 @@ describe("the Pi adapter", () => {
       const progress: AuthorProgress[] = [];
       harness.faux.setResponses([
         (context) => {
-          systemPrompt = context.systemPrompt ?? "";
+          systemPrompt = ai.getCurrentSystemPrompt(context.messages);
           return submitted(validBody);
         },
       ]);
@@ -1005,7 +1011,7 @@ describe("generation", () => {
       harness.faux.setResponses([
         (context) => {
           initialContext = JSON.stringify(context.messages);
-          systemPrompt = context.systemPrompt ?? "";
+          systemPrompt = ai.getCurrentSystemPrompt(context.messages);
           return submitted(invalidBody);
         },
         (context) => {

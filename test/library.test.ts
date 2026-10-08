@@ -103,11 +103,11 @@ describe("the library entry", () => {
         const systemPrompts: string[] = [];
         harness.faux.setResponses([
           (context) => {
-            systemPrompts.push(context.systemPrompt ?? "");
+            systemPrompts.push(ai.getCurrentSystemPrompt(context.messages));
             return submitted();
           },
           (context) => {
-            systemPrompts.push(context.systemPrompt ?? "");
+            systemPrompts.push(ai.getCurrentSystemPrompt(context.messages));
             return submitted();
           },
         ]);
