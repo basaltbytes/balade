@@ -205,18 +205,24 @@ describe("the library entry", () => {
       );
       const file = join(external, "review.md");
       writeFileSync(file, readFileSync(join(repo.dir, internalFile), "utf8"));
-      // Git expands Windows short names in its root; compare canonical temporary paths.
-      const options = { repository: realpathSync(repo.dir), base, head: repo.pin };
+      const options = { repository: repo.dir, base, head: repo.pin };
       const internal = yield* compilePayloadEffect({ ...options, file: internalFile });
       if (internal._tag !== "Compiled") throw new Error("Compilation refused");
-      const sourcePath = relative(options.repository, file).replaceAll("\\", "/");
+      // Output paths use Git's root, which can expand a Windows short-name alias.
+      const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      const sourcePath = relative(realpathSync(root), file).replaceAll("\\", "/");
       const expected = {
         ...internal,
         payload: { ...internal.payload, sourcePath },
         report: { ...internal.report, file: sourcePath },
       };
       expect(yield* compilePayloadEffect({ ...options, file })).toEqual(expected);
-      expect(yield* compilePayloadEffect({ ...options, file: sourcePath })).toEqual(expected);
+      expect(yield* compilePayloadEffect({ ...options, file: relative(repo.dir, file) })).toEqual(
+        expected,
+      );
       // A different clone around the source must not change the selected repository.
       execFileSync("git", ["init", "-q"], { cwd: external });
       expect(yield* compilePayloadEffect({ ...options, file })).toEqual(expected);
