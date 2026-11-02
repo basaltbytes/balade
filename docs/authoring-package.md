@@ -19,9 +19,13 @@ Live clarification is a narrower consumer of this package. Its dedicated
 prompt ([`src/pi/clarification-prompt.md`](../src/pi/clarification-prompt.md))
 reuses the core tag catalog and inspection budgets, but asks for a validated
 answer fragment rather than a complete walkthrough and does not use the section
-templates or writing rubric.
+templates or writing rubric. The generated skill also teaches external agents
+to answer an anchored question in a separate Markdoc file and repair it with
+`balade answer check`. Library hosts use `checkAnswer` and
+`clarificationContext`; payload-only hosts import `balade/answers`. These paths
+share the live clarifier's validator and untrusted-data context framing.
 
-The current package version is `1.33.0`. Its major version matches the
+The current package version is `1.34.0`. Its major version matches the
 walkthrough schema it authors.
 
 ## Contract
@@ -89,7 +93,7 @@ pr: 14
 commit: 9f3c2ad
 meta:
   lang: en
-  balade-authoring: 1.33.0
+  balade-authoring: 1.34.0
 ```
 
 The model cannot replace that version. `balade check` parses the written file

@@ -6,6 +6,7 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
 import { terminalAgentModelManagerLive } from "./agent/terminal.js";
+import { answerCommand } from "./commands/answer/index.js";
 import { agentCommand } from "./commands/agent/index.js";
 import { buildCommand } from "./commands/build/index.js";
 import { checkCommand } from "./commands/check/index.js";
@@ -44,6 +45,7 @@ const balade = Command.make("balade").pipe(
   Command.withDescription("Human-readable walkthroughs for agent-scale pull requests"),
   Command.withSubcommands([
     checkCommand,
+    answerCommand,
     openCommand,
     buildCommand,
     generateCommand,

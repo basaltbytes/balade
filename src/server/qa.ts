@@ -9,7 +9,6 @@ import {
   Exit,
   Layer,
   Option,
-  Result,
   Schema,
   Semaphore,
   type Scope,
@@ -45,7 +44,7 @@ import {
 import { getPreset } from "../preset/registry.js";
 import { QaStateStore } from "../state.js";
 import { sanitizeTerminalText } from "../terminal.js";
-import { compileFragment, parseFragment } from "../walkthrough/fragment.js";
+import { checkAnswerWithContext } from "../walkthrough/answer.js";
 import { PayloadCache } from "./cache.js";
 import { ServerRepo } from "./repo.js";
 
@@ -412,18 +411,18 @@ const compileAnswer = Effect.fn("QaWorkflow.compileAnswer")(function* (
   work: PendingWork,
   raw: string,
 ) {
-  const { path, payload, pending, request, initialContext } = work;
-  const parsed = yield* Effect.fromResult(parseFragment(raw, path, payload.preset));
+  const { path, payload, request, initialContext } = work;
   const known = new Set(initialContext.files.map((file) => file.path));
-  const context = parsed.references.every((reference) => known.has(reference))
-    ? initialContext
-    : (yield* runtime.resolver.resolve(
-        resolveOptions(runtime.options, request.root, path, payload, parsed.references),
-      )).ctx;
-  const blocks = yield* Effect.fromResult(
-    compileFragment(parsed, context, path, pending.anchor.sectionId),
-  );
-  return blocks;
+  return yield* checkAnswerWithContext(raw, {
+    file: path,
+    preset: payload.preset,
+    resolve: (references) =>
+      references.every((reference) => known.has(reference))
+        ? Effect.succeed(initialContext)
+        : runtime.resolver
+            .resolve(resolveOptions(runtime.options, request.root, path, payload, references))
+            .pipe(Effect.map(({ ctx }) => ctx)),
+  });
 });
 
 const completeQuestion = Effect.fn("QaWorkflow.completeQuestion")(function* (
@@ -432,10 +431,7 @@ const completeQuestion = Effect.fn("QaWorkflow.completeQuestion")(function* (
 ) {
   const { path, payload, pending, question, request } = work;
   const blocks = yield* runtime.clarifier.answer(request, (candidate) =>
-    compileAnswer(runtime, work, candidate).pipe(
-      Effect.map(Result.succeed),
-      Effect.catchTag("FragmentInvalid", (error) => Effect.succeed(Result.fail(error))),
-    ),
+    compileAnswer(runtime, work, candidate),
   );
   const answeredAt = yield* isoNow();
   const turn: QaTurn = { ...question, answeredAt, answer: [...blocks] };

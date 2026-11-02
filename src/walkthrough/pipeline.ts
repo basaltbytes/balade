@@ -3,7 +3,7 @@
  * served mode calls this per request; `check` calls it per discovered file.
  */
 
-import { Effect, FileSystem, Match, Path, Schema } from "effect";
+import { Effect, Match, Path } from "effect";
 import type { Lang, CheckDiagnostic, Payload, RangeEcho } from "../contract/types.js";
 import {
   ContextResolver,
@@ -15,6 +15,7 @@ import {
 import { repoRelative, type PathResolutionFailed } from "../contract/paths.js";
 import { compileDocument, referencedFiles, type CompileInput } from "./compiler.js";
 import { parseDocument, type ValidDocument } from "./document.js";
+import { readWalkthrough, type WalkthroughFileReadFailed } from "./source.js";
 
 export interface LoadOptions {
   cwd: string;
@@ -40,26 +41,16 @@ export interface LoadResult {
   ranges: RangeEcho[];
 }
 
-export class WalkthroughFileReadFailed extends Schema.TaggedErrorClass<WalkthroughFileReadFailed>()(
-  "WalkthroughFileReadFailed",
-  { path: Schema.String, cause: Schema.Defect() },
-) {}
-
 export type LoadError = ResolveError | PathResolutionFailed | WalkthroughFileReadFailed;
 
 export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: LoadOptions) {
-  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const absolute = path.isAbsolute(options.path)
     ? options.path
     : path.resolve(options.cwd, options.path);
   const givenPath = toGivenPath(path, absolute, options.cwd);
 
-  const source =
-    options.source ??
-    (yield* fs
-      .readFileString(absolute)
-      .pipe(Effect.mapError((cause) => new WalkthroughFileReadFailed({ path: givenPath, cause }))));
+  const source = options.source ?? (yield* readWalkthrough(absolute, givenPath));
 
   const doc = parseDocument(source, givenPath);
   const { frontmatter } = doc;

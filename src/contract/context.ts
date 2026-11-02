@@ -32,6 +32,9 @@ export interface ResolveContext {
   blob(path: string): Option.Option<readonly string[]>;
 }
 
+/** Pinned evidence the block compiler and preset macros consume, independent of Git. */
+export type BlockContext = Pick<ResolveContext, "pin" | "files" | "changed" | "blob">;
+
 /** How a pull request range is anchored when it is not derived from the checkout. */
 export type PullResolution =
   | { readonly _tag: "PullHead"; readonly head: string }

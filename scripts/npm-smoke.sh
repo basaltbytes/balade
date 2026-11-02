@@ -88,8 +88,9 @@ grep -Fqi "Not inside a git repository" "$GENERATE_STDERR"
 # consumer project, rejections are the tagged errors with a sentence attached,
 # and a finished call leaves nothing keeping the process alive.
 cat >"$PROJECT/consumer.ts" <<'EOF_CONSUMER'
-import { build, check, compilePayload, compilePayloadEffect, generate, liveLayer, type GenerationResult } from "balade";
+import { checkAnswer, checkAnswerEffect, clarificationContext, build, check, compilePayload, compilePayloadEffect, generate, liveLayer, type GenerationResult } from "balade";
 import { decodePayload, PAYLOAD_FORMAT, type Payload } from "balade/contract";
+import { checkAnswer as portableCheck } from "balade/answers";
 import { Effect } from "effect";
 
 export async function payload(repository: string, file: string, base: string, head: string): Promise<Payload | undefined> {
@@ -98,6 +99,13 @@ export async function payload(repository: string, file: string, base: string, he
   if (result._tag === "Compiled") {
     const decoded = await Effect.runPromise(decodePayload(result.payload));
     const format: typeof PAYLOAD_FORMAT = decoded.format;
+    const source = { _tag: "Payload", payload: decoded } as const;
+    await portableCheck("Answer", source);
+    await Effect.runPromise(checkAnswerEffect("Answer", source));
+    const repositorySource = { _tag: "Repository", repository, file, base, head } as const;
+    await checkAnswer("Answer", repositorySource);
+    await Effect.runPromise(checkAnswerEffect("Answer", repositorySource).pipe(Effect.provide(liveLayer)));
+    clarificationContext({ walkthrough: decoded, anchor: { sectionId: "overview", excerpt: "Selected" }, question: "Why?", turns: [] });
     return decoded;
   }
 }
@@ -154,6 +162,7 @@ console.log("library smoke passed");
 EOF_RUNTIME
 node "$PROJECT/consumer.mjs" | grep -q "library smoke passed"
 node "$ROOT/scripts/contract-smoke.mjs" "$PROJECT" "$(command -v git)"
+node "$ROOT/scripts/answers-smoke.mjs" "$PROJECT" "$(command -v git)"
 
 # A real install writes the shared convention; .claude/ only once it exists.
 SKILL_REPO="$TMP_ROOT/skill-repo"

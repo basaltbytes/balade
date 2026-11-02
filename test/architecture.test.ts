@@ -37,8 +37,8 @@ function importsOf(file: string): string[] {
   return found;
 }
 
-/** The two roots: the executable and the library. They compose freely, and nothing imports them. */
-const ENTRIES = ["cli.ts", "library.ts"];
+/** Public entries compose freely, and nothing imports them. */
+const ENTRIES = ["cli.ts", "library.ts", "answers.ts"];
 
 /** The layer a module belongs to: a concept folder, `commands/<verb>`, or its root file. */
 function layerOf(module: string): string {
@@ -54,6 +54,7 @@ const ROOT_UTILS = [
   "failure.ts",
   "presence.ts",
   "submission.ts",
+  "clarification.ts",
 ];
 
 /** Which layers each layer may import from. Orchestrators may import anything but commands/. */
