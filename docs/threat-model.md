@@ -186,8 +186,9 @@ they describe.
 - Both payload entry points decode with `onExcessProperty: "error"` against
   the versioned payload schema; `window.__BALADE__` is typed `unknown`.
   The browser-safe `decodePayload` exported as `balade/contract` uses the same
-  schema for stored payloads and names unsupported integer versions with
-  `PayloadFormatUnsupported` before decoding their shape.
+  schema for stored payloads and names unsupported safe integer versions with
+  `PayloadFormatUnsupported` before decoding their shape. Malformed versions,
+  including unsafe integers, remain typed `PayloadInvalid` errors.
 - The schema checks the shape and the HTTP/HTTPS protocol of `pr.url`.
   Expensive consumers enforce their own length and work limits, as recorded below and in
   [#74](https://github.com/basaltbytes/balade/issues/74).

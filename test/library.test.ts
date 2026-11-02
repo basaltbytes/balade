@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 import { Effect, Layer } from "effect";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import { makeGenerationProgress } from "../src/commands/generate/progress-terminal.js";
 import type { GenerationProgress } from "../src/commands/generate/progress.js";
@@ -182,6 +182,37 @@ describe("the library entry", () => {
             .filter((arg) => /(?:origin\/HEAD|refs\/heads\/|refs\/remotes\/|merge-base)/.test(arg)),
         ).toEqual([]);
       }),
+  );
+
+  it.effect("compiles external walkthroughs against the supplied repository", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const internalFile = repo.addWalkthrough("valid.md", "valid.md");
+      const base = execFileSync("git", ["rev-parse", "main"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      const external = yield* Effect.acquireRelease(
+        Effect.sync(() => mkdtempSync(join(tmpdir(), "balade-library-source-"))),
+        (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+      );
+      const file = join(external, "review.md");
+      writeFileSync(file, readFileSync(join(repo.dir, internalFile), "utf8"));
+      const options = { repository: repo.dir, base, head: repo.pin };
+      const internal = yield* compilePayloadEffect({ ...options, file: internalFile });
+      if (internal._tag !== "Compiled") throw new Error("Compilation refused");
+      const sourcePath = relative(repo.dir, file).replaceAll("\\", "/");
+      const expected = {
+        ...internal,
+        payload: { ...internal.payload, sourcePath },
+        report: { ...internal.report, file: sourcePath },
+      };
+      expect(yield* compilePayloadEffect({ ...options, file })).toEqual(expected);
+      expect(yield* compilePayloadEffect({ ...options, file: sourcePath })).toEqual(expected);
+      // A different clone around the source must not change the selected repository.
+      execFileSync("git", ["init", "-q"], { cwd: external });
+      expect(yield* compilePayloadEffect({ ...options, file })).toEqual(expected);
+    }).pipe(Effect.provide(resolverLayer)),
   );
 
   it.effect(

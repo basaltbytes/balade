@@ -18,6 +18,8 @@ import { parseDocument, type ValidDocument } from "./document.js";
 
 export interface LoadOptions {
   cwd: string;
+  /** Explicit clone to resolve Git facts from instead of the walkthrough's directory. */
+  repository?: string;
   /** Path of the walkthrough file, absolute or relative to `cwd`. */
   path: string;
   /** Walkthrough text already read — ref mode, where the file may not be in the working tree. */
@@ -72,11 +74,12 @@ export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: 
     preset: doc.preset,
   };
 
-  /* Ref mode: the walkthrough's directory may not exist on disk, so git runs
-     from `cwd` — the repository root the server resolved. */
+  /* A host can select a clone independently of where it stores the source.
+     Ref mode uses `cwd`: the walkthrough's directory may not exist on disk. */
   const resolver = yield* ContextResolver;
   const request: ResolveOptions = {
-    cwd: options.source === undefined ? path.dirname(absolute) : options.cwd,
+    cwd:
+      options.repository ?? (options.source === undefined ? path.dirname(absolute) : options.cwd),
     pr: frontmatter.pr,
     commit: frontmatter.commit,
     file: givenPath,

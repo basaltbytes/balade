@@ -208,7 +208,7 @@ export function generate(options: GenerateOptions): Promise<GenerationResult> {
 export interface CompilePayloadOptions extends PullRange {
   /** A path inside the clone. */
   readonly repository: string;
-  /** Walkthrough file, absolute or relative to `repository`. */
+  /** Walkthrough file, absolute or relative to `repository`; it may be outside the clone. */
   readonly file: string;
   readonly lang?: Lang;
 }
@@ -223,6 +223,7 @@ export const compilePayloadEffect = Effect.fn("compilePayload")(
     const { repository, file, lang, ...range } = options;
     const loadOptions: LoadOptions = {
       cwd: repository,
+      repository,
       path: file,
       resolution: { ...range, _tag: "PullRange" },
     };

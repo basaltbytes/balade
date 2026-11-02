@@ -31,7 +31,7 @@ export const decodePayload = (
   if (
     Predicate.hasProperty(input, "format") &&
     Predicate.isNumber(input.format) &&
-    Number.isInteger(input.format) &&
+    Number.isSafeInteger(input.format) &&
     input.format !== PAYLOAD_FORMAT
   ) {
     return Effect.fail(new PayloadFormatUnsupported({ format: input.format }));

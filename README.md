@@ -365,6 +365,9 @@ cannot produce a payload. File, repository, commit, command and path failures
 reject with their tagged errors. Invalid supplied header facts reject with
 `PayloadInvalid`.
 
+`repository` selects the clone used for Git resolution. The walkthrough `file`
+may be outside that clone; relative paths are resolved from `repository`.
+
 Explicit ranges never invoke `gh` or discover the default branch. Both SHAs
 must name commits in the clone. File contents remain pinned to the walkthrough's
 stamped commit; `head` determines staleness and `headDistance` records the distance
@@ -387,8 +390,9 @@ and metadata as HTML exports, including full file contents at both revisions.
 
 `balade/contract` is safe to import in a browser bundle. Its `decodePayload`
 returns an Effect that strictly checks the payload and requires an absolute
-HTTP or HTTPS `pr.url`. Another integer format version fails with
-`PayloadFormatUnsupported`; malformed data fails with `PayloadInvalid`.
+HTTP or HTTPS `pr.url`. Another safe integer format version fails with
+`PayloadFormatUnsupported`; malformed data, including unsafe integers, fails with
+`PayloadInvalid`.
 Only the current payload format (`format: 1`) is supported. Keep the walkthrough
 source and recompile stored payloads when the format changes. This version is
 separate from the input's `walkthrough: 1`. Review-storage keys belong to the

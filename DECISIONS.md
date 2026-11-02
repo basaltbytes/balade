@@ -154,6 +154,11 @@ is `Compiled` even when the report carries errors; an unparseable document is
 `NotCompiled`. IO and resolution failures remain typed errors. `build` keeps its
 soft report policy for HTML and JSON, and reads the renderer bundle only for HTML.
 
+Compilation resolves Git facts from the supplied `repository`, independently of
+where the host stores the walkthrough source. The loader accepts an explicit
+repository for this case; check, build and served mode keep their existing
+file-based or ref-based repository discovery.
+
 The existing `PullRange` owns full base/head SHAs plus optional header facts.
 Resolution validates those SHAs before any diff command, bypasses gh completely,
 and never discovers the default branch. File bytes still come from the stamped
@@ -166,8 +171,9 @@ rejects invalid fields and non-HTTP URLs as `PayloadInvalid`.
 
 `format: 1` versions the resolved contract separately from the input's
 `walkthrough: 1`. `balade/contract` exports the current `PAYLOAD_FORMAT`, contract
-types and an Effect-returning `decodePayload`. Another integer version produces
-`PayloadFormatUnsupported`; malformed or excess fields produce `PayloadInvalid`.
+types and an Effect-returning `decodePayload`. Another safe integer version
+produces `PayloadFormatUnsupported`; malformed or excess fields, including unsafe
+integer versions, produce `PayloadInvalid`.
 Only the current format is supported, with no migration or older-format decoder.
 A host retaining walkthrough source can recompile it after an upgrade. Format
 changes that invalidate stored payloads require incrementing `PAYLOAD_FORMAT`.

@@ -50,6 +50,11 @@ describe("the payload schemas", () => {
         message: expect.stringContaining("Recompile"),
       });
       expect(yield* Effect.flip(decodePayload({}))).toMatchObject({ _tag: "PayloadInvalid" });
+      for (const format of [Number.MAX_SAFE_INTEGER + 1, 1.5, Infinity, "2", null]) {
+        expect(yield* Effect.flip(decodePayload({ format }))).toMatchObject({
+          _tag: "PayloadInvalid",
+        });
+      }
       expect(yield* Effect.flip(decodePayload({ ...payload, extra: true }))).toMatchObject({
         _tag: "PayloadInvalid",
       });
