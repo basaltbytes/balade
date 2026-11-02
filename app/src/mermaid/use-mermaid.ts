@@ -1,6 +1,14 @@
 import { Effect } from "effect";
-import { createContext, useContext, useEffect, useState } from "react";
-import { runAppEffect } from "../data/runtime";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
+import { useRenderEffect } from "../ui/render-runtime";
 import {
   lazyMermaidRenderer,
   logMermaidFailure,
@@ -19,34 +27,41 @@ export type Diagram =
 const PENDING: Diagram = { state: "pending" };
 const UNAVAILABLE: Diagram = { state: "unavailable" };
 
-let drawn = 0;
-
-/* Mermaid writes this id into CSS selectors of the stylesheet it embeds, so it
-   has to be selector-safe — which React's own `useId` output is not. */
-const nextDiagramId = (): string => `balade-mermaid-${(drawn += 1)}`;
-
 /**
  * Mermaid needs a document, so a diagram is `pending` through server rendering
  * and until the browser draws it. An empty source never reaches mermaid.
  */
-export function useMermaidDiagram(source: string): Diagram {
+export function useMermaidDiagram(
+  source: string,
+  stage: RefObject<HTMLDivElement | null>,
+): Diagram {
+  const runAppEffect = useRenderEffect();
+  const instance = useId();
+  const draw = useRef(0);
   const renderer = useContext(MermaidRendererContext);
   const [diagram, setDiagram] = useState<Diagram>(PENDING);
 
   useEffect(() => {
-    if (source === "") {
+    const container = stage.current;
+    if (source === "" || container === null) {
       setDiagram(UNAVAILABLE);
       return;
     }
     setDiagram(PENDING);
+    draw.current += 1;
     return runAppEffect(
-      renderDiagram(renderer, nextDiagramId(), source).pipe(
+      renderDiagram(
+        renderer,
+        `balade-mermaid-${instance.replace(/[^a-zA-Z0-9_-]/g, "")}-${draw.current}`,
+        source,
+        container,
+      ).pipe(
         Effect.map((svg): Diagram => ({ state: "drawn", svg })),
         Effect.catch((error) => logMermaidFailure(error).pipe(Effect.as(UNAVAILABLE))),
       ),
       setDiagram,
     );
-  }, [renderer, source]);
+  }, [instance, renderer, source, stage, runAppEffect]);
 
   return diagram;
 }

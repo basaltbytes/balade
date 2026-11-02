@@ -1,13 +1,14 @@
 /** Selection affordance, section indicator, and clarification thread panel. */
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import type { QaAnchor, QaThread } from "../contract";
-import { runAppEffect } from "../data/runtime";
+import { useRenderEffect } from "../ui/render-runtime";
 import { ensureLangs, withHighlightFallback } from "../highlight/shiki";
 import { BlockView } from "../widgets";
 import { Octicon } from "./octicon";
 import { useQa } from "./qa-context";
 import { useStrings } from "./strings";
+import { useNavigation } from "./navigation-context";
 
 interface SelectionTarget {
   readonly anchor: QaAnchor;
@@ -16,15 +17,17 @@ interface SelectionTarget {
 }
 
 export function SelectionAsk() {
+  const { root } = useNavigation();
   const qa = useQa();
   const strings = useStrings();
   const [target, setTarget] = useState<SelectionTarget | null>(null);
 
   useEffect(() => {
-    if (!qa.available) return;
+    const element = root.current;
+    if (!qa.available || element === null) return;
     const capture = (): void => {
-      const selection = window.getSelection();
-      if (selection === null || selection.isCollapsed) {
+      const selection = root.current?.ownerDocument.getSelection();
+      if (selection === undefined || selection === null || selection.isCollapsed) {
         setTarget(null);
         return;
       }
@@ -36,11 +39,12 @@ export function SelectionAsk() {
       }
       const anchorElement = anchorNode instanceof Element ? anchorNode : anchorNode.parentElement;
       const focusElement = focusNode instanceof Element ? focusNode : focusNode.parentElement;
-      const section = anchorElement?.closest<HTMLElement>("section[id]");
+      const section = anchorElement?.closest<HTMLElement>("[data-balade-section]");
       if (
         section === undefined ||
         section === null ||
         focusElement === null ||
+        !element.contains(section) ||
         !section.contains(focusElement) ||
         section.closest("[data-qa-panel]") !== null
       ) {
@@ -53,15 +57,18 @@ export function SelectionAsk() {
         return;
       }
       const rect = selection.getRangeAt(0).getBoundingClientRect();
+      const bounds = element.getBoundingClientRect();
+      const sectionId = section.dataset.baladeSection;
+      if (sectionId === undefined) return;
       setTarget({
-        anchor: { sectionId: section.id, excerpt },
-        left: Math.min(rect.right, window.innerWidth - 120),
-        top: Math.min(rect.bottom + 8, window.innerHeight - 44),
+        anchor: { sectionId, excerpt },
+        left: Math.min(rect.right - bounds.left, bounds.width),
+        top: rect.bottom - bounds.top + 8,
       });
     };
-    document.addEventListener("mouseup", capture);
-    return () => document.removeEventListener("mouseup", capture);
-  }, [qa.available]);
+    element.addEventListener("mouseup", capture);
+    return () => element.removeEventListener("mouseup", capture);
+  }, [qa.available, root]);
 
   if (target === null) return null;
   return (
@@ -71,10 +78,12 @@ export function SelectionAsk() {
       onClick={() => {
         qa.openComposer(target.anchor);
         setTarget(null);
-        window.getSelection()?.removeAllRanges();
+        const selection = root.current?.ownerDocument.getSelection();
+        if (selection?.anchorNode && root.current?.contains(selection.anchorNode))
+          selection.removeAllRanges();
       }}
       style={{ left: target.left, top: target.top }}
-      className="fixed z-40 -translate-x-full rounded-md border border-primary bg-background px-2.5 py-1.5 text-[12px] font-medium text-foreground shadow-lg hover:bg-muted cursor-pointer"
+      className="absolute z-40 -translate-x-full rounded-md border border-primary bg-background px-2.5 py-1.5 text-[12px] font-medium text-foreground shadow-lg hover:bg-muted cursor-pointer"
     >
       <span className="inline-flex items-center gap-1.5">
         <Octicon name="question" size={14} />
@@ -120,16 +129,21 @@ function latestQuestion(thread: QaThread | undefined): string {
   return thread.turns.at(-1)?.question ?? "";
 }
 
-export function QaPanel() {
+export function QaPanel({ layout = "drawer" }: { layout?: "inline" | "drawer" }) {
   const qa = useQa();
   const strings = useStrings();
   const panel = qa.panel;
   useAnswerLanguages(qa.state.threads);
-  if (panel._tag === "Closed") return null;
+  if (!qa.available || (panel._tag === "Closed" && layout === "drawer")) return null;
 
-  const sectionId = panel._tag === "Composer" ? panel.anchor.sectionId : panel.sectionId;
+  const sectionId =
+    panel._tag === "Closed"
+      ? null
+      : panel._tag === "Composer"
+        ? panel.anchor.sectionId
+        : panel.sectionId;
   const activeThreadId = panel._tag === "Thread" ? panel.threadId : null;
-  const anchoredThreads = qa.threadsFor(sectionId);
+  const anchoredThreads = sectionId === null ? qa.state.threads : qa.threadsFor(sectionId);
   const threads =
     activeThreadId === null
       ? anchoredThreads
@@ -138,14 +152,22 @@ export function QaPanel() {
         );
 
   return (
-    <div className="fixed inset-0 z-50" data-qa-panel>
-      <button
-        type="button"
-        aria-label={strings.qa.close}
-        onClick={qa.close}
-        className="absolute inset-0 bg-black/35 cursor-default"
-      />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-[620px] overflow-y-auto border-l border-border bg-background shadow-2xl">
+    <div className={layout === "drawer" ? "absolute inset-0 z-50" : "relative"} data-qa-panel>
+      {layout === "drawer" && (
+        <button
+          type="button"
+          aria-label={strings.qa.close}
+          onClick={qa.close}
+          className="absolute inset-0 bg-black/35 cursor-default"
+        />
+      )}
+      <aside
+        className={
+          layout === "drawer"
+            ? "absolute right-0 top-0 h-full w-full max-w-[620px] overflow-y-auto border-l border-border bg-background shadow-2xl"
+            : "border border-border rounded-lg bg-background"
+        }
+      >
         <header className="sticky top-0 z-10 flex items-center border-b border-border bg-background px-5 py-4">
           <div>
             <h2 className="text-[17px] font-semibold">{strings.qa.title}</h2>
@@ -182,6 +204,7 @@ export function QaPanel() {
 }
 
 function QuestionForm({ anchor }: { anchor: QaAnchor }) {
+  const inputId = useId();
   const qa = useQa();
   const strings = useStrings();
   const [question, setQuestion] = useState("");
@@ -199,11 +222,11 @@ function QuestionForm({ anchor }: { anchor: QaAnchor }) {
       <blockquote className="mt-2 border-l-2 border-primary pl-3 text-[13px] text-secondary-foreground">
         {anchor.excerpt}
       </blockquote>
-      <label className="mt-4 block text-[12px] font-medium" htmlFor="qa-question">
+      <label className="mt-4 block text-[12px] font-medium" htmlFor={inputId}>
         {strings.qa.questionLabel}
       </label>
       <textarea
-        id="qa-question"
+        id={inputId}
         value={question}
         onChange={(event) => setQuestion(event.target.value)}
         placeholder={strings.qa.questionPlaceholder}
@@ -263,6 +286,7 @@ function Thread({ thread, active }: { thread: QaThread; active: boolean }) {
 }
 
 function FollowUp({ thread }: { thread: Exclude<QaThread, { status: "pending" }> }) {
+  const inputId = useId();
   const qa = useQa();
   const strings = useStrings();
   const [question, setQuestion] = useState("");
@@ -274,11 +298,11 @@ function FollowUp({ thread }: { thread: Exclude<QaThread, { status: "pending" }>
   };
   return (
     <form onSubmit={submit} className="mt-5 border-t border-border pt-4">
-      <label className="text-[12px] font-medium" htmlFor={`qa-follow-up-${thread.id}`}>
+      <label className="text-[12px] font-medium" htmlFor={inputId}>
         {strings.qa.followUp}
       </label>
       <textarea
-        id={`qa-follow-up-${thread.id}`}
+        id={inputId}
         value={question}
         onChange={(event) => setQuestion(event.target.value)}
         placeholder={strings.qa.followUpPlaceholder}
@@ -328,6 +352,7 @@ function AgentSetupNotice() {
 }
 
 function useAnswerLanguages(threads: readonly QaThread[]): void {
+  const runAppEffect = useRenderEffect();
   useEffect(() => {
     const languages = new Set<string>();
     for (const thread of threads) {
@@ -340,5 +365,5 @@ function useAnswerLanguages(threads: readonly QaThread[]): void {
       ensureLangs([...languages]).pipe(withHighlightFallback(undefined)),
       () => undefined,
     );
-  }, [threads]);
+  }, [threads, runAppEffect]);
 }

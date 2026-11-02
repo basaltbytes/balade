@@ -1,17 +1,40 @@
 // @vitest-environment jsdom
 
 import { Effect } from "effect";
-import { act } from "react";
+import { act, useMemo, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "@effect/vitest";
 import { QaThreadId, QaTurnId } from "../../../src/contract/schema";
-import type { QaState } from "../contract";
+import type { Payload, QaState } from "../contract";
 import type { FetchLike } from "../data/browser";
 import { pr96 } from "../fixtures/pr96";
-import { QaProvider, useQa } from "./qa-context";
+import { QaProvider as BaseQaProvider, useQa } from "./qa-context";
 import { QaSidebar } from "./qa-sidebar";
 import { QaIndicator, QaPanel } from "./qa";
 import { StringsProvider } from "./strings";
+
+import type { WalkthroughHost } from "../host";
+import { createAppHost } from "../data/app-host";
+import { RenderRuntimeProvider } from "./render-runtime";
+
+function QaProvider({
+  payload,
+  served,
+  children,
+}: {
+  payload: Payload;
+  served: boolean;
+  children: ReactNode;
+}) {
+  const host = useMemo(() => createAppHost(payload, served), [payload, served]);
+  return (
+    <RenderRuntimeProvider>
+      <BaseQaProvider payload={payload} host={host.clarifications}>
+        {children}
+      </BaseQaProvider>
+    </RenderRuntimeProvider>
+  );
+}
 
 const threadId = QaThreadId.make("34d91d9f-21f4-4c3b-9b72-b1f76166395c");
 const turnId = QaTurnId.make("57992f39-f492-4b7c-8580-d2483916bba2");
@@ -218,7 +241,7 @@ describe("clarification threads in the walkthrough", () => {
       }
       yield* Effect.promise(() => act(async () => indicator.click()));
 
-      const textarea = container.querySelector(`#qa-follow-up-${threadId}`);
+      const textarea = container.querySelector("textarea");
       if (!(textarea instanceof HTMLTextAreaElement)) {
         return yield* Effect.die("follow-up textarea missing");
       }
@@ -292,7 +315,7 @@ describe("clarification threads in the walkthrough", () => {
         }),
       );
 
-      const textarea = container.querySelector("#qa-question");
+      const textarea = container.querySelector("textarea");
       if (!(textarea instanceof HTMLTextAreaElement)) {
         return yield* Effect.die("question textarea missing");
       }
@@ -433,7 +456,77 @@ describe("clarification threads in the walkthrough", () => {
       expect(container.textContent).toContain("How does the worker finish?");
     }),
   );
+  it.effect(
+    "keeps subscription updates ahead of delayed load and ask responses, and unsubscribes",
+    () =>
+      Effect.gen(function* () {
+        const loading = deferred<QaState | null>();
+        const asking = deferred<QaState>();
+        let notify: ((next: QaState) => void) | undefined;
+        let subscribed = false;
+        const host: NonNullable<WalkthroughHost["clarifications"]> = {
+          load: () => loading.promise,
+          status: async () => ({ status: "ready" }),
+          ask: () => asking.promise,
+          subscribe: (onChange) => {
+            notify = onChange;
+            subscribed = true;
+            return () => {
+              subscribed = false;
+            };
+          },
+        };
+        yield* Effect.promise(() =>
+          act(async () =>
+            root.render(
+              <RenderRuntimeProvider>
+                <BaseQaProvider payload={payload} host={host}>
+                  <QaProbe />
+                </BaseQaProvider>
+              </RenderRuntimeProvider>,
+            ),
+          ),
+        );
+        const push = notify;
+        if (push === undefined) return yield* Effect.die("host subscription missing");
+        yield* Effect.promise(() =>
+          act(async () => {
+            push(state);
+            loading.resolve({ ...state, threads: [] });
+          }),
+        );
+        expect(container.textContent).toContain("Why is this safe?");
+        const button = container.querySelector("button");
+        if (button === null) return yield* Effect.die("ask button missing");
+        yield* Effect.promise(() => act(async () => button.click()));
+        yield* Effect.promise(() =>
+          act(async () => {
+            push(state);
+            asking.resolve(pendingState);
+          }),
+        );
+        expect(container.textContent).toContain("Why is this safe?");
+        expect(container.textContent).not.toContain("How does the worker finish?");
+        yield* Effect.promise(() => act(async () => root.unmount()));
+        expect(subscribed).toBe(false);
+        root = createRoot(container);
+      }),
+  );
 });
+
+function deferred<A>() {
+  let complete: ((value: A) => void) | undefined;
+  const promise = new Promise<A>((resolve) => {
+    complete = resolve;
+  });
+  return {
+    promise,
+    resolve: (value: A) => {
+      if (complete === undefined) throw new Error("Deferred promise did not initialize");
+      complete(value);
+    },
+  };
+}
 
 function QaProbe() {
   const qa = useQa();

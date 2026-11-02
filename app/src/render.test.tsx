@@ -6,7 +6,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Payload } from "./contract";
 import { pr96 } from "./fixtures/pr96";
-import { WalkthroughRoute } from "./routes/walkthrough";
+import { WalkthroughView } from "./viewer";
 import { StringsProvider } from "./ui/strings";
 
 type CollapsedFacet = { collapsed?: boolean };
@@ -14,7 +14,7 @@ type CollapsedFacet = { collapsed?: boolean };
 const render = (payload: Payload, lang: "en" | "fr" = "en"): string =>
   renderToString(
     <StringsProvider lang={lang}>
-      <WalkthroughRoute payload={payload} served={false} devStale={false} onToggleDevStale={null} />
+      <WalkthroughView payload={{ ...payload, lang }} />
     </StringsProvider>,
   );
 
@@ -23,7 +23,8 @@ describe("the walkthrough route", () => {
 
   it("renders the header, the nav and every section", () => {
     expect(html).toContain("Add live planning pool items");
-    for (const section of pr96.sections) expect(html).toContain(`id="${section.id}"`);
+    for (const section of pr96.sections)
+      expect(html).toContain(`data-balade-section="${section.id}"`);
   });
 
   it("puts the review controls on screen", () => {

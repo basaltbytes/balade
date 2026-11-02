@@ -12,8 +12,9 @@ import {
   type ReactNode,
 } from "react";
 import type { Payload, QaAnchor, QaAskRequest, QaState, QaThread } from "../contract";
-import { askQa, fetchQa, fetchQaAgentStatus } from "../data/qa";
-import { runAppEffect } from "../data/runtime";
+import { askHostQa, loadHostQa, hostAgentStatus, decodeHostQa } from "../data/host";
+import type { WalkthroughHost } from "../host";
+import { useRenderEffect } from "./render-runtime";
 
 interface QaApi {
   readonly available: boolean;
@@ -87,13 +88,14 @@ function emptyState(payload: Payload): QaState {
 
 export function QaProvider({
   payload,
-  served,
+  host,
   children,
 }: {
   payload: Payload;
-  served: boolean;
+  host: WalkthroughHost["clarifications"];
   children: ReactNode;
 }) {
+  const runAppEffect = useRenderEffect();
   const [state, setState] = useState<QaState>(() => emptyState(payload));
   const [agent, setAgent] = useState<QaAgentState>(UNCHECKED_AGENT);
   const [requestState, setRequest] = useState<QaRequestState>(IDLE_REQUEST);
@@ -112,19 +114,19 @@ export function QaProvider({
     lifecycle.current = null;
     pollEpoch.current += 1;
     requestPending.current = false;
-    if (!served) return;
+    if (host === undefined) return;
 
     const scope = new AbortController();
     lifecycle.current = scope;
     let timer: number | undefined;
     const poll = (): void => {
       if (requestPending.current) {
-        timer = window.setTimeout(poll, 1_500);
+        if (host.subscribe === undefined) timer = window.setTimeout(poll, 1_500);
         return;
       }
       const epoch = pollEpoch.current;
       runAppEffect(
-        fetchQa(payload.sourcePath).pipe(
+        loadHostQa(host, payload).pipe(
           Effect.match({
             onFailure: () => ({ ok: false as const }),
             onSuccess: (next) => ({ ok: true as const, next }),
@@ -134,29 +136,49 @@ export function QaProvider({
           if (scope.signal.aborted) return;
           if (epoch === pollEpoch.current && !requestPending.current) {
             if (outcome.ok) {
-              setState(outcome.next);
+              setState(outcome.next ?? emptyState(payload));
               setPollState(CURRENT_POLL);
             } else {
               setPollState({ _tag: "Unavailable" });
             }
           }
-          timer = window.setTimeout(poll, 1_500);
+          if (host.subscribe === undefined) timer = window.setTimeout(poll, 1_500);
         },
         { signal: scope.signal },
       );
     };
     poll();
+    const unsubscribe = host.subscribe?.((next) => {
+      pollEpoch.current += 1;
+      runAppEffect(
+        decodeHostQa(next, payload).pipe(
+          Effect.match({
+            onSuccess: (value) => ({ ok: true as const, value }),
+            onFailure: () => ({ ok: false as const }),
+          }),
+        ),
+        (outcome) => {
+          if (scope.signal.aborted) return;
+          if (outcome.ok) {
+            setState(outcome.value ?? emptyState(payload));
+            setPollState(CURRENT_POLL);
+          } else setPollState({ _tag: "Unavailable" });
+        },
+        { signal: scope.signal },
+      );
+    });
     return () => {
+      unsubscribe?.();
       scope.abort();
       if (lifecycle.current === scope) lifecycle.current = null;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [payload, served]);
+  }, [payload, host, runAppEffect]);
 
   const checkAgent = useCallback(() => {
     const scope = lifecycle.current;
     if (
-      !served ||
+      host === undefined ||
       scope === null ||
       agent._tag === "Checking" ||
       agent._tag === "Ready" ||
@@ -166,7 +188,7 @@ export function QaProvider({
     }
     setAgent(CHECKING_AGENT);
     runAppEffect(
-      fetchQaAgentStatus().pipe(
+      hostAgentStatus(host).pipe(
         Effect.match({
           onFailure: () => ({ _tag: "Unavailable" as const }),
           onSuccess: (status) =>
@@ -180,7 +202,7 @@ export function QaProvider({
       },
       { signal: scope.signal },
     );
-  }, [agent._tag, served]);
+  }, [agent._tag, host, runAppEffect]);
 
   const openSection = useCallback(
     (sectionId: string) => {
@@ -209,19 +231,25 @@ export function QaProvider({
   const ask = useCallback(
     (request: QaAskIntent) => {
       const scope = lifecycle.current;
-      if (!served || isRequestPending(requestState) || requestPending.current || scope === null) {
+      if (
+        host === undefined ||
+        isRequestPending(requestState) ||
+        requestPending.current ||
+        scope === null
+      ) {
         return;
       }
       const needsSetup = agent._tag === "SetupRequired";
       requestPending.current = true;
       pollEpoch.current += 1;
+      const epoch = pollEpoch.current;
       setRequest(needsSetup ? { _tag: "SettingUp" } : { _tag: "Asking" });
       const submitted = {
         ...request,
         generation: { pr: payload.pr.number, stamp: payload.commit },
       } satisfies QaAskRequest;
       runAppEffect(
-        askQa(payload.sourcePath, submitted).pipe(
+        askHostQa(host, submitted, payload).pipe(
           Effect.match({
             onFailure: (error) => ({ ok: false as const, error }),
             onSuccess: (next) => ({ ok: true as const, next }),
@@ -233,7 +261,7 @@ export function QaProvider({
           if (outcome.ok) {
             setRequest(IDLE_REQUEST);
             setAgent({ _tag: "Ready" });
-            setState(outcome.next);
+            if (epoch === pollEpoch.current) setState(outcome.next ?? emptyState(payload));
             setPanel((current) =>
               request.kind === "new" &&
               current._tag === "Composer" &&
@@ -242,12 +270,12 @@ export function QaProvider({
                 : current,
             );
           } else {
-            if (outcome.error._tag === "QaAgentUnavailable") {
+            if (outcome.error._tag === "ClarificationAgentUnavailable") {
               setAgent({ _tag: "SetupRequired" });
               setRequest({ _tag: "SetupFailed" });
             } else {
               setRequest(
-                outcome.error._tag === "QaGenerationChanged"
+                outcome.error._tag === "ClarificationGenerationChanged"
                   ? { _tag: "GenerationChanged" }
                   : { _tag: "RequestFailed" },
               );
@@ -257,12 +285,12 @@ export function QaProvider({
         { signal: scope.signal },
       );
     },
-    [agent, payload.commit, payload.pr.number, payload.sourcePath, requestState, served],
+    [agent, payload, requestState, host, runAppEffect],
   );
 
   const value = useMemo<QaApi>(
     () => ({
-      available: served,
+      available: host !== undefined,
       state,
       agent,
       request: requestState,
@@ -285,7 +313,7 @@ export function QaProvider({
       panel,
       pollState,
       requestState,
-      served,
+      host,
       state,
     ],
   );

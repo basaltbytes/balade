@@ -48,6 +48,8 @@ attack*.
 
 ## Assets
 
+- The embedding application’s **session**: the viewer may share an authenticated
+  origin, so an HTML sink bug also exposes host data and cookies.
 - The reviewer's **machine** — files, credentials, ability to execute.
 - The reviewer's **judgment** — the walkthrough's accuracy. Corrupting it is the
   highest-value attack and leaves no technical trace.
@@ -193,6 +195,27 @@ they describe.
   Expensive consumers enforce their own length and work limits, as recorded below and in
   [#74](https://github.com/basaltbytes/balade/issues/74).
 
+**Embedded host boundary**
+
+- `balade/viewer` imports no browser fetch or storage layer. All review and Q&A
+  IO passes through the supplied `WalkthroughHost`; omitting it leaves marks in
+  memory and removes clarification controls. The standalone app supplies its
+  HTTP/localStorage adapter through that same boundary.
+- Root strictly decodes payloads before any sink. Host review and Q&A responses,
+  including subscription updates and answer blocks, pass through the canonical
+  parsers; Q&A state must match the displayed walkthrough, PR and commit.
+- Navigation, selection listeners and observers are rooted in the instance or
+  its explicit scroll container. IDs carry a React instance prefix; renderer
+  components never change title, HTML attributes, history or document overflow.
+- The generated stylesheet has no document reset or global selector. Tokens,
+  animation names and property defaults are scoped or prefixed for the viewer.
+  React and React DOM remain external peers; Effect and renderer dependencies
+  are bundled, so a host's Effect major does not supply renderer services.
+- The packed-package browser fixture runs with `script-src 'self'` (no eval),
+  `style-src 'self' 'unsafe-inline'`, `connect-src 'self'` and
+  `img-src 'self' data:`. It captures requests and CSP violations while
+  exercising hostile payload and answer blocks with the host's own Tailwind CSS.
+
 **Rendering**
 
 - The `Inline` contract has **no link and no HTML kind** — the union is
@@ -229,7 +252,12 @@ they describe.
   `:144525`, `:157266`); and it sends a `click … href` URL through
   `@braintree/sanitize-url` (`:34481-34489`). **Four conditions hold this sink
   safe** and must not be broken:
-  1. HTML labels are off. They default to **on** even at `strict` —
+  1. Resource-bearing source never reaches Mermaid. HTML tags, encoded entities,
+     CSS escapes or block comments, image metadata and CSS resource functions show the localized
+     source view. This happens **before layout**, where Mermaid otherwise creates
+     `Image` objects to measure remote image nodes. The label sanitizer also
+     forbids image, style, frame, media and embedded-object tags.
+     HTML labels are off. They default to **on** even at `strict` —
      `config.htmlLabels ?? config.flowchart?.htmlLabels ?? true` (`:6887-6892`)
      over a shipped default that sets neither (`:5815`) — so `MERMAID_CONFIG`
      (`app/src/mermaid/mermaid.ts`) sets the root switch plus
@@ -239,8 +267,8 @@ they describe.
      a YAML `config:` block inside the source reaches `addDirective`
      (`:191373-191378`), which drops only the keys named in `siteConfig.secure`
      (`:6818`). mermaid's own list holds six, and not `htmlLabels`
-     (`:6344-6351`), so `MERMAID_CONFIG` extends it with `htmlLabels` and
-     `themeCSS`. `secure` is always first in that list, so a directive cannot
+     (`:6344-6351`), so `MERMAID_CONFIG` extends it with `htmlLabels`,
+     `themeCSS`, `dompurifyConfig`, font and theme variables, look and layout. `secure` is always first in that list, so a directive cannot
      shorten it; `maxTextSize` (50,000 characters) and `maxEdges` (500) are on
      it already, so a diagram cannot raise its own bounds (`:6336-6337`).
   3. `bindFunctions` is never called. The renderer keeps only `svg` off the
@@ -252,10 +280,12 @@ they describe.
      security gate (`:47722-47731`) and the node renderer wraps the shape in
      `<svg:a xlink:href=…>` (`:50015-50022`, `:171899-171909`), which DOMPurify
      keeps. The guard parses the markup into an inert `DOMParser` document,
-     unwraps every `<a>`, removes `<script>`, and drops every `on*` attribute
+     unwraps every `<a>`, removes scripts, images, foreign objects, frames,
+     embedded objects, media and SVG animations, and drops every `on*` attribute
      and every `href`/`xlink:href`/`src`/`target`/`ping`/`formaction` that is
-     not a `#` same-document reference — mermaid's own marker and icon
-     references are all that stay. The rule that a walkthrough cannot express a
+     not a reference to an ID inside that diagram. Every retained ID, marker,
+     icon and accessible-label reference is renamed with the instance prefix;
+     references into the host document are removed. The rule that a walkthrough cannot express a
      link therefore holds at this sink too, and no PR-derived URL is fetched.
      `app/src/mermaid/mermaid.test.ts` drives these three cases through real
      mermaid.
@@ -263,8 +293,10 @@ they describe.
   a `themeCSS` a directive might set, is compiled through `compileCSS(svgId, …)`,
   which prefixes each selector with the `#<id>` the app generated and comments
   out at-rules outside a fixed list (`:191451-191517`). Ids are app-generated
-  (`balade-mermaid-<n>`), never payload-derived.
-- Mermaid needs a document, so it loads and draws only from an effect hook in
+  (`balade-mermaid-<instance>-<draw>`), never payload-derived.
+- Mermaid draws its temporary DOM into a child of the viewer, never into the
+  host document body. Cleanup clears that child after success or failure.
+  Mermaid needs a document, so it loads and draws only from an effect hook in
   the browser: server rendering shows a placeholder and never imports the
   library. A parse or render failure falls back to the diagram source as React
   text with a localized note, which is not an HTML sink

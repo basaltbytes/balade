@@ -460,6 +460,23 @@ balade answer check answer.md --walkthrough review.md --base "$BASE_SHA" --head 
 diagnostics. Text output reports acceptance or lists diagnostics. Rejected
 answers exit with status 1; repair the answer and check again.
 
+## React viewer
+
+Render a compiled payload inside your React 19 application:
+
+```tsx
+import { WalkthroughView } from "balade/viewer";
+import "balade/viewer.css";
+
+<WalkthroughView payload={payload} />;
+```
+
+Supply a `WalkthroughHost` to persist review marks or answer clarification
+questions. `Walkthrough.Root`, `Header`, `Nav`, `Sections` and `Clarifications`
+let you arrange the review in your own layout. Each instance keeps its browser
+state and CSS scoped to the viewer. See [the integration guide](docs/viewer.md)
+for host adapters, navigation, theme tokens and CSP requirements.
+
 ## CI
 
 This workflow validates walkthroughs changed by a pull request:

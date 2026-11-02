@@ -16,11 +16,40 @@ Object.defineProperties(globalThis.SVGElement.prototype, {
   getSubStringLength: { configurable: true, value: () => 40 },
 });
 
+async function render(id: string, source: string): Promise<string> {
+  const container = document.createElement("div");
+  document.body.append(container);
+  try {
+    return await lazyMermaidRenderer.render(id, source, container);
+  } finally {
+    container.remove();
+  }
+}
+
 const hasAnchor = (markup: string): boolean => /<a[\s>]/i.test(markup);
 
 describe("mermaid over an untrusted diagram source", () => {
+  it("keeps markers and accessible labels inside their own diagram namespace", () => {
+    const markup =
+      '<svg id="diagram" aria-labelledby="title" aria-describedby="host-secret"><title id="title">Review</title><defs><marker id="arrow" /></defs><path marker-end="url(#arrow)" fill="url(#host-secret)" /><use href="#host-secret" /></svg>';
+    const container = document.createElement("div");
+    container.innerHTML =
+      sanitizeDiagramSvg(markup, "first") + sanitizeDiagramSvg(markup, "second");
+    const ids = [...container.querySelectorAll("[id]")].map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const svg of container.querySelectorAll("svg")) {
+      expect(svg.getAttribute("aria-labelledby")).toBe(svg.querySelector("title")?.id);
+      expect(svg.getAttribute("aria-describedby")).toBe("");
+      expect(svg.querySelector("path")?.getAttribute("marker-end")).toBe(
+        `url(#${svg.querySelector("marker")?.id})`,
+      );
+      expect(svg.querySelector("path")?.getAttribute("fill")).toBe("none");
+      expect(svg.querySelector("use")?.hasAttribute("href")).toBe(false);
+    }
+  });
+
   it("keeps a script out of a label and a link out of the injected markup", async () => {
-    const svg = await lazyMermaidRenderer.render(
+    const svg = await render(
       "test-strict",
       [
         "graph TD",
@@ -34,14 +63,14 @@ describe("mermaid over an untrusted diagram source", () => {
     expect(svg).not.toMatch(/<script/i);
     expect(hasAnchor(svg)).toBe(true);
 
-    const clean = sanitizeDiagramSvg(svg);
+    const clean = sanitizeDiagramSvg(svg, "test-scoped");
     expect(hasAnchor(clean)).toBe(false);
     expect(clean).not.toContain("evil.example");
     expect(clean).not.toMatch(/<script/i);
   });
 
   it("refuses a directive that would downgrade the security level", async () => {
-    const svg = await lazyMermaidRenderer.render(
+    const svg = await render(
       "test-directive-security",
       [
         '%%{init: {"securityLevel": "loose"}}%%',
@@ -61,7 +90,7 @@ describe("mermaid over an untrusted diagram source", () => {
      directive can flip the switch, so the diagram source is where they would
      come back if `secure` did not hold the key. */
   it("refuses a directive that would put labels back into HTML", async () => {
-    const svg = await lazyMermaidRenderer.render(
+    const svg = await render(
       "test-directive-labels",
       [
         '%%{init: {"htmlLabels": true, "flowchart": {"htmlLabels": true}}}%%',

@@ -43,14 +43,19 @@
       "types": "./dist/contract/payload.d.ts",
       "default": "./dist/contract/payload.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./viewer": {
+      "types": "./dist/viewer/types/app/src/viewer.d.ts",
+      "import": "./dist/viewer/index.js"
+    },
+    "./viewer.css": "./dist/viewer/viewer.css"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "scripts": {
-    "build": "pnpm run build:cli && pnpm run build:app && pnpm run build:skill",
+    "build": "pnpm run build:cli && pnpm run build:app && pnpm run build:viewer && pnpm run build:skill",
     "build:cli": "tsc -p tsconfig.build.json && node scripts/copy-prose.mjs",
     "build:app": "vite build app && vite build app --mode export",
     "build:skill": "node dist/cli.js skills install --out dist/skill",
@@ -70,7 +75,8 @@
     "changeset:version": "changeset version",
     "package:smoke": "bash scripts/npm-smoke.sh",
     "prepare": "effect-tsgo patch",
-    "prepublishOnly": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test && pnpm package:smoke"
+    "prepublishOnly": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test && pnpm package:smoke",
+    "build:viewer": "vite build app --config app/viewer.vite.config.ts && tsc -p app/tsconfig.viewer.json && node scripts/viewer-types.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.1.0",
@@ -88,6 +94,7 @@
     "@effect/vitest": "4.0.0-beta.102",
     "@git-diff-view/react": "0.1.7",
     "@oxlint/plugins": "1.78.0",
+    "@playwright/test": "1.58.2",
     "@primer/octicons-react": "19.32.0",
     "@shikijs/langs": "4.4.1",
     "@shikijs/themes": "4.4.1",
@@ -97,18 +104,34 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
     "jsdom": "^27.4.0",
+    "lowlight": "3.3.0",
     "mermaid": "11.16.1",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.78.0",
     "pkg-pr-new": "0.0.87",
+    "postcss": "8.5.6",
+    "postcss-selector-parser": "7.1.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "rolldown": "1.2.1",
     "shiki": "4.4.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.118.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devEngines": {
     "packageManager": {

@@ -23,6 +23,12 @@ const SECURE_KEYS = [
   "maxEdges",
   "htmlLabels",
   "themeCSS",
+  "dompurifyConfig",
+  "fontFamily",
+  "altFontFamily",
+  "themeVariables",
+  "look",
+  "layout",
 ];
 
 /**
@@ -40,6 +46,10 @@ export const MERMAID_CONFIG = {
   flowchart: { htmlLabels: false },
   class: { htmlLabels: false },
   theme: "dark",
+  suppressErrorRendering: true,
+  dompurifyConfig: {
+    FORBID_TAGS: ["img", "image", "style", "iframe", "object", "embed", "video", "audio", "source"],
+  },
   secure: SECURE_KEYS,
 } satisfies MermaidConfig;
 
@@ -50,7 +60,7 @@ export class MermaidRenderFailed extends Schema.TaggedErrorClass<MermaidRenderFa
 
 /** The seam: a fake renderer stands in for mermaid without touching the module graph. */
 export interface MermaidRenderer {
-  readonly render: (id: string, source: string) => Promise<string>;
+  readonly render: (id: string, source: string, container: HTMLElement) => Promise<string>;
 }
 
 let loading: Promise<MermaidRenderer> | null = null;
@@ -60,12 +70,20 @@ let loading: Promise<MermaidRenderer> | null = null;
 const loadMermaid = (): Promise<MermaidRenderer> =>
   (loading ??= import("mermaid").then(({ default: mermaid }) => {
     mermaid.initialize(MERMAID_CONFIG);
-    return { render: async (id, source) => (await mermaid.render(id, source)).svg };
+    return {
+      render: async (id, source, container) => {
+        try {
+          return (await mermaid.render(id, source, container)).svg;
+        } finally {
+          container.replaceChildren();
+        }
+      },
+    };
   }));
 
 /** The production renderer: mermaid arrives as its own chunk on first use. */
 export const lazyMermaidRenderer: MermaidRenderer = {
-  render: async (id, source) => (await loadMermaid()).render(id, source),
+  render: async (id, source, container) => (await loadMermaid()).render(id, source, container),
 };
 
 /* `target` and `ping` carry no URL of their own but only make sense on a link. */
@@ -79,9 +97,6 @@ const URL_ATTRIBUTES = new Set([
   "formaction",
 ]);
 
-/** Mermaid's markers and icon symbols point at ids inside the same document. */
-const isSameDocumentReference = (value: string): boolean => value.startsWith("#");
-
 /**
  * The sink's own guard, applied to whatever the renderer returned.
  *
@@ -92,32 +107,83 @@ const isSameDocumentReference = (value: string): boolean => value.startsWith("#"
  * event handler is dropped, and scripts go with them. `DOMParser` builds an
  * inert document: nothing in the markup runs or loads while it is inspected.
  */
-export function sanitizeDiagramSvg(markup: string): string {
+export function sanitizeDiagramSvg(markup: string, namespace: string): string {
   const { body } = new DOMParser().parseFromString(markup, "text/html");
-  for (const script of body.querySelectorAll("script")) script.remove();
+  for (const script of body.querySelectorAll(
+    "script, foreignObject, image, img, iframe, object, embed, video, audio, source, animate, set",
+  ))
+    script.remove();
   for (const anchor of body.querySelectorAll("a")) anchor.replaceWith(...anchor.childNodes);
+  const ids = new Map(
+    [...body.querySelectorAll("[id]")].map((element, index) => [
+      element.id,
+      `${namespace}-${index}`,
+    ]),
+  );
+  const rootId = body.querySelector("svg")?.id;
   for (const element of body.querySelectorAll("*")) {
+    if (element.id) element.id = ids.get(element.id) ?? element.id;
     for (const name of element.getAttributeNames()) {
       const lowered = name.toLowerCase();
-      if (lowered.startsWith("on")) element.removeAttribute(name);
-      else if (
-        URL_ATTRIBUTES.has(lowered) &&
-        !isSameDocumentReference(element.getAttribute(name) ?? "")
-      ) {
+      const value = element.getAttribute(name) ?? "";
+      if (lowered.startsWith("on")) {
         element.removeAttribute(name);
+        continue;
       }
+      if (URL_ATTRIBUTES.has(lowered)) {
+        const linked = value.startsWith("#") ? ids.get(value.slice(1)) : undefined;
+        if (linked === undefined) element.removeAttribute(name);
+        else element.setAttribute(name, `#${linked}`);
+        continue;
+      }
+      if (name === "aria-labelledby" || name === "aria-describedby") {
+        element.setAttribute(
+          name,
+          value
+            .split(/\s+/)
+            .flatMap((id) => ids.get(id) ?? [])
+            .join(" "),
+        );
+        continue;
+      }
+      element.setAttribute(name, localUrls(value, ids));
+    }
+    if (element.tagName.toLowerCase() === "style") {
+      let css = localUrls(element.textContent ?? "", ids);
+      if (rootId) css = css.replaceAll(`#${rootId}`, `#${ids.get(rootId)}`);
+      element.textContent = css;
     }
   }
   return body.innerHTML;
 }
 
+function localUrls(value: string, ids: ReadonlyMap<string, string>): string {
+  return value.replace(/url\(\s*["']?([^)'"\s]*)["']?\s*\)/gi, (_match, reference: string) => {
+    const target = reference.startsWith("#") ? ids.get(reference.slice(1)) : undefined;
+    return target === undefined ? "none" : `url(#${target})`;
+  });
+}
+
 /** Injectable SVG for `source`, or a typed failure the caller turns into the source view. */
 export const renderDiagram = Effect.fn("Mermaid.renderDiagram")(
-  (renderer: MermaidRenderer, id: string, source: string) =>
+  (renderer: MermaidRenderer, id: string, source: string, container: HTMLElement) =>
     Effect.tryPromise({
-      try: () => renderer.render(id, source),
+      try: () => {
+        // Mermaid can fetch images while measuring, before returning its sanitized SVG.
+        // Resource syntax, HTML, CSS escapes/entities and CSS URLs are outside this text-only renderer.
+        if (source.length > 50_000)
+          return Promise.reject(new Error("Diagram exceeds the rendering limit"));
+        if (
+          /[\\]|\/\*|&(?:#|[a-z]+;)|<\s*[a-z!/]|!\[|\b(?:img|image)["']?\s*:|\bshape["']?\s*:\s*["']?image|(?:url|var|attr|image-set|paint)\s*\(|@(?:import|font-face)/i.test(
+            source,
+          )
+        ) {
+          return Promise.reject(new Error("Diagram resource syntax is not supported"));
+        }
+        return renderer.render(id, source, container);
+      },
       catch: (cause) => new MermaidRenderFailed({ cause }),
-    }).pipe(Effect.map(sanitizeDiagramSvg)),
+    }).pipe(Effect.map((svg) => sanitizeDiagramSvg(svg, id))),
 );
 
 export const logMermaidFailure = (error: MermaidRenderFailed): Effect.Effect<void> =>

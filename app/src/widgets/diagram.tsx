@@ -7,7 +7,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DiagramEdge, DiagramNode, Inline } from "../contract";
-import { jumpTo } from "../ui/nav";
+import { useNavigation } from "../ui/navigation-context";
 import { Rich } from "../ui/rich";
 
 interface Point {
@@ -49,10 +49,10 @@ function labelSpot(container: DOMRect, from: DOMRect, to: DOMRect, chipWidth: nu
 }
 
 const EDGE_COLOR = {
-  ctx: "var(--color-context)",
-  mod: "var(--color-modified)",
-  new: "var(--color-added)",
-  derived: "var(--color-accent-muted)",
+  ctx: "var(--balade-color-context)",
+  mod: "var(--balade-color-modified)",
+  new: "var(--balade-color-added)",
+  derived: "var(--balade-color-accent-muted)",
 } satisfies Record<DiagramEdge["kind"], string>;
 
 const NEW_BADGE = "text-added bg-added/12 border-added/32";
@@ -86,6 +86,7 @@ export function Diagram({
   nodes: ReadonlyArray<DiagramNode>;
   edges: ReadonlyArray<DiagramEdge>;
 }) {
+  const { jump, sectionId } = useNavigation();
   const [hover, setHover] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeRefs = useRef(new Map<string, HTMLElement>());
@@ -245,11 +246,11 @@ export function Diagram({
                       if (el === null) nodeRefs.current.delete(node.id);
                       else nodeRefs.current.set(node.id, el);
                     }}
-                    href={node.ref === undefined ? undefined : `#${node.ref}`}
+                    href={node.ref === undefined ? undefined : `#${sectionId(node.ref)}`}
                     onClick={(event) => {
                       if (node.ref === undefined) return;
                       event.preventDefault();
-                      jumpTo(node.ref);
+                      jump(node.ref);
                     }}
                     onMouseEnter={() => setHover(node.id)}
                     onMouseLeave={() => setHover(null)}
