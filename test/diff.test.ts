@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { FastCheck } from "effect/testing";
-import { changedLines, splitDiff } from "../src/git/diff.js";
+import { splitDiff } from "../src/git/diff.js";
+import { changedLines } from "../src/contract/diff.js";
 
 const DIFF = `diff --git a/models/pool.py b/models/pool.py
 index 1111111..2222222 100644
@@ -78,7 +79,7 @@ describe("unified diff", () => {
     expect(records[1]?.path).toBe("docs/old.md");
   });
 
-  it("reads the change overlay off the hunk headers", () => {
+  it("reads added lines across zero-context hunks", () => {
     const record = splitDiff(DIFF)[0];
     expect([...changedLines(record?.body ?? "")]).toEqual([1, 7, 11, 12, 13, 14, 15, 16]);
   });

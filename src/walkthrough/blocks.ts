@@ -22,7 +22,7 @@ import type {
 } from "../contract/types.js";
 import type { MacroApi, Preset } from "../preset/types.js";
 import { presetOfTag } from "../preset/registry.js";
-import type { ResolveContext } from "../contract/context.js";
+import type { BlockContext } from "../contract/context.js";
 import { countEntries, isGettext, poLanguage } from "./gettext.js";
 import { matchesGlob } from "./glob.js";
 import { langOf } from "../contract/lang.js";
@@ -33,7 +33,7 @@ import { bodyInline, inlineOf, mdNodesOf, paragraphsOf, plainText } from "./inli
 export interface CompileEnv {
   /** Repo-relative path of the walkthrough file. */
   readonly file: string;
-  readonly ctx: ResolveContext;
+  readonly ctx: BlockContext;
   readonly preset: Preset | undefined;
   /** The PR's entry for a path, from the map the compiler already keeps. */
   fileEntry(path: string): { lang?: string } | undefined;

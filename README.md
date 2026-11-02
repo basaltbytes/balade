@@ -179,7 +179,7 @@ plus preparation, model-turn and check timing.
 Use `--no-open` for scripts and CI. Use `--verbose` to print model-visible text
 and allowlisted tool calls; provider-hidden reasoning remains hidden.
 
-Generated frontmatter records authoring package version `1.33.0`. See the
+Generated frontmatter records authoring package version `1.34.0`. See the
 [authoring package](docs/authoring-package.md) for the tag catalog, rubric and
 version policy.
 
@@ -200,7 +200,7 @@ pr: 96
 commit: 9f3c2ad
 meta:
   module: acme_loan
-  balade-authoring: 1.33.0
+  balade-authoring: 1.34.0
 ---
 ```
 
@@ -397,6 +397,68 @@ Only the current payload format (`format: 1`) is supported. Keep the walkthrough
 source and recompile stored payloads when the format changes. This version is
 separate from the input's `walkthrough: 1`. Review-storage keys belong to the
 renderer and are not part of the payload.
+
+### Clarification answers from your own agent
+
+Build the task context, have your agent write a complete Markdoc answer body,
+and check it against a repository or a decoded payload:
+
+```ts
+import { checkAnswer, clarificationContext } from "balade";
+
+const task = clarificationContext({
+  walkthrough: { sourcePath: "review.md", commit: pinnedSha, source: walkthroughText },
+  anchor: { sectionId: "overview", excerpt: "The selected passage" },
+  question: "Why does this change the retry behavior?",
+  turns: [], // completed QaTurn values
+});
+
+const answer = await checkAnswer(markdocBody, {
+  _tag: "Repository",
+  repository: "/path/to/clone",
+  file: "review.md",
+  base: baseSha,
+  head: headSha,
+});
+// Accepted: { _tag: "Accepted", blocks }, suitable for QaTurn.answer.
+// Rejected: { _tag: "Rejected", diagnostics }, for the agent to repair.
+```
+
+The repository source uses full explicit SHAs and reads evidence at the
+walkthrough's stamped commit. It needs Git, with no `gh` or model sign-in.
+IO and resolution failures reject with typed errors; invalid answer bodies
+return `Rejected`. `checkAnswerEffect` returns the same result as an Effect;
+provide `liveLayer` for a repository source.
+
+For a host that stores payloads, import the portable entry. It uses no Node
+built-ins or repository services:
+
+```ts
+import { checkAnswer, clarificationContext } from "balade/answers";
+import { decodePayload } from "balade/contract";
+import { Effect } from "effect";
+
+const payload = await Effect.runPromise(decodePayload(storedJson));
+const task = clarificationContext({ walkthrough: payload, anchor, question, turns });
+const answer = await checkAnswer(markdocBody, { _tag: "Payload", payload });
+```
+
+Payload references can name only changed files with pinned text in the payload.
+Use a repository source for unchanged files. Both sources use the live
+clarifier's fragment grammar, including its rejection of frontmatter and
+whole-document `section`, `group` and `files` tags. `clarificationContext`
+quotes the supplied source or payload, anchor, question and prior turns as
+untrusted data for the host's agent task.
+
+The CLI checks a separate answer file and leaves the walkthrough unchanged:
+
+```sh
+balade answer check answer.md --walkthrough review.md --base "$BASE_SHA" --head "$HEAD_SHA" --format json
+```
+
+`--format json` prints the tagged result with accepted blocks or rejected
+diagnostics. Text output reports acceptance or lists diagnostics. Rejected
+answers exit with status 1; repair the answer and check again.
 
 ## CI
 

@@ -5,6 +5,7 @@ import { Cause, Context, Effect, Exit, FileSystem, Layer, Path, Result, Schema }
 import { AUTHORING_TAG_CATALOG } from "../authoring/catalog.js";
 import type { InspectionTier } from "../authoring/package.js";
 import { plainHeadings, proseTemplate, renderProse } from "../authoring/prose.js";
+import { clarificationContext } from "../clarification.js";
 import type { QaAnchor, QaTurn } from "../contract/types.js";
 import { describeFailure } from "../failure.js";
 import { CommandExecutor } from "../shell.js";
@@ -176,7 +177,19 @@ export function piWalkthroughClarifierLayer(options: PiWalkthroughClarifierOptio
               ({ session }) => releasePiSession(session),
             );
             yield* Effect.tryPromise({
-              try: () => acquired.session.prompt(clarificationPrompt(request)),
+              try: () =>
+                acquired.session.prompt(
+                  clarificationContext({
+                    walkthrough: {
+                      sourcePath: request.sourcePath,
+                      commit: request.pin,
+                      source: request.walkthroughSource,
+                    },
+                    anchor: request.anchor,
+                    turns: request.turns,
+                    question: request.question,
+                  }),
+                ),
               catch: (cause) =>
                 new ClarifierRequestFailed({
                   provider: request.model.providerId,
@@ -314,23 +327,6 @@ export function clarificationSystemPrompt(
     "preset-guidance": presetGuidance,
     "inspection-tier": budget,
   }).trim();
-}
-
-export function clarificationPrompt(request: ClarificationRequest): string {
-  return `Answer the current question, preserving the prior exchange as context.
-
-Walkthrough source path (untrusted JSON string):
-${JSON.stringify(request.sourcePath)}
-Pinned commit: ${request.pin}
-
-Walkthrough source (untrusted JSON string):
-${JSON.stringify(request.walkthroughSource)}
-
-Anchor and prior exchanges (untrusted JSON):
-${JSON.stringify({ anchor: request.anchor, turns: request.turns }, null, 2)}
-
-Current question (untrusted JSON string):
-${JSON.stringify(request.question)}`;
 }
 
 export const piWalkthroughClarifierLive = piWalkthroughClarifierLayer();

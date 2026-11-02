@@ -20,7 +20,8 @@ import { PayloadInvalid } from "../contract/payload.js";
 import { langOf } from "../contract/lang.js";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../contract/types.js";
 import { CommandExecutor, firstLine, gh, gitOut, gitToplevel } from "../shell.js";
-import { changedLines, splitDiff } from "./diff.js";
+import { splitDiff } from "./diff.js";
+import { changedLines, sourceLines } from "../contract/diff.js";
 import type { PullLinkedIssueReference, PullNotice, PullRequestClaimsSource } from "./intent.js";
 
 export interface PullFile {
@@ -152,7 +153,7 @@ const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOp
         entry.path,
         entry.diff.newContent === null
           ? Option.none()
-          : Option.some(splitLines(entry.diff.newContent)),
+          : Option.some(sourceLines(entry.diff.newContent)),
       );
     }
   }
@@ -178,7 +179,7 @@ const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOp
       blobs.set(
         path,
         held.has(path)
-          ? Option.some(splitLines(yield* gitOut(["show", `${pin}:${path}`], root)))
+          ? Option.some(sourceLines(yield* gitOut(["show", `${pin}:${path}`], root)))
           : Option.none(),
       );
     }
@@ -293,12 +294,6 @@ export const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
 /* ------------------------------------------------------------------ */
 /* git plumbing                                                        */
 /* ------------------------------------------------------------------ */
-
-function splitLines(content: string): string[] {
-  const lines = content.split("\n");
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  return lines;
-}
 
 const firstSha = Effect.fn("firstSha")(function* (
   root: string,

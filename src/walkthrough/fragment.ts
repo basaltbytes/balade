@@ -2,7 +2,7 @@
 
 import type { Node } from "@markdoc/markdoc";
 import { Predicate, Result, Schema } from "effect";
-import type { ResolveContext } from "../contract/context.js";
+import type { BlockContext } from "../contract/context.js";
 import type { Block, CheckDiagnostic } from "../contract/types.js";
 import { getPreset } from "../preset/registry.js";
 import type { Preset } from "../preset/types.js";
@@ -102,7 +102,7 @@ function containsForbiddenTag(nodes: readonly Node[]): boolean {
 
 export function compileFragment(
   parsed: ParsedFragment,
-  ctx: ResolveContext,
+  ctx: BlockContext,
   file: string,
   sectionId: string,
 ): Result.Result<readonly [Block, ...Block[]], FragmentInvalid> {
