@@ -7,7 +7,7 @@
 import { processAST, type DiffAST, type DiffFileHighlighter } from "@git-diff-view/react";
 import { Effect, Result } from "effect";
 import { useEffect, useState } from "react";
-import { reportAppEffect, runAppEffect } from "../data/runtime";
+import { useRenderEffect } from "../ui/render-runtime";
 import {
   ensureLangs,
   type HighlightFailure,
@@ -96,11 +96,12 @@ interface LoadedDiffHighlighter {
  * unhighlighted rather than blocking on the network.
  */
 export function useDiffHighlighter(langs: string[]): DiffFileHighlighter | undefined {
+  const runAppEffect = useRenderEffect();
   const [loaded, setLoaded] = useState<LoadedDiffHighlighter | null>(null);
   const key = langs.join(",");
   useEffect(() => {
     const reportFailure: ReportHighlightFailure = (error) => {
-      reportAppEffect(logHighlightFailure(error));
+      runAppEffect(logHighlightFailure(error), () => undefined);
     };
     return runAppEffect(
       ensureLangs(key.length > 0 ? key.split(",") : []).pipe(
@@ -109,6 +110,6 @@ export function useDiffHighlighter(langs: string[]): DiffFileHighlighter | undef
       ),
       (highlighter) => setLoaded(highlighter === undefined ? null : { key, highlighter }),
     );
-  }, [key]);
+  }, [key, runAppEffect]);
   return loaded?.key === key ? loaded.highlighter : undefined;
 }

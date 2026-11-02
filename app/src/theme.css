@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@import "@git-diff-view/react/styles/diff-view.css";
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
 
 @source "./";
 
@@ -60,12 +62,57 @@
 }
 
 html {
+  position: relative;
+  isolation: isolate;
+  contain: layout style;
+  container-type: inline-size;
   color-scheme: dark;
   scrollbar-color: var(--color-border) transparent;
 }
 
 body {
+  margin: 0;
   @apply bg-background text-foreground font-sans text-[14.5px] leading-normal antialiased;
+}
+
+/* A sticky viewport stays inside its root at both ends of the walkthrough.
+   Portals target this element, never the host document body. */
+.balade-overlay-viewport {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+.balade-overlay-viewport > * {
+  pointer-events: auto;
+}
+
+/* Component foundations; Tailwind's document reset is deliberately not imported. */
+:where(*, ::before, ::after) {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+}
+:where(h1, h2, h3, p, pre, blockquote, ul, ol) {
+  margin: 0;
+}
+:where(button, input, textarea, select) {
+  font: inherit;
+  color: inherit;
+}
+:where(button) {
+  background: transparent;
+  padding: 0;
+}
+:where(a) {
+  color: inherit;
+  text-decoration: inherit;
+}
+:where(svg) {
+  vertical-align: middle;
+}
+:where(code, pre) {
+  font-family: var(--font-mono);
 }
 
 /* ---- browser surfaces -------------------------------------------------- */
@@ -250,6 +297,7 @@ section[id] {
 
 /* collapse is a state class on the block */
 .codeblock.collapsed .cbody {
+  margin: 0;
   display: none;
 }
 
@@ -294,6 +342,7 @@ section[id] {
 /* ---- reviewed state --------------------------------------------------- */
 .hide-reviewed .reviewed-section > .section-body,
 .hide-reviewed .reviewed-file > .file-body {
+  margin: 0;
   display: none;
 }
 .hide-reviewed .reviewed-section > .section-head,

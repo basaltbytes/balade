@@ -1,7 +1,7 @@
 /* The React face of the review state: one hook that owns it, one context so a
    files browser deep in a section can flip its own "Viewed" box. */
 
-import { Option } from "effect";
+import { Effect, Semaphore } from "effect";
 import {
   createContext,
   useCallback,
@@ -27,8 +27,9 @@ import {
   type Progress,
   type ResetReport,
 } from "../data/review";
-import { runAppEffect } from "../data/runtime";
-import { loadReview, saveReview, type ReviewStoreTarget, type SaveOutcome } from "../data/store";
+import { loadHostReview, saveHostReview, type SaveOutcome } from "../data/host";
+import type { WalkthroughHost } from "../host";
+import { useRenderEffect } from "./render-runtime";
 
 export interface ReviewApi {
   /** Marks stay read-only until stored state has been reconciled. */
@@ -50,14 +51,16 @@ export interface ReviewApi {
   next: (afterId?: string) => string | null;
 }
 
-export function useReviewApi(payload: Payload, target: ReviewStoreTarget): ReviewApi {
+export function useReviewApi(payload: Payload, target: WalkthroughHost["reviewState"]): ReviewApi {
+  const runAppEffect = useRenderEffect();
+  const [savePermit] = useState(() => Semaphore.makeUnsafe(1));
   const [state, setState] = useState<ReviewState>(() => emptyState(payload));
   const [reset, setReset] = useState<ResetReport | null>(null);
   const [persist, setPersist] = useState<SaveOutcome>("saved");
   const [hideReviewed, setHideReviewed] = useState(false);
   const current = useRef(state);
   const hydratedPayload = useRef<Payload | null>(null);
-  const hydratedTarget = useRef<ReviewStoreTarget | null>(null);
+  const hydratedTarget = useRef<WalkthroughHost["reviewState"] | null>(null);
   const saveScope = useRef<AbortController | null>(null);
   const ready = hydratedPayload.current === payload && hydratedTarget.current === target;
 
@@ -66,14 +69,14 @@ export function useReviewApi(payload: Payload, target: ReviewStoreTarget): Revie
       const scope = saveScope.current;
       if (scope === null) return;
       runAppEffect(
-        saveReview(target, next),
+        savePermit.withPermits(1)(saveHostReview(target, next)),
         (outcome) => {
           if (!scope.signal.aborted) setPersist(outcome);
         },
         { signal: scope.signal },
       );
     },
-    [target],
+    [target, runAppEffect, savePermit],
   );
 
   useEffect(() => {
@@ -87,19 +90,27 @@ export function useReviewApi(payload: Payload, target: ReviewStoreTarget): Revie
 
     const scope = new AbortController();
     saveScope.current = scope;
-    const cancelLoad = runAppEffect(loadReview(target), (storedOption) => {
-      const stored = Option.getOrNull(storedOption);
-      const outcome = reconcile(payload, stored);
-      hydratedPayload.current = payload;
-      hydratedTarget.current = target;
-      const next = outcome.state;
-      current.current = next;
-      setState(next);
-      if (outcome.reset.sections.length > 0 || outcome.reset.files.length > 0) {
-        setReset(outcome.reset);
-      }
-      if (outcome.changed) persistState(next);
-    });
+    const cancelLoad = runAppEffect(
+      loadHostReview(target).pipe(
+        Effect.match({
+          onSuccess: (stored) => ({ stored, failed: false }),
+          onFailure: () => ({ stored: null, failed: true }),
+        }),
+      ),
+      ({ stored, failed }) => {
+        if (failed) setPersist("failed");
+        const outcome = reconcile(payload, stored);
+        hydratedPayload.current = payload;
+        hydratedTarget.current = target;
+        const next = outcome.state;
+        current.current = next;
+        setState(next);
+        if (outcome.reset.sections.length > 0 || outcome.reset.files.length > 0) {
+          setReset(outcome.reset);
+        }
+        if (outcome.changed) persistState(next);
+      },
+    );
     return () => {
       if (hydratedPayload.current === payload) hydratedPayload.current = null;
       if (hydratedTarget.current === target) hydratedTarget.current = null;
@@ -107,7 +118,7 @@ export function useReviewApi(payload: Payload, target: ReviewStoreTarget): Revie
       scope.abort();
       if (saveScope.current === scope) saveScope.current = null;
     };
-  }, [payload, persistState, target]);
+  }, [payload, persistState, target, runAppEffect]);
 
   const update = useCallback(
     (next: (previous: ReviewState) => ReviewState) => {
@@ -118,7 +129,7 @@ export function useReviewApi(payload: Payload, target: ReviewStoreTarget): Revie
       setState(updated);
       persistState(updated);
     },
-    [payload, persistState, target],
+    [payload, persistState, target, runAppEffect],
   );
 
   return useMemo<ReviewApi>(

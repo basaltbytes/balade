@@ -7,22 +7,12 @@
 import { useEffect, useState } from "react";
 import type { Payload } from "../contract";
 import { ProgressBar } from "./bits";
-import { jumpTo, Nav } from "./nav";
+import { Nav } from "./nav";
 import { Octicon } from "./octicon";
 import { useReview } from "./review-context";
 import { useStrings } from "./strings";
-
-/** The sheet owns the scroll while it is up; the document behind it must not move. */
-function useScrollLock(locked: boolean): void {
-  useEffect(() => {
-    if (!locked) return;
-    const previous = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.documentElement.style.overflow = previous;
-    };
-  }, [locked]);
-}
+import { useNavigation } from "./navigation-context";
+import { ViewportOverlay } from "./viewport";
 
 function SectionSheet({
   payload,
@@ -34,25 +24,26 @@ function SectionSheet({
   onClose: () => void;
 }) {
   const strings = useStrings();
-  useScrollLock(true);
+  const { root } = useNavigation();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === "Escape") onClose();
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    const element = root.current;
+    element?.addEventListener("keydown", onKey);
+    return () => element?.removeEventListener("keydown", onKey);
+  }, [onClose, root]);
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden" data-section-sheet>
+    <div className="absolute inset-0 z-50 @min-[768px]:hidden" data-section-sheet>
       <button
         type="button"
         aria-label={strings.sheet.close}
         onClick={onClose}
         className="absolute inset-0 bg-black/50 cursor-default"
       />
-      <aside className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto rounded-t-2xl border-t border-border bg-background pb-[max(16px,env(safe-area-inset-bottom))]">
+      <aside className="absolute inset-x-0 bottom-0 max-h-[82%] overflow-y-auto rounded-t-2xl border-t border-border bg-background pb-[max(16px,env(safe-area-inset-bottom))]">
         <div className="sticky top-0 z-10 bg-background pt-2.5">
           <span className="mx-auto block h-1 w-9 rounded-full bg-border" aria-hidden="true" />
           <button
@@ -80,13 +71,17 @@ function SectionSheet({
 }
 
 export function SheetNav({ payload, active }: { payload: Payload; active: string }) {
+  const { jump } = useNavigation();
   const strings = useStrings();
   const review = useReview();
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background md:hidden">
+      <div
+        className="sticky bottom-0 z-40 border-t border-border bg-background @min-[768px]:hidden"
+        data-section-bar
+      >
         <ProgressBar
           done={review.progress.done}
           total={review.progress.total}
@@ -109,7 +104,7 @@ export function SheetNav({ payload, active }: { payload: Payload; active: string
             type="button"
             onClick={() => {
               const next = review.next(active === "" ? undefined : active);
-              if (next) jumpTo(next);
+              if (next) jump(next);
             }}
             disabled={review.complete}
             className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-[13px] text-secondary-foreground cursor-pointer hover:border-primary hover:text-foreground disabled:opacity-40 disabled:hover:border-border disabled:cursor-default"
@@ -119,7 +114,11 @@ export function SheetNav({ payload, active }: { payload: Payload; active: string
           </button>
         </div>
       </div>
-      {open && <SectionSheet payload={payload} active={active} onClose={() => setOpen(false)} />}
+      {open && (
+        <ViewportOverlay>
+          <SectionSheet payload={payload} active={active} onClose={() => setOpen(false)} />
+        </ViewportOverlay>
+      )}
     </>
   );
 }

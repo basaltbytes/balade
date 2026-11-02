@@ -53,6 +53,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm package:smoke
       # The pkg.pr.new app authenticates the upload and posts the PR comment;
       # this job keeps the workflow token read-only and carries no npm token.

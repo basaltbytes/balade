@@ -210,32 +210,46 @@ rather than wrapped in it. One version note: the pinned `effect@4.0.0-beta.102`
 `ServiceMap` is later naming that most docs already use. Verify every API
 against the installed `.d.ts` under `node_modules/effect/dist/`.
 
-## The SPA has one browser runtime; React still owns render state
+## The renderer owns an instance; the application owns browser capabilities
 
-The SPA builds one module-level `ManagedRuntime` from live browser fetch and
-storage layers. Payload loading returns an Effect with tagged unreadable/fetch
-failures, and review persistence composes the `localStore` and `httpStore`
-layers once behind a `ReviewStore` service. Those layers take the browser
-capabilities as inputs; the service selects served or export behavior and its
-public methods have `R = never`. React components cross the boundary through
-one `runAppEffect` helper inside `useEffect`, but
-`review-context.tsx` continues to own the state, reconciliation and persistence
-badges. A browser-storage or served-state failure is logged inside the service
-and deliberately becomes the existing fallback/failed product value. The helper
-returns the Effect fiber interruptor, so React cleanup aborts pending browser
-IO. Review writes share a one-permit semaphore, so rapid marks persist in state
-order. Review controls remain disabled until the initial read has reconciled;
-this prevents a late read from overwriting an optimistic mark and prevents
-unflushed marks when navigation interrupts a stalled read.
+Decided on [#164](https://github.com/basaltbytes/balade/issues/164). The public
+`balade/viewer` entry composes `Walkthrough.Root`, `Header`, `Nav`, `Sections`
+and `Clarifications`; `WalkthroughView` uses those same parts for the default
+layout. Root decodes the payload and supplies a runtime containing only Shiki.
+No renderer import reaches the standalone app's browser runtime.
 
-The Phase 5 production build was measured against commit `8e82aca`. The
-single-file export JS grew from 4,054,328 to 4,072,550 bytes (+18,222); Vite's
-reported gzip size moved from 789.63 to 795.61 kB (+5.98 kB). The served entry
-grew from 1,627,728 to 1,645,938 bytes (+18,210), with reported gzip from 514.04
-to 520.44 kB (+6.40 kB). The export already carried Effect Schema; this delta is
-the runtime, layers and typed browser workflows. It is accepted so the SPA uses
-the same dependency, error and parsing model as the CLI without handing render
-state to a second state system.
+`WalkthroughHost` exposes promise methods with abort signals. Review storage is
+optional and otherwise stays in memory; clarification capability is optional
+and otherwise has no UI. The existing HTTP/localStorage stores remain behind
+`createAppHost`, preserving the served app's browser-backup persistence badge.
+Host state is decoded at entry, including answer blocks and generation identity.
+The two public clarification errors extend JavaScript Error so host code needs
+no Effect import or matching runtime. The adapter translates them into the
+existing UI states; all other renderer workflows retain typed Effect errors.
+
+Section tracking, selections and listeners use instance refs. React IDs prefix
+section IDs; only the standalone route owns title, language and URL updates.
+An explicit scrollRoot supports host scroll containers. Clarifications defaults
+to an inline list in composed layouts and takes a drawer presentation in the
+standalone layout. A root-scoped ResizeObserver measures available space once
+for responsive diffs and overlays. Container queries choose compact navigation.
+Drawers portal into a sticky viewport inside the root; the mobile bar sticks
+to its bottom edge. Neither covers the host page.
+
+The stylesheet excludes Tailwind preflight. A shared build transform scopes
+utilities, dependency styles and tokens; tokens use `--balade-`, keyframes have
+a balade prefix, and property defaults are local declarations instead of global
+registrations. React and React DOM are optional peers for CLI-only installations
+and required by viewer consumers. Other renderer dependencies are bundled, with
+Mermaid dynamically imported. TypeScript emits the declaration graph beside the
+viewer, including the existing contract types.
+
+The diff library's audited highlighter boundary already uses Shiki exclusively.
+Its Lowlight adapter now receives an empty automatic-language registry through a
+build adapter, retaining the upstream engine API while removing the redundant
+bundled grammars. The package browser smoke test exercises both Shiki and diff
+rendering from the packed ESM entry, alongside a host with another Effect major.
+This keeps the single-file export smaller than the preceding build.
 
 ## Toned callouts derive their chrome from the tone
 
@@ -1637,3 +1651,22 @@ and stated in one line each, not argued for, alongside the two owner-chosen
 pushes: every section sits in a change-named group and carries a subject icon.
 The offline evaluation asserts that structure on every fixture draft, so a
 prompt regression fails `pnpm test` instead of a paid generation run.
+
+## Embedded diagrams reject resource syntax before Mermaid draws
+
+Issue #164 moves the rendering sinks onto an application's authenticated origin.
+Mermaid's strict SVG sanitization happens after layout, but image shapes can
+start requests while layout measures them. The renderer therefore rejects HTML,
+encoded entities, CSS escapes or block comments, image metadata and resource-bearing CSS syntax
+before calling Mermaid. Such diagrams keep the existing localized source view.
+The fixed configuration also forbids resource tags in Mermaid's label sanitizer.
+
+Mermaid draws into a temporary child of the viewer. The returned SVG still goes
+through the sink guard, which strips links, handlers, external references,
+foreign objects, images and SVG animation elements. Every retained SVG ID and
+its local references, including accessible labels, receive an instance prefix;
+references into the host document are removed. Configuration directives
+cannot replace the sanitizer or theme CSS. Code and fence HTML remains Shiki's
+escaped output; diff HAST properties remain theme-owned. The browser fixture
+checks hostile document and answer blocks under the host CSP with network
+capture, alongside two viewers and a separately composed navigation layout.

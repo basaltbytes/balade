@@ -2,7 +2,8 @@
    header: progress count and thin bar, the next-unreviewed jump, and the
    hide-reviewed toggle. */
 
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useNavigation } from "./navigation-context";
 import type { NavNode, Payload, Section } from "../contract";
 import { sectionById } from "../data/review";
 import { MarkButton, ProgressBar } from "./bits";
@@ -10,42 +11,6 @@ import { FileStatusIcon, Octicon, statusColor } from "./octicon";
 import { QaSidebar } from "./qa-sidebar";
 import { useReview } from "./review-context";
 import { useStrings } from "./strings";
-
-export function useActiveSection(): string {
-  const [active, setActive] = useState("");
-  useEffect(() => {
-    const sections = Array.from(document.querySelectorAll("section[id]"));
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((entry) => entry.isIntersecting);
-        const first = visible[0];
-        if (first) setActive(first.target.id);
-      },
-      { rootMargin: "0px 0px -70% 0px" },
-    );
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, []);
-  return active;
-}
-
-export function jumpTo(id: string): void {
-  const target = document.getElementById(id);
-  if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
-  window.history.replaceState(null, "", `#${id}`);
-  /* Browsers with smooth scrolling disabled (flag or accessibility setting)
-     drop the animated scroll outright instead of degrading it; when nothing
-     has moved after a frame pair, jump without the animation. */
-  const from = window.scrollY;
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      if (window.scrollY === from && Math.abs(target.getBoundingClientRect().top) > 1) {
-        target.scrollIntoView({ block: "start" });
-      }
-    }),
-  );
-}
 
 /** An in-page anchor that scrolls instead of navigating. */
 export function JumpLink({
@@ -59,12 +24,13 @@ export function JumpLink({
   title?: string;
   children: ReactNode;
 }) {
+  const { jump, sectionId } = useNavigation();
   return (
     <a
-      href={`#${id}`}
+      href={`#${sectionId(id)}`}
       onClick={(event) => {
         event.preventDefault();
-        jumpTo(id);
+        jump(id);
       }}
       {...(className !== undefined ? { className } : {})}
       {...(title !== undefined ? { title } : {})}
@@ -162,6 +128,7 @@ function NavTree({
 }
 
 export function Nav({ payload, active }: { payload: Payload; active: string }) {
+  const { jump } = useNavigation();
   const review = useReview();
   const strings = useStrings();
   const sections = sectionById(payload);
@@ -181,7 +148,7 @@ export function Nav({ payload, active }: { payload: Payload; active: string }) {
             type="button"
             onClick={() => {
               const next = review.next(active === "" ? undefined : active);
-              if (next) jumpTo(next);
+              if (next) jump(next);
             }}
             disabled={review.complete}
             className="inline-flex items-center gap-1.5 text-[11.5px] border border-border rounded-md px-2 py-[3px] text-secondary-foreground hover:text-foreground hover:border-primary disabled:opacity-40 disabled:hover:border-border cursor-pointer disabled:cursor-default"

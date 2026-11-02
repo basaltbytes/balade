@@ -11,6 +11,7 @@ import { dictionaries } from "../i18n";
 import { MermaidRendererContext } from "../mermaid/use-mermaid";
 import type { MermaidRenderer } from "../mermaid/mermaid";
 import { StringsProvider } from "../ui/strings";
+import { RenderRuntimeProvider } from "../ui/render-runtime";
 import { Mermaid } from "./mermaid";
 
 const renderingTo = (svg: string): MermaidRenderer => ({ render: () => Promise.resolve(svg) });
@@ -43,11 +44,13 @@ describe("the mermaid widget", () => {
   ): Promise<void> => {
     await act(async () =>
       root.render(
-        <StringsProvider lang={lang}>
-          <MermaidRendererContext.Provider value={renderer}>
-            <Mermaid block={{ b: "mermaid", source }} />
-          </MermaidRendererContext.Provider>
-        </StringsProvider>,
+        <RenderRuntimeProvider>
+          <StringsProvider lang={lang}>
+            <MermaidRendererContext.Provider value={renderer}>
+              <Mermaid block={{ b: "mermaid", source }} />
+            </MermaidRendererContext.Provider>
+          </StringsProvider>
+        </RenderRuntimeProvider>,
       ),
     );
     await vi.waitFor(async () => {
@@ -77,7 +80,7 @@ describe("the mermaid widget", () => {
           '<a xlink:href="https://evil.example/" target="_blank"><text>node</text></a>',
           '<g onclick="globalThis.pwned = true"><text>handler</text></g>',
           '<image xlink:href="https://evil.example/pixel.png" />',
-          '<use xlink:href="#icon-0" />',
+          '<defs><symbol id="icon-0" /></defs><use xlink:href="#icon-0" />',
           "</svg>",
         ].join(""),
       ),
@@ -92,7 +95,31 @@ describe("the mermaid widget", () => {
     expect(drawn?.innerHTML).not.toContain("target=");
     /* The anchor's own content survives, and mermaid's internal references do. */
     expect(drawn?.textContent).toContain("node");
-    expect(drawn?.querySelector("use")?.getAttribute("xlink:href")).toBe("#icon-0");
+    expect(drawn?.querySelector("use")?.getAttribute("xlink:href")).toBe(
+      `#${drawn?.querySelector("symbol")?.id}`,
+    );
+  });
+
+  it.each([
+    'graph TD\n a@{ img: "https://evil.example/pixel" }',
+    'graph TD\n a@{ "img": "/pixel" }',
+    "graph TD\n a@{ shape: image }",
+    'graph TD\n a["<img src="/pixel">"]',
+    "graph TD\n a[bad]\n style a fill:u/*comment*/rl(/pixel)",
+    'graph TD\n a["/*"]\n b@{ img: "/pixel" }\n c["*/"]',
+  ])("rejects resource syntax before the renderer can create an image: %s", async (source) => {
+    let drawings = 0;
+    await draw(
+      {
+        render: async () => {
+          drawings += 1;
+          return "<svg />";
+        },
+      },
+      source,
+    );
+    expect(drawings).toBe(0);
+    expect(container.querySelector('[data-mermaid="unavailable"]')).not.toBeNull();
   });
 
   it("falls back to the escaped source with a localized note", async () => {

@@ -6,7 +6,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { FileEntry, ReviewState } from "../contract";
 import type { FetchLike } from "../data/browser";
-import type { ReviewStoreTarget } from "../data/store";
+import { createAppHost } from "../data/app-host";
+import { RenderRuntimeProvider } from "./render-runtime";
 import { pr96 } from "../fixtures/pr96";
 import { useReviewApi } from "./review-context";
 
@@ -26,11 +27,7 @@ const payload = {
   errors: [],
 };
 
-const target = {
-  mode: "served",
-  storageKey: "balade:test-review",
-  sourcePath: payload.sourcePath,
-} satisfies ReviewStoreTarget;
+const target = createAppHost(payload, true).reviewState;
 
 const stored: ReviewState = {
   version: 1,
@@ -139,7 +136,15 @@ describe("the browser review lifecycle", () => {
       };
       installFetch(fetch);
 
-      yield* Effect.promise(() => act(async () => root.render(<Probe />)));
+      yield* Effect.promise(() =>
+        act(async () =>
+          root.render(
+            <RenderRuntimeProvider>
+              <Probe />
+            </RenderRuntimeProvider>,
+          ),
+        ),
+      );
       expect(button(container, "mental model").disabled).toBe(true);
       yield* Effect.promise(() => act(async () => button(container, "mental model").click()));
       expect(container.querySelector('[data-testid="sections"]')?.textContent).toBe("");
@@ -175,7 +180,15 @@ describe("the browser review lifecycle", () => {
       };
       installFetch(fetch);
 
-      yield* Effect.promise(() => act(async () => root.render(<Probe />)));
+      yield* Effect.promise(() =>
+        act(async () =>
+          root.render(
+            <RenderRuntimeProvider>
+              <Probe />
+            </RenderRuntimeProvider>,
+          ),
+        ),
+      );
       yield* Effect.promise(() =>
         act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
@@ -217,7 +230,15 @@ describe("the browser review lifecycle", () => {
       };
       installFetch(fetch);
 
-      yield* Effect.promise(() => act(async () => root.render(<Probe />)));
+      yield* Effect.promise(() =>
+        act(async () =>
+          root.render(
+            <RenderRuntimeProvider>
+              <Probe />
+            </RenderRuntimeProvider>,
+          ),
+        ),
+      );
       yield* Effect.promise(() => vi.waitFor(() => expect(signal).toBeDefined()));
       expect(button(container, "overview").disabled).toBe(true);
       yield* Effect.promise(() => act(async () => button(container, "overview").click()));

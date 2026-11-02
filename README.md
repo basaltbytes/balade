@@ -398,6 +398,23 @@ source and recompile stored payloads when the format changes. This version is
 separate from the input's `walkthrough: 1`. Review-storage keys belong to the
 renderer and are not part of the payload.
 
+## React viewer
+
+Render a compiled payload inside your React 19 application:
+
+```tsx
+import { WalkthroughView } from "balade/viewer";
+import "balade/viewer.css";
+
+<WalkthroughView payload={payload} />;
+```
+
+Supply a `WalkthroughHost` to persist review marks or answer clarification
+questions. `Walkthrough.Root`, `Header`, `Nav`, `Sections` and `Clarifications`
+let you arrange the review in your own layout. Each instance keeps its browser
+state and CSS scoped to the viewer. See [the integration guide](docs/viewer.md)
+for host adapters, navigation, theme tokens and CSP requirements.
+
 ## CI
 
 This workflow validates walkthroughs changed by a pull request:

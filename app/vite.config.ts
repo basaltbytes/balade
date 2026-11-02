@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import { viewerBoundaries } from "../scripts/viewer-build";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type BuildEnvironmentOptions } from "vite";
 
@@ -36,15 +37,14 @@ export default defineConfig(({ mode }) => {
     /* `base: "./"` keeps the asset URLs relative so the same bundle works served
        from `/` and inlined into the single-file static export. */
     base: "./",
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), ...viewerBoundaries()],
     build: {
       /* The tarball ships `dist/` only, and the CLI finds the bundles beside
          itself: `dist/cli.js` next to `dist/app/` and `dist/export/`. Emptying
          stops at that directory, so the compiled CLI survives an app rebuild. */
       outDir: single ? "../dist/export" : "../dist/app",
       emptyOutDir: true,
-      /* The entry chunk carries react, the octicon set and `@git-diff-view`'s
-         eager lowlight/highlight.js import (~870 kB, upstream issue #58). */
+      /* The single-file export includes Mermaid and every supported Shiki grammar. */
       chunkSizeWarningLimit: single ? 5000 : 1700,
       ...singleFileFacets,
     },

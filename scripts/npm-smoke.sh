@@ -55,6 +55,8 @@ fi
 # The tarball must carry both app bundles; open and build depend on them.
 test -f "$PROJECT/node_modules/balade/dist/app/index.html"
 test -f "$PROJECT/node_modules/balade/dist/export/app.js"
+# Keep the single-file renderer within the size before the embedding extraction (9262a79).
+node --input-type=module -e 'import { statSync } from "node:fs"; const bytes = ["app.js", "app.css"].reduce((sum, file) => sum + statSync(`node_modules/balade/dist/export/${file}`).size, 0); if (bytes > 7618618) throw new Error(`Export grew to ${bytes} bytes`);'
 
 # The tarball also ships the rendered skill for path-based installers.
 test -f "$PROJECT/node_modules/balade/dist/skill/balade-authoring/SKILL.md"
@@ -154,6 +156,26 @@ console.log("library smoke passed");
 EOF_RUNTIME
 node "$PROJECT/consumer.mjs" | grep -q "library smoke passed"
 node "$ROOT/scripts/contract-smoke.mjs" "$PROJECT" "$(command -v git)"
+
+# A React consumer owns another Effect major. Runtime and declaration imports
+# must remain valid without borrowing that consumer's Effect services.
+npm install --ignore-scripts --no-audit --no-fund react@19.2.8 react-dom@19.2.8 effect@3.19.19 @types/react@19.2.18 tailwindcss@4.3.3 >/dev/null
+cat >"$PROJECT/viewer-consumer.tsx" <<'EOF_VIEWER'
+import { Walkthrough, WalkthroughView, ClarificationGenerationChanged, type WalkthroughHost, type Payload, type QaTurn } from "balade/viewer";
+import { Effect } from "effect";
+const host: WalkthroughHost = { reviewState: { load: async () => null, save: async () => {} } };
+export function review(payload: Payload) {
+  Effect.runSync(Effect.succeed(new ClarificationGenerationChanged()));
+  return <><WalkthroughView payload={payload} host={host} /><Walkthrough.Root payload={payload}><Walkthrough.Nav /><Walkthrough.Sections /><Walkthrough.Clarifications /></Walkthrough.Root></>;
+}
+export function question(turn: QaTurn): string { return turn.question; }
+EOF_VIEWER
+cat >"$PROJECT/tsconfig.viewer.json" <<'EOF_VIEWER_TSCONFIG'
+{"compilerOptions":{"module":"nodenext","moduleResolution":"nodenext","target":"es2023","jsx":"react-jsx","strict":true,"exactOptionalPropertyTypes":true,"noEmit":true,"skipLibCheck":true,"types":["react"]},"files":["viewer-consumer.tsx"]}
+EOF_VIEWER_TSCONFIG
+"$ROOT/node_modules/.bin/tsc" -p "$PROJECT/tsconfig.viewer.json"
+node --input-type=module -e 'import { WalkthroughView } from "balade/viewer"; if (!WalkthroughView) throw new Error("viewer import failed");'
+node "$ROOT/scripts/viewer-smoke.mjs" "$PROJECT"
 
 # A real install writes the shared convention; .claude/ only once it exists.
 SKILL_REPO="$TMP_ROOT/skill-repo"

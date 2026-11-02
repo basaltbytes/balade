@@ -7,6 +7,7 @@ import type { Lang } from "./contract";
 export interface Strings {
   loading: string;
   loadFailed: string;
+  payloadFormatUnsupported: string;
   payloadUnreadable: string;
   payloadFetchFailed: string;
   payloadLocationInvalid: string;
@@ -120,6 +121,7 @@ export interface Strings {
 const en: Strings = {
   loading: "Loading the walkthrough…",
   loadFailed: "The walkthrough could not be loaded.",
+  payloadFormatUnsupported: "This walkthrough format is not supported. Recompile the walkthrough.",
   payloadUnreadable: "The walkthrough data does not match the format this app reads.",
   payloadFetchFailed: "The walkthrough could not be fetched from the CLI.",
   payloadLocationInvalid: "The walkthrough link contains an invalid path.",
@@ -228,6 +230,8 @@ const en: Strings = {
 const fr: Strings = {
   loading: "Chargement de la balade…",
   loadFailed: "La balade n’a pas pu être chargée.",
+  payloadFormatUnsupported:
+    "Ce format de parcours n’est pas pris en charge. Recompilez le parcours.",
   payloadUnreadable:
     "Les données de la balade ne correspondent pas au format attendu par l’application.",
   payloadFetchFailed: "La balade n’a pas pu être récupérée auprès du CLI.",
