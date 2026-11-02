@@ -29,6 +29,8 @@ export interface CheckOptions {
   cwd: string;
   /** Explicit files; empty means discover every walkthrough in the repository. */
   paths?: readonly string[];
+  /** Explicit pull range; applies to every checked file. */
+  resolution?: PullResolution;
   /** `false` skips gh entirely — CI without auth, and the test fixtures. */
   useGh?: boolean;
 }
@@ -80,6 +82,7 @@ export const runCheck = Effect.fn("runCheck")(function* (options: CheckOptions) 
   const one = (path: string) => {
     const fileOptions: CheckFileOptions = { cwd: options.cwd, path };
     if (options.useGh !== undefined) fileOptions.useGh = options.useGh;
+    if (options.resolution !== undefined) fileOptions.resolution = options.resolution;
     return checkOne(fileOptions);
   };
 
@@ -116,6 +119,16 @@ export function softReport(loaded: LoadResult): CheckReport {
   };
 }
 
+/** The authoring gate's report, also carried alongside a compiled payload. */
+export function checkReport(loaded: LoadResult): CheckReport {
+  return {
+    ...softReport(loaded),
+    ok:
+      loaded.payload !== null &&
+      !loaded.diagnostics.some((diagnostic) => diagnostic.level === "error"),
+  };
+}
+
 export const checkOne = Effect.fn("checkOne")(function* (options: CheckFileOptions) {
   const { cwd, path } = options;
   const loadOptions: LoadOptions = { cwd, path };
@@ -126,15 +139,10 @@ export const checkOne = Effect.fn("checkOne")(function* (options: CheckFileOptio
       onFailure: (error): CheckReport => ({
         file: path,
         ok: false,
-        diagnostics: [loadErrorDiagnostic(error)],
+        diagnostics: [loadErrorDiagnostic(error, path)],
         ranges: [],
       }),
-      onSuccess: (loaded): CheckReport => ({
-        file: loaded.sourcePath,
-        ok: !loaded.diagnostics.some((diagnostic) => diagnostic.level === "error"),
-        diagnostics: loaded.diagnostics,
-        ranges: loaded.ranges,
-      }),
+      onSuccess: checkReport,
     }),
   );
 });

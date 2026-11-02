@@ -207,16 +207,17 @@ export function WalkthroughRoute({
   devStale: boolean;
   onToggleDevStale: (() => void) | null;
 }) {
+  const storageKey = `balade:${payload.pr.url}#${payload.pr.number}:${payload.sourcePath}`;
   const target = useMemo<ReviewStoreTarget>(
     () =>
       served
         ? {
             mode: "served",
-            storageKey: payload.storageKey,
+            storageKey,
             sourcePath: payload.sourcePath,
           }
-        : { mode: "export", storageKey: payload.storageKey },
-    [payload.sourcePath, payload.storageKey, served],
+        : { mode: "export", storageKey },
+    [payload.sourcePath, storageKey, served],
   );
   const review = useReviewApi(payload, target);
   usePayloadLanguages(payload);

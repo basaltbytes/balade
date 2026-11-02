@@ -83,7 +83,6 @@ export function createAuthoringFixtureRepo(fixture: AuthoringEvalCase): Authorin
     directory,
     source: {
       root: directory,
-      repoSlug: `fixture/${fixture.id}`,
       pin,
       base,
       head: pin,

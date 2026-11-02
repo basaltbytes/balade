@@ -10,6 +10,7 @@ import { fetchLayer, type BrowserFetch, type FetchLike } from "./browser";
 import { fetchHeadDistance, loadPayload, type RouteLocation } from "./source";
 
 const walkthrough = {
+  format: 1,
   walkthrough: 1,
   title: "Add live planning pool items",
   commit: "9f3c2ad",
@@ -31,7 +32,6 @@ const walkthrough = {
   sections: [],
   errors: [],
   sourcePath: "walkthroughs/one.md",
-  storageKey: "balade:acme/repo#42:walkthroughs/one.md",
 };
 
 const index = { kind: "index", repo: "acme/repo", entries: [] };
@@ -85,9 +85,10 @@ describe("loadPayload", () => {
       Effect.gen(function* () {
         const invalid = [
           { ...walkthrough, walkthrough: 2 },
+          { ...walkthrough, format: 2 },
+          { ...walkthrough, pr: { ...walkthrough.pr, url: "javascript:alert(1)" } },
           { ...walkthrough, sections: {} },
           { ...walkthrough, pr: "42" },
-          { ...walkthrough, storageKey: 7 },
           { ...index, entries: null },
           { ...index, entries: [{ path: "walkthroughs/one.md" }] },
           {

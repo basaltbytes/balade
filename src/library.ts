@@ -35,7 +35,8 @@ import {
 } from "./commands/generate/pipeline.js";
 import type { GenerationProgress } from "./commands/generate/progress.js";
 import { langOfMeta } from "./contract/schema.js";
-import type { CheckReport, Lang } from "./contract/types.js";
+import type { PullRange } from "./contract/context.js";
+import type { CheckReport, Lang, Payload } from "./contract/types.js";
 import { contextResolverLive } from "./git/git.js";
 import { parsePrTarget, resolvePullHead } from "./git/pr.js";
 import {
@@ -46,7 +47,8 @@ import {
 import { piWalkthroughAuthorLive } from "./pi/client.js";
 import { getPreset, presetNames } from "./preset/registry.js";
 import { CommandExecutor } from "./shell.js";
-import { checkOne, type CheckFileOptions } from "./walkthrough/checker.js";
+import { checkOne, checkReport, type CheckFileOptions } from "./walkthrough/checker.js";
+import { loadWalkthrough, type LoadOptions } from "./walkthrough/pipeline.js";
 
 export type {
   AgentModelResolutionError,
@@ -74,7 +76,9 @@ export type {
   GenerationTiming,
   GenerationTimingSegment,
 } from "./commands/generate/progress.js";
-export type { CheckDiagnostic, CheckReport, Lang, RangeEcho } from "./contract/types.js";
+export type { CheckDiagnostic, CheckReport, Lang, Payload, RangeEcho } from "./contract/types.js";
+export type { PullHeader, PullRange } from "./contract/context.js";
+export type { LoadError as CompileError } from "./walkthrough/pipeline.js";
 export type { PullNotice } from "./git/intent.js";
 export type { AuthorModel, AuthorUsage, HeadInstructionPolicy } from "./pi/author.js";
 
@@ -201,11 +205,48 @@ export function generate(options: GenerateOptions): Promise<GenerationResult> {
   return Effect.runPromise(generateWalkthrough(options).pipe(Effect.provide(liveLayer)));
 }
 
+export interface CompilePayloadOptions extends PullRange {
+  /** A path inside the clone. */
+  readonly repository: string;
+  /** Walkthrough file, absolute or relative to `repository`. */
+  readonly file: string;
+  readonly lang?: Lang;
+}
+
+export type CompileOutcome =
+  | { readonly _tag: "Compiled"; readonly payload: Payload; readonly report: CheckReport }
+  | { readonly _tag: "NotCompiled"; readonly report: CheckReport };
+
+/** Resolve a payload without gh, default-branch discovery, a renderer, or file writes. */
+export const compilePayloadEffect = Effect.fn("compilePayload")(
+  function* (options: CompilePayloadOptions) {
+    const { repository, file, lang, ...range } = options;
+    const loadOptions: LoadOptions = {
+      cwd: repository,
+      path: file,
+      resolution: { ...range, _tag: "PullRange" },
+    };
+    if (lang !== undefined) loadOptions.lang = lang;
+    const loaded = yield* loadWalkthrough(loadOptions);
+    const report = checkReport(loaded);
+    return loaded.payload === null
+      ? ({ _tag: "NotCompiled", report } satisfies CompileOutcome)
+      : ({ _tag: "Compiled", payload: loaded.payload, report } satisfies CompileOutcome);
+  },
+  Effect.mapError((error) => withMessage(error, buildErrorMessage(error))),
+);
+
+export function compilePayload(options: CompilePayloadOptions): Promise<CompileOutcome> {
+  return Effect.runPromise(compilePayloadEffect(options).pipe(Effect.provide(liveLayer)));
+}
+
 export interface CheckOptions {
   /** What a relative `file` is resolved against. Defaults to the working directory. */
   readonly cwd?: string;
   /** `false` skips gh entirely — CI without auth. */
   readonly useGh?: boolean;
+  /** Explicit full commit SHAs; skips gh and default-branch discovery. */
+  readonly range?: PullRange;
 }
 
 /** The report `balade check --json` prints for one file. Diagnostics are values: this never fails. */
@@ -215,6 +256,7 @@ export const checkWalkthrough = Effect.fn("checkWalkthrough")(function* (
 ) {
   const fileOptions: CheckFileOptions = { cwd: options.cwd ?? process.cwd(), path: file };
   if (options.useGh !== undefined) fileOptions.useGh = options.useGh;
+  if (options.range !== undefined) fileOptions.resolution = { ...options.range, _tag: "PullRange" };
   return yield* checkOne(fileOptions);
 });
 
@@ -225,7 +267,7 @@ export function check(file: string, options?: CheckOptions): Promise<CheckReport
 export interface BuildOptions {
   /** What a relative `file` or `out` is resolved against. Defaults to the working directory. */
   readonly cwd?: string;
-  /** Output path, absolute or relative to `cwd`. Defaults to `<walkthrough>.html` beside the file. */
+  /** Output path, absolute or relative to `cwd`. Defaults to `<walkthrough>.<format>` beside the file. */
   readonly out?: string;
   /** Chrome language override; the walkthrough's own `meta.lang` applies otherwise. */
   readonly lang?: Lang;
@@ -233,6 +275,9 @@ export interface BuildOptions {
   readonly useGh?: boolean;
   /** Where the export bundle is read from; defaults to the one shipped with balade. */
   readonly bundleDir?: string;
+  readonly format?: "html" | "json";
+  /** Explicit full commit SHAs; skips gh and default-branch discovery. */
+  readonly range?: PullRange;
 }
 
 /** `balade build` for one file: the outcome the command prints, as a value. */
@@ -246,6 +291,9 @@ export const buildWalkthrough = Effect.fn("buildWalkthrough")(
     if (options.lang !== undefined) buildOptions.lang = options.lang;
     if (options.useGh !== undefined) buildOptions.useGh = options.useGh;
     if (options.bundleDir !== undefined) buildOptions.bundleDir = options.bundleDir;
+    if (options.format !== undefined) buildOptions.format = options.format;
+    if (options.range !== undefined)
+      buildOptions.resolution = { ...options.range, _tag: "PullRange" };
     return yield* runBuild(buildOptions);
   },
   Effect.mapError((error) => withMessage(error, buildErrorMessage(error))),

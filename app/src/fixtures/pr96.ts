@@ -1531,6 +1531,7 @@ const sections: Section[] = [
 ];
 
 export const pr96: Payload = {
+  format: 1,
   walkthrough: 1,
   title: "Add live planning pool items",
   commit: "9f3c2ad41b6e7c05",
@@ -1562,5 +1563,4 @@ export const pr96: Payload = {
     },
   ],
   sourcePath: "walkthroughs/pr-96-shared-pool.md",
-  storageKey: "balade:acme-co/planning-suite#96:walkthroughs/pr-96-shared-pool.md",
 };

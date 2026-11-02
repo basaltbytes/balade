@@ -77,9 +77,8 @@ function authorRequest(
 function prepared(root: string, pin: string): PullSnapshot {
   return {
     root,
-    repoSlug: "acme/planning",
     pin,
-    base: `${pin}^`,
+    base: execFileSync("git", ["rev-parse", `${pin}^`], { cwd: root, encoding: "utf8" }).trim(),
     head: pin,
     pull: {
       number: 42,

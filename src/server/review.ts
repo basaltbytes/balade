@@ -158,6 +158,7 @@ const reviewSessionErrorMessage = (error: ReviewSessionError): string =>
       port === 0
         ? "Could not start the live review server on a free local port."
         : `Could not start the live review server on port ${port}; choose another --port.`,
+    PayloadInvalid: sessionErrorMessage,
     NotARepository: sessionErrorMessage,
     CommandFailed: sessionErrorMessage,
     WalkthroughReadFailed: sessionErrorMessage,

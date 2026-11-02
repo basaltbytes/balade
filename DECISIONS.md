@@ -131,8 +131,8 @@ Frontmatter has a second, edge-only schema because YAML metadata accepts string,
 finite-number and boolean scalars while the resolved contract carries strings.
 Schema issue paths map back to the existing diagnostic codes, source lines and
 hints; valid scalars are normalized, then the result passes through the canonical
-`Frontmatter` schema. This keeps the encoded JSON of every persisted or
-transported shape byte-compatible.
+`Frontmatter` schema. The payload-format decision below versions the resolved
+payload separately; review-state JSON retains its existing shape.
 
 The cost of sharing the runtime schema with the SPA was measured on the Phase 1
 build. The served entry grew from 1,545,312 to 1,611,014 bytes (+65,702; Vite
@@ -144,6 +144,45 @@ contract and deep validation at both baked and served edges.
 exceptions to "app imports the CLI as types only": the server and SPA guard the
 same JSON. What stays forbidden is CLI *runtime* — git, fs, process — reaching
 `app/`.
+
+## Payload compilation takes an explicit range; renderer formats support one version
+
+Decided on [#163](https://github.com/basaltbytes/balade/issues/163).
+`compilePayload` and `compilePayloadEffect` expose `loadWalkthrough`'s resolved
+payload alongside the same strict report `check` returns. A renderable payload
+is `Compiled` even when the report carries errors; an unparseable document is
+`NotCompiled`. IO and resolution failures remain typed errors. `build` keeps its
+soft report policy for HTML and JSON, and reads the renderer bundle only for HTML.
+
+The existing `PullRange` owns full base/head SHAs plus optional header facts.
+Resolution validates those SHAs before any diff command, bypasses gh completely,
+and never discovers the default branch. File bytes still come from the stamped
+commit, while the supplied head determines staleness. Explicit headers use the
+caller's facts first, then local defaults: origin-derived GitHub URL, stamped
+commit author, `open` state and abbreviated range SHAs as branch labels. Git
+cannot recover a PR's state or actual branch names from its objects; guessing the
+checkout's branch would mislabel host-supplied ranges. The shared header boundary
+rejects invalid fields and non-HTTP URLs as `PayloadInvalid`.
+
+`format: 1` versions the resolved contract separately from the input's
+`walkthrough: 1`. `balade/contract` exports the current `PAYLOAD_FORMAT`, contract
+types and an Effect-returning `decodePayload`. Another integer version produces
+`PayloadFormatUnsupported`; malformed or excess fields produce `PayloadInvalid`.
+Only the current format is supported, with no migration or older-format decoder.
+A host retaining walkthrough source can recompile it after an upgrade. Format
+changes that invalidate stored payloads require incrementing `PAYLOAD_FORMAT`.
+
+The renderer and public decoder share the same strict payload schema, including
+an absolute HTTP/HTTPS check for the sole link, `pr.url`. The renderer keeps its
+source-aware `PayloadUnreadable` errors; importing the host decoder's additional
+error wrappers would add bytes without improving its displayed errors. Its two
+JSON fetch paths now share request and failure handling. The single-file JS is
+7,561,129 bytes against 7,561,146 before this change; CSS remains 57,489 bytes.
+
+`storageKey` is a renderer setting, derived by the built-in route from the PR URL,
+number and walkthrough source path. It no longer travels in compiled or stored
+payloads. Existing browser marks under the previous key are not migrated.
+`headDistance` describes compilation time; a stored payload is not a live query.
 
 ## Effect v4 is the codebase idiom
 
@@ -438,8 +477,9 @@ second protects ref-mode and exported payloads that did not pass through that
 transform. A 64×64 grid already exceeds a readable walkthrough diagram, while
 bounding the renderer to 4,096 cells.
 
-The payload schema remains shape-only. These limits belong to the consumers
-whose cost they bound, so no contract field or compatibility path is added.
+Rendering work limits belong to the consumers whose cost they bound. The
+payload schema additionally enforces the HTTP/HTTPS link boundary described
+in the payload-format decision.
 The same consumer-boundary rule makes frontmatter key lookup literal instead of
 regular-expression based, and terminates `git rev-parse` options before a
 PR-controlled ref name.

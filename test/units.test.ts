@@ -69,7 +69,6 @@ describe("small pure helpers", () => {
 describe("blocks without a repository", () => {
   const stubContext: ResolveContext = {
     repoRoot: "/tmp/none",
-    repoSlug: "acme/none",
     pin: "0".repeat(40),
     baseSha: "1".repeat(40),
     headSha: "0".repeat(40),

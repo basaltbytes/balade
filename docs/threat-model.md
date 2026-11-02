@@ -183,11 +183,13 @@ they describe.
 
 **Payload decoding**
 
-- Both payload entry points decode with `onExcessProperty: "error"`
-  (`app/src/data/source.ts:29-32`, baked `:124`, served `:112`);
-  `window.__BALADE__` is typed `unknown`. Enforced, not conventional.
-- The schema is **shape-only** — no length, bound or protocol refinements.
-  Expensive consumers enforce their own limits, as recorded below and in
+- Both payload entry points decode with `onExcessProperty: "error"` against
+  the versioned payload schema; `window.__BALADE__` is typed `unknown`.
+  The browser-safe `decodePayload` exported as `balade/contract` uses the same
+  schema for stored payloads and names unsupported integer versions with
+  `PayloadFormatUnsupported` before decoding their shape.
+- The schema checks the shape and the HTTP/HTTPS protocol of `pr.url`.
+  Expensive consumers enforce their own length and work limits, as recorded below and in
   [#74](https://github.com/basaltbytes/balade/issues/74).
 
 **Rendering**
@@ -282,9 +284,11 @@ they describe.
 - Diagram coordinates are clamped to 1–64 by both the CLI transform and the
   renderer (`src/contract/diagram.ts`, `app/src/widgets/diagram.tsx`). No
   diagram can make the renderer materialize more than 4,096 grid cells.
-- The only payload-derived `href` is `pr.url` (`app/src/ui/chrome.tsx:36`),
-  which is GitHub-derived (`src/git/git.ts:239`) and additionally protected by
-  React 19's `javascript:` blocking.
+- The only payload-derived `href` is `pr.url` (`app/src/ui/chrome.tsx`). It may
+  come from a host application's supplied header or stored JSON, so its schema
+  requires a parseable absolute HTTP or HTTPS URL. Explicit header facts pass
+  through the same URL rule before compilation. React's `javascript:` blocking
+  remains an additional barrier.
 - `@git-diff-view/react@0.1.7` escapes all content it renders. Its four
   `dangerouslySetInnerHTML` sinks are fed by templates that route every
   content interpolation through `escapeHtml`. **Three conditions hold that

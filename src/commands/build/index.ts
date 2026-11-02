@@ -23,7 +23,9 @@ const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
 );
 
 const outFlag = Flag.string("out").pipe(
-  Flag.withDescription("Where to write the HTML; defaults to <walkthrough>.html beside the file"),
+  Flag.withDescription(
+    "Where to write the export; defaults to <walkthrough>.<format> beside the file",
+  ),
   Flag.optional,
 );
 
@@ -35,10 +37,41 @@ const buildFile = Argument.variadic(
 
 export const buildCommand = Command.make(
   "build",
-  { files: buildFile, lang: langFlag, out: outFlag },
+  {
+    files: buildFile,
+    lang: langFlag,
+    out: outFlag,
+    format: Flag.choice("format", ["html", "json"]).pipe(Flag.withDefault("html")),
+    base: Flag.string("base").pipe(
+      Flag.withDescription(
+        "Full base commit SHA; requires --head; skips gh and default-branch discovery",
+      ),
+      Flag.optional,
+    ),
+    head: Flag.string("head").pipe(
+      Flag.withDescription("Full PR head commit SHA; requires --base"),
+      Flag.optional,
+    ),
+  },
   (config) =>
     Effect.gen(function* () {
-      const buildOptions: BuildOptions = { cwd: process.cwd(), paths: config.files };
+      if (Option.isSome(config.base) !== Option.isSome(config.head)) {
+        return yield* Effect.sync(() =>
+          stopMessage("--base and --head must be supplied together."),
+        );
+      }
+      const buildOptions: BuildOptions = {
+        cwd: process.cwd(),
+        paths: config.files,
+        format: config.format,
+      };
+      if (Option.isSome(config.base) && Option.isSome(config.head)) {
+        buildOptions.resolution = {
+          _tag: "PullRange",
+          base: config.base.value,
+          head: config.head.value,
+        };
+      }
       if (Option.isSome(config.lang)) buildOptions.lang = config.lang.value;
       if (Option.isSome(config.out)) buildOptions.out = config.out.value;
       const result = yield* runBuild(buildOptions);
@@ -55,8 +88,4 @@ export const buildCommand = Command.make(
         BuildFailed: ({ reports }) => Effect.sync(() => stopReports(reports)),
       });
     }).pipe(Effect.catch((error) => Effect.sync(() => stopMessage(buildErrorMessage(error))))),
-).pipe(
-  Command.withDescription(
-    "Export one self-contained HTML review; no server, state stays in the browser",
-  ),
-);
+).pipe(Command.withDescription("Export one self-contained HTML review or a resolved JSON payload"));

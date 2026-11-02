@@ -1,7 +1,7 @@
 /* Where the payload comes from, in order: the baked global of a static export,
    then the served endpoint, with the representative fixture as dev policy. */
 
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import {
   IndexPayload as IndexPayloadSchema,
   Payload as PayloadSchema,
@@ -26,6 +26,8 @@ export interface RouteLocation {
   pathname: string;
 }
 
+// The renderer already wraps decode failures with their baked/served source.
+// Share the format and URL schema without bundling the host API's error wrappers.
 const decodePayloadEffect = Schema.decodeUnknownEffect(
   Schema.Union([PayloadSchema, IndexPayloadSchema]),
   { onExcessProperty: "error" },
@@ -87,12 +89,7 @@ const walkthroughPath = Effect.fn("walkthroughPath")(function* (loc: RouteLocati
 
 export const hrefFor = (path: string): string => `?path=${encodeURIComponent(path)}`;
 
-const wrap = (data: Payload | IndexPayload, served: boolean): Loaded =>
-  "kind" in data
-    ? { kind: "index", payload: data }
-    : { kind: "walkthrough", payload: data, served };
-
-const fetchPayload = Effect.fn("fetchPayload")(function* (url: string) {
+const fetchJson = Effect.fn("fetchJson")(function* (url: string) {
   const fetch = yield* BrowserFetch;
   const response = yield* Effect.tryPromise({
     try: (signal) => fetch(url, { headers: { accept: "application/json" }, signal }),
@@ -105,13 +102,11 @@ const fetchPayload = Effect.fn("fetchPayload")(function* (url: string) {
     });
   }
 
-  const body: unknown = yield* Effect.tryPromise({
-    try: () => response.json(),
+  return yield* Effect.tryPromise({
+    /* SAFETY: Response.json returns any; forget it until the owning schema decodes it. */
+    try: () => response.json() as Promise<unknown>,
     catch: (cause) => new PayloadUnreadable({ source: "served", cause }),
   });
-  return yield* decodePayloadEffect(body).pipe(
-    Effect.mapError((cause) => new PayloadUnreadable({ source: "served", cause })),
-  );
 });
 
 /** Load and deeply decode the baked payload or the served JSON response. */
@@ -119,18 +114,22 @@ export const loadPayload = Effect.fn("loadPayload")(function* (
   loc: RouteLocation,
   bakedPayload: Window["__BALADE__"],
 ) {
-  const raw = bakedPayload;
-  if (raw !== undefined && raw !== null) {
-    const baked = yield* decodePayloadEffect(raw).pipe(
-      Effect.mapError((cause) => new PayloadUnreadable({ source: "baked", cause })),
+  const served = bakedPayload === undefined || bakedPayload === null;
+  let raw = bakedPayload;
+  if (served) {
+    const path = yield* walkthroughPath(loc);
+    raw = yield* fetchJson(
+      path === null ? "/api/walkthrough" : `/api/walkthrough?path=${encodeURIComponent(path)}`,
     );
-    return wrap(baked, false);
   }
-
-  const path = yield* walkthroughPath(loc);
-  const url =
-    path === null ? "/api/walkthrough" : `/api/walkthrough?path=${encodeURIComponent(path)}`;
-  return wrap(yield* fetchPayload(url), true);
+  const payload = yield* decodePayloadEffect(raw).pipe(
+    Effect.mapError(
+      (cause) => new PayloadUnreadable({ source: served ? "served" : "baked", cause }),
+    ),
+  );
+  return "kind" in payload
+    ? ({ kind: "index", payload } satisfies Loaded)
+    : ({ kind: "walkthrough", payload, served } satisfies Loaded);
 });
 
 /** The app's development policy: missing served data opens the representative fixture. */
@@ -158,19 +157,10 @@ export const loadAppPayload = (
  * The index's staleness badge is one call per row, fired after the page shows.
  * A CLI that does not answer simply leaves the badge off.
  */
-export const fetchHeadDistance = Effect.fn("fetchHeadDistance")(function* (path: string) {
-  const fetch = yield* BrowserFetch;
-  const response = yield* Effect.tryPromise((signal) =>
-    fetch(`/api/staleness?path=${encodeURIComponent(path)}`, {
-      headers: { accept: "application/json" },
-      signal,
-    }),
-  ).pipe(Effect.option);
-  if (Option.isNone(response) || !response.value.ok) return Option.none();
-
-  const decoded = yield* Effect.tryPromise(() => response.value.json()).pipe(
+export const fetchHeadDistance = Effect.fn("fetchHeadDistance")((path: string) =>
+  fetchJson(`/api/staleness?path=${encodeURIComponent(path)}`).pipe(
     Effect.flatMap(decodeHeadDistance),
+    Effect.map(({ headDistance }) => headDistance),
     Effect.option,
-  );
-  return Option.map(decoded, ({ headDistance }) => headDistance);
-});
+  ),
+);

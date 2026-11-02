@@ -97,8 +97,6 @@ describe("build", () => {
       expect(payload.title).toBe("Add live planning pool items");
       expect(payload.sourcePath).toBe("walkthroughs/valid.md");
       expect(payload.sections.map((section) => section.id)).toContain("overview");
-      /* Review state falls back to localStorage under this key (#14). */
-      expect(payload.storageKey).toContain("walkthroughs/valid.md");
     }),
   );
 

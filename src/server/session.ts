@@ -86,6 +86,7 @@ export type SessionError = DiscoveryError | LoadError | PathResolutionFailed | S
 
 export function sessionErrorMessage(error: SessionError): string {
   return Match.valueTags(error, {
+    PayloadInvalid: () => "The supplied pull request header is invalid.",
     NotARepository: ({ note }) => note,
     CommandFailed: ({ file, args, code }) => `${file} ${args.join(" ")} failed (exit ${code}).`,
     WalkthroughReadFailed: ({ path, cause }) =>

@@ -342,9 +342,23 @@ export const ErrorCard = Schema.Struct({
   line: Schema.optionalKey(Schema.Int),
 });
 
+/** The only payload URL rendered as a link, including payloads supplied by hosts. */
+export const PullUrl = Schema.String.check(
+  Schema.makeFilter(
+    (value) => {
+      const url = URL.parse(value);
+      return url !== null && (url.protocol === "http:" || url.protocol === "https:");
+    },
+    {
+      message: "Expected an absolute HTTP or HTTPS URL",
+      arbitrary: { candidate: { make: (fc) => fc.webUrl() } },
+    },
+  ),
+);
+
 const PullRequest = Schema.Struct({
   number: Schema.Int,
-  url: Schema.String,
+  url: PullUrl,
   author: Schema.String,
   state: Schema.Literals(["open", "closed", "merged"]),
   base: Schema.String,
@@ -364,13 +378,17 @@ export function langOfMeta(value: string | undefined): typeof Lang.Type {
   return value === "fr" ? "fr" : "en";
 }
 
+export const PAYLOAD_FORMAT = 1;
+
 export const Payload = Schema.Struct({
+  /** Resolved payload format, independent of the walkthrough input version. */
+  format: Schema.Literal(PAYLOAD_FORMAT),
   /** Input schema version carried by the walkthrough. */
   walkthrough: Schema.Literal(1),
   title: Schema.String,
   /** Stamped pin SHA the walkthrough was authored against. */
   commit: Schema.String,
-  /** Commits between the stamp and the current PR head. */
+  /** Commits between the stamp and the PR head at compile time; not a live value. */
   headDistance: Schema.Int,
   /** Resolved chrome language after the optional CLI override. */
   lang: Lang,
@@ -386,8 +404,6 @@ export const Payload = Schema.Struct({
   errors: Schema.Array(ErrorCard),
   /** Repo-relative path of the source walkthrough. */
   sourcePath: Schema.String,
-  /** localStorage key prefix for a static export. */
-  storageKey: Schema.String,
 });
 
 /* ------------------------------------------------------------------ */

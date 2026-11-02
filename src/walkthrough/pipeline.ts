@@ -106,7 +106,7 @@ export const loadWalkthrough = Effect.fn("loadWalkthrough")(function* (options: 
 });
 
 /** Translates a real load failure into `check`'s product vocabulary at its boundary. */
-export function loadErrorDiagnostic(error: LoadError): CheckDiagnostic {
+export function loadErrorDiagnostic(error: LoadError, file: string): CheckDiagnostic {
   return Match.valueTags(error, {
     WalkthroughFileReadFailed: ({ path }): CheckDiagnostic => ({
       code: "file-unresolvable",
@@ -126,8 +126,8 @@ export function loadErrorDiagnostic(error: LoadError): CheckDiagnostic {
       code: "commit-unresolvable",
       level: "error",
       file,
-      message: `The stamped commit \`${commit}\` is not in this clone.`,
-      hint: "Fetch the branch (CI needs `fetch-depth: 0`), or re-stamp the walkthrough against a commit you have.",
+      message: `Commit \`${commit}\` cannot be resolved in this clone.`,
+      hint: "Fetch the branch (CI needs `fetch-depth: 0`). Explicit --base and --head ranges require full commit SHAs.",
     }),
     PathResolutionFailed: ({ path }): CheckDiagnostic => ({
       code: "file-unresolvable",
@@ -137,6 +137,13 @@ export function loadErrorDiagnostic(error: LoadError): CheckDiagnostic {
       hint: "Check that the repository and walkthrough path are readable.",
     }),
     CommandFailed: commandDiagnostic,
+    PayloadInvalid: (): CheckDiagnostic => ({
+      code: "schema",
+      level: "error",
+      file,
+      message: "The supplied pull request header is invalid.",
+      hint: "Use an HTTP or HTTPS pull URL and the documented header fields.",
+    }),
   });
 }
 

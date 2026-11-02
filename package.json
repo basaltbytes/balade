@@ -35,6 +35,10 @@
       "types": "./dist/library.d.ts",
       "default": "./dist/library.js"
     },
+    "./contract": {
+      "types": "./dist/contract/payload.d.ts",
+      "default": "./dist/contract/payload.js"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
