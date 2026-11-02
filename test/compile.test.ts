@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { loadWalkthrough, type LoadResult } from "../src/walkthrough/pipeline.js";
@@ -38,7 +37,6 @@ describe("compile", () => {
     expect(payload.lang).toBe("en");
     expect(payload.meta).toEqual({ module: "acme_planning", lang: "en" });
     expect(payload.preset).toBeUndefined();
-    expect(payload.storageKey).toBe(`balade:${basename(repo.dir)}#42:walkthroughs/valid.md`);
     expect(payload.pr.number).toBe(42);
     expect(payload.pr.base).toBe("main");
     expect(payload.pr.head).toBe("feature/pool");

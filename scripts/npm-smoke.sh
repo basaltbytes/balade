@@ -88,7 +88,19 @@ grep -Fqi "Not inside a git repository" "$GENERATE_STDERR"
 # consumer project, rejections are the tagged errors with a sentence attached,
 # and a finished call leaves nothing keeping the process alive.
 cat >"$PROJECT/consumer.ts" <<'EOF_CONSUMER'
-import { build, check, generate, type GenerationResult } from "balade";
+import { build, check, compilePayload, compilePayloadEffect, generate, liveLayer, type GenerationResult } from "balade";
+import { decodePayload, PAYLOAD_FORMAT, type Payload } from "balade/contract";
+import { Effect } from "effect";
+
+export async function payload(repository: string, file: string, base: string, head: string): Promise<Payload | undefined> {
+  const result = await compilePayload({ repository, file, base, head });
+  await Effect.runPromise(compilePayloadEffect({ repository, file, base, head }).pipe(Effect.provide(liveLayer)));
+  if (result._tag === "Compiled") {
+    const decoded = await Effect.runPromise(decodePayload(result.payload));
+    const format: typeof PAYLOAD_FORMAT = decoded.format;
+    return decoded;
+  }
+}
 
 export async function walkthrough(pullRequest: number): Promise<GenerationResult> {
   const result = await generate({
@@ -141,6 +153,7 @@ setTimeout(() => {
 console.log("library smoke passed");
 EOF_RUNTIME
 node "$PROJECT/consumer.mjs" | grep -q "library smoke passed"
+node "$ROOT/scripts/contract-smoke.mjs" "$PROJECT" "$(command -v git)"
 
 # A real install writes the shared convention; .claude/ only once it exists.
 SKILL_REPO="$TMP_ROOT/skill-repo"

@@ -44,7 +44,6 @@ import type { PullSnapshot } from "../src/git/pr.js";
 
 const source: PullSnapshot = {
   root: "/fixture",
-  repoSlug: "fixture/repo",
   pin: "abcdef1",
   base: "abcdef0",
   head: "abcdef1",

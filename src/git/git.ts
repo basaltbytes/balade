@@ -9,12 +9,14 @@ import { basename, win32 } from "node:path";
 import {
   CommitUnresolvable,
   ContextResolver,
+  PullHeader,
   type CommandFailed,
   type PullResolution,
   type ResolveContext,
   type ResolveOptions,
 } from "../contract/context.js";
 import { sha256 } from "../contract/hash.js";
+import { PayloadInvalid } from "../contract/payload.js";
 import { langOf } from "../contract/lang.js";
 import type { CheckDiagnostic, FileEntry, FileStatus, Payload } from "../contract/types.js";
 import { CommandExecutor, firstLine, gh, gitOut, gitToplevel } from "../shell.js";
@@ -32,7 +34,6 @@ export interface PullFile {
 
 export interface ResolvedPull {
   readonly root: string;
-  readonly repoSlug: string;
   readonly pin: string;
   readonly base: string;
   readonly head: string;
@@ -93,17 +94,36 @@ class PullRepositoryUrlInvalid extends Schema.TaggedErrorClass<PullRepositoryUrl
 const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOptions) {
   const root = yield* gitToplevel(options.cwd);
 
-  const pinProbe = yield* resolveCommit(root, options.commit);
-  if (Option.isNone(pinProbe))
-    return yield* new CommitUnresolvable({ commit: options.commit, file: options.file });
-  const pin = pinProbe.value;
-  const requested = options.useGh === false ? undefined : yield* readPullRequest(root, options.pr);
+  const pin = yield* requireCommit(root, options.commit, options.file);
+  let resolution = options.resolution;
+  if (resolution?._tag === "PullRange") {
+    if (resolution.pull !== undefined) {
+      const pull = yield* Schema.decodeUnknownEffect(PullHeader, { onExcessProperty: "error" })(
+        resolution.pull,
+      ).pipe(Effect.mapError((cause) => new PayloadInvalid({ cause })));
+      resolution = { ...resolution, pull };
+    }
+    for (const commit of [resolution.base, resolution.head]) {
+      if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(commit)) {
+        return yield* new CommitUnresolvable({ commit, file: options.file });
+      }
+    }
+    resolution = {
+      ...resolution,
+      base: yield* requireCommit(root, resolution.base, options.file),
+      head: yield* requireCommit(root, resolution.head, options.file),
+    };
+  }
+  const requested =
+    resolution?._tag === "PullRange" || options.useGh === false
+      ? undefined
+      : yield* readPullRequest(root, options.pr);
   const snapshot = yield* makeResolvedPull({
     root,
     number: options.pr,
     pin,
     requested,
-    resolution: options.resolution,
+    resolution,
   });
   const diagnostics = snapshot.notices.map(
     (notice): CheckDiagnostic => ({
@@ -169,7 +189,6 @@ const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOp
 
   const ctx: ResolveContext = {
     repoRoot: root,
-    repoSlug: snapshot.repoSlug,
     pin,
     baseSha: snapshot.base,
     headSha: snapshot.head,
@@ -224,6 +243,8 @@ export const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
         PullRange: (resolved) => Effect.succeed(resolved),
       });
   const { base, head } = range;
+  const explicit = options.resolution?._tag === "PullRange" ? options.resolution : undefined;
+  const header = explicit?.pull;
   const files = yield* readFileSummaries(options.root, base, options.pin);
   const stats = files.reduce(
     (acc, entry) => ({
@@ -236,14 +257,23 @@ export const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
   const slug = yield* repoSlug(options.root);
   const pr: Payload["pr"] = {
     number: options.number,
-    url: pull?.url ?? `https://github.com/${slug}/pull/${options.number}`,
+    url: header?.url ?? pull?.url ?? `https://github.com/${slug}/pull/${options.number}`,
     author:
+      header?.author ??
       pull?.author ??
       ((yield* gitOut(["log", "-1", "--format=%an", options.pin], options.root)).trim() ||
         "unknown"),
-    state: prState(pull?.state),
-    base: pull?.baseRefName ?? (yield* defaultBranch),
-    head: pull?.headRefName ?? Option.getOrElse(yield* symbolicHead(options.root), () => "HEAD"),
+    state: header?.state ?? prState(pull?.state),
+    base:
+      header?.baseRef ??
+      pull?.baseRefName ??
+      (explicit === undefined ? yield* defaultBranch : base.slice(0, 7)),
+    head:
+      header?.headRef ??
+      pull?.headRefName ??
+      (explicit === undefined
+        ? Option.getOrElse(yield* symbolicHead(options.root), () => "HEAD")
+        : head.slice(0, 7)),
     commits:
       pull?.commits ??
       Number((yield* gitOut(["rev-list", "--count", `${base}..${head}`], options.root)).trim()),
@@ -251,7 +281,6 @@ export const makeResolvedPull = Effect.fn("makeResolvedPull")(function* (
   };
   return {
     root: options.root,
-    repoSlug: slug,
     pin: options.pin,
     base,
     head,
@@ -338,6 +367,16 @@ export const resolveCommit = Effect.fn("resolveCommit")(function* (root: string,
     const sha = value.trim();
     return sha === "" ? Option.none() : Option.some(sha);
   });
+});
+
+const requireCommit = Effect.fn("requireCommit")(function* (
+  root: string,
+  commit: string,
+  file: string,
+) {
+  const resolved = yield* resolveCommit(root, commit);
+  if (Option.isNone(resolved)) return yield* new CommitUnresolvable({ commit, file });
+  return resolved.value;
 });
 
 const resolveObject = Effect.fn("resolveObject")(function* (root: string, revision: string) {

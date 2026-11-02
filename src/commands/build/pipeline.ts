@@ -16,13 +16,14 @@ import { softReport } from "../../walkthrough/checker.js";
 import { loadWalkthrough, type LoadError, type LoadOptions } from "../../walkthrough/pipeline.js";
 import { describeFailure } from "../../failure.js";
 import type { Lang, CheckReport } from "../../contract/types.js";
+import type { PullResolution } from "../../contract/context.js";
 import { exportHtml, type ExportAssets } from "./html.js";
 
 export interface BuildOptions {
   cwd: string;
   /** The command line's file arguments; exactly one builds. */
   paths: readonly string[];
-  /** Output path, absolute or relative to `cwd`. Defaults to `<walkthrough>.html`. */
+  /** Output path, absolute or relative to `cwd`. Defaults to `<walkthrough>.<format>`. */
   out?: string;
   /** Chrome language override (`--lang`). */
   lang?: Lang;
@@ -30,6 +31,8 @@ export interface BuildOptions {
   useGh?: boolean;
   /** Where the export bundle is read from; defaults to the one shipped beside the CLI. */
   bundleDir?: string;
+  format?: "html" | "json";
+  resolution?: PullResolution;
 }
 
 /** Written; `reports` may still carry warnings and renderable error cards. */
@@ -95,11 +98,10 @@ export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) 
   const target = yield* pick(options);
   if (!Predicate.isString(target)) return target;
 
-  const assets = yield* readExportBundle(options.bundleDir);
-
   const loadOptions: LoadOptions = { cwd: options.cwd, path: target };
   if (options.lang !== undefined) loadOptions.lang = options.lang;
   if (options.useGh !== undefined) loadOptions.useGh = options.useGh;
+  if (options.resolution !== undefined) loadOptions.resolution = options.resolution;
   const loaded = yield* loadWalkthrough(loadOptions);
   const report = softReport(loaded);
   if (loaded.payload === null) {
@@ -107,14 +109,17 @@ export const runBuild = Effect.fn("runBuild")(function* (options: BuildOptions) 
   }
 
   const file = outputPath(path, options, target);
-  const html = exportHtml(loaded.payload, assets);
+  const contents =
+    options.format === "json"
+      ? `${JSON.stringify(loaded.payload)}\n`
+      : exportHtml(loaded.payload, yield* readExportBundle(options.bundleDir));
   yield* fs
-    .writeFileString(file, html)
+    .writeFileString(file, contents)
     .pipe(Effect.mapError((cause) => new ExportWriteFailed({ path: file, cause })));
   return {
     _tag: "Built",
     file,
-    bytes: Buffer.byteLength(html),
+    bytes: Buffer.byteLength(contents),
     changedFileCount: loaded.payload.files.length,
     reports: [report],
   } satisfies Built;
@@ -162,12 +167,14 @@ function outputPath(path: Path.Path, options: BuildOptions, target: string): str
   const absolute = path.isAbsolute(target) ? target : path.resolve(options.cwd, target);
   return path.join(
     path.dirname(absolute),
-    `${path.basename(absolute, path.extname(absolute))}.html`,
+    `${path.basename(absolute, path.extname(absolute))}.${options.format ?? "html"}`,
   );
 }
 
 export function buildErrorMessage(error: BuildError): string {
   return Match.valueTags(error, {
+    PayloadInvalid: () =>
+      "balade: the supplied pull request header is invalid; use an HTTP or HTTPS URL and the documented header fields.",
     ExportBundleReadFailed: ({ dir, file, cause }) =>
       `balade: could not read export bundle ${file} (${describeFailure(cause)}).` +
       (dir === BUNDLE_DIR ? EXPORT_BUNDLE_REPAIR : ""),
@@ -177,7 +184,7 @@ export function buildErrorMessage(error: BuildError): string {
       `balade: could not read ${path} (${describeFailure(cause)}).`,
     NotARepository: () => NOT_A_REPO,
     CommitUnresolvable: ({ commit }) =>
-      `balade: the stamped commit ${commit} is not in this clone.`,
+      `balade: commit ${commit} is not a resolvable commit in this clone; explicit ranges require full SHAs.`,
     PathResolutionFailed: ({ path, cause }) =>
       `balade: could not resolve ${path} (${describeFailure(cause)}).`,
     CommandFailed: ({ file, args, code }) =>

@@ -23,7 +23,7 @@ import type {
 } from "../contract/types.js";
 import type { ResolveContext } from "../contract/context.js";
 import { sha256 } from "../contract/hash.js";
-import { langOfMeta } from "../contract/schema.js";
+import { PAYLOAD_FORMAT, langOfMeta } from "../contract/schema.js";
 import { fileName } from "../contract/paths.js";
 import { frontmatterLine } from "./frontmatter.js";
 import { SECTION_ID } from "./tags.js";
@@ -361,6 +361,7 @@ export function compileDocument(input: CompileInput): CompileResult {
   const payloadFacets: PayloadFacets = {};
   if (doc.preset !== undefined) payloadFacets.preset = doc.preset.name;
   const payload: Payload = {
+    format: PAYLOAD_FORMAT,
     walkthrough: 1,
     title: frontmatter.title,
     commit: ctx.pin,
@@ -373,7 +374,6 @@ export function compileDocument(input: CompileInput): CompileResult {
     sections,
     errors,
     sourcePath,
-    storageKey: `balade:${ctx.repoSlug}#${frontmatter.pr}:${sourcePath}`,
     ...payloadFacets,
   };
 

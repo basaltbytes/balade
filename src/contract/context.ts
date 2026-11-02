@@ -6,13 +6,13 @@
  */
 
 import { Context, Schema, type Effect, type Option } from "effect";
+import { PullUrl } from "./schema.js";
+import type { PayloadInvalid } from "./payload.js";
 import type { CheckDiagnostic, FileEntry, Payload } from "./types.js";
 
 export interface ResolveContext {
   /** Absolute path of the repository root. */
   repoRoot: string;
-  /** `owner/name` when the remote is known, else the repository directory name. */
-  repoSlug: string;
   /** Full SHA the walkthrough is stamped against. */
   pin: string;
   /** Full SHA of the diff base (PR base, else merge-base with the default branch). */
@@ -35,7 +35,23 @@ export interface ResolveContext {
 /** How a pull request range is anchored when it is not derived from the checkout. */
 export type PullResolution =
   | { readonly _tag: "PullHead"; readonly head: string }
-  | { readonly _tag: "PullRange"; readonly base: string; readonly head: string };
+  | ({ readonly _tag: "PullRange" } & PullRange);
+
+export interface PullRange {
+  readonly base: string;
+  readonly head: string;
+  readonly pull?: PullHeader;
+}
+
+/** Header facts supplied by a host; absent facts use local Git defaults. */
+export const PullHeader = Schema.Struct({
+  url: Schema.optionalKey(PullUrl),
+  author: Schema.optionalKey(Schema.String),
+  state: Schema.optionalKey(Schema.Literals(["open", "closed", "merged"])),
+  baseRef: Schema.optionalKey(Schema.String),
+  headRef: Schema.optionalKey(Schema.String),
+});
+export type PullHeader = typeof PullHeader.Type;
 
 /* The process-port failure vocabulary. Produced by `shell.ts`, carried across
    module boundaries by resolution and discovery, translated at the command
@@ -83,7 +99,7 @@ export interface ResolveResult {
   diagnostics: CheckDiagnostic[];
 }
 
-export type ResolveError = NotARepository | CommandFailed | CommitUnresolvable;
+export type ResolveError = NotARepository | CommandFailed | CommitUnresolvable | PayloadInvalid;
 
 export interface ContextResolverPort {
   readonly resolve: (options: ResolveOptions) => Effect.Effect<ResolveResult, ResolveError>;

@@ -20,6 +20,7 @@ const section = (id: string, hash: string, extra?: Partial<Section>): Section =>
 });
 
 const payload = (sections: Section[], files: Payload["files"] = []): Payload => ({
+  format: 1,
   walkthrough: 1,
   title: "t",
   commit: "abc",
@@ -41,7 +42,6 @@ const payload = (sections: Section[], files: Payload["files"] = []): Payload => 
   sections,
   errors: [],
   sourcePath: "walkthroughs/one.md",
-  storageKey: "balade:acme/repo#1:walkthroughs/one.md",
 });
 
 const file = (path: string, hash: string): Payload["files"][number] => ({

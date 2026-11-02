@@ -7,9 +7,16 @@ import * as ai from "@earendil-works/pi-ai";
 import { NodeServices } from "@effect/platform-node";
 import { execFileSync } from "node:child_process";
 import { Effect, Layer } from "effect";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import { makeGenerationProgress } from "../src/commands/generate/progress-terminal.js";
 import type { GenerationProgress } from "../src/commands/generate/progress.js";
@@ -17,11 +24,15 @@ import { contextResolverLive } from "../src/git/git.js";
 import {
   buildWalkthrough,
   checkWalkthrough,
+  compilePayload,
+  compilePayloadEffect,
   generate,
   generateWalkthrough,
   type GenerateOptions,
 } from "../src/library.js";
 import { plainTheme } from "../src/terminal.js";
+import { CommandExecutor } from "../src/shell.js";
+import { decodePayload } from "../src/contract/payload.js";
 import { unavailableGhLayer } from "./support/command.js";
 import { piHarness, releasePiHarnesses } from "./support/pi.js";
 import { cloneOnMain, createFixtureRepo, type FixtureRepo } from "./support/repo.js";
@@ -91,6 +102,185 @@ const stubBundle = Effect.acquireRelease(
 );
 
 describe("the library entry", () => {
+  it.effect(
+    "compiles an explicit range without gh or default-branch probes, shared with check and build",
+    () =>
+      Effect.gen(function* () {
+        const repo = yield* fixture;
+        const file = repo.addWalkthrough("valid.md", "valid.md");
+        const base = execFileSync("git", ["rev-parse", "main"], {
+          cwd: repo.dir,
+          encoding: "utf8",
+        }).trim();
+        // No origin/HEAD exists; poison the default branch so deriving a range would be wrong.
+        execFileSync("git", ["branch", "-f", "main", repo.pin], { cwd: repo.dir });
+        const calls: { file: string; args: readonly string[] }[] = [];
+        const recorded = Layer.effect(
+          CommandExecutor,
+          Effect.gen(function* () {
+            const live = yield* CommandExecutor;
+            return {
+              exec: Effect.fn("recordCompilationCommand")(function* (
+                file: string,
+                args: readonly string[],
+                cwd: string,
+              ) {
+                calls.push({ file, args });
+                return yield* live.exec(file, args, cwd);
+              }),
+            };
+          }),
+        ).pipe(Layer.provide(CommandExecutor.layer));
+        const shell = Layer.mergeAll(NodeServices.layer, recorded);
+        const layer = contextResolverLive.pipe(Layer.provideMerge(shell));
+        const range = { base, head: repo.pin };
+        const options = { repository: repo.dir, file, ...range };
+        const compiled = yield* compilePayloadEffect(options).pipe(Effect.provide(layer));
+        expect(compiled._tag).toBe("Compiled");
+        if (compiled._tag !== "Compiled") return;
+        expect(compiled.report.ok).toBe(true);
+        expect(compiled.payload.files.length).toBeGreaterThan(0);
+        expect(compiled.payload.headDistance).toBe(0);
+        expect(compiled.payload.pr).toMatchObject({
+          base: base.slice(0, 7),
+          head: repo.pin.slice(0, 7),
+          author: "Fixture",
+        });
+        const report = yield* checkWalkthrough(file, { cwd: repo.dir, range }).pipe(
+          Effect.provide(layer),
+        );
+        expect(report).toEqual(compiled.report);
+        const built = yield* buildWalkthrough(file, {
+          cwd: repo.dir,
+          range,
+          format: "json",
+          bundleDir: "/missing-bundle",
+        }).pipe(Effect.provide(layer));
+        if (built._tag !== "Built") throw new Error(`Build refused: ${built._tag}`);
+        expect(built.file).toBe(join(repo.dir, "walkthroughs/valid.json"));
+        expect(built.reports).toEqual([compiled.report]);
+        expect(yield* decodePayload(JSON.parse(readFileSync(built.file, "utf8")))).toEqual(
+          compiled.payload,
+        );
+        const pull = {
+          url: "https://forge.example.test/review/42",
+          author: "Host author",
+          state: "merged",
+          baseRef: "release/2",
+          headRef: "feature/pool",
+        } as const;
+        const enriched = yield* compilePayloadEffect({ ...options, pull, lang: "fr" }).pipe(
+          Effect.provide(layer),
+        );
+        if (enriched._tag !== "Compiled") throw new Error("Compilation refused");
+        expect(enriched.payload.lang).toBe("fr");
+        expect(enriched.payload.pr).toMatchObject({
+          ...compiled.payload.pr,
+          url: pull.url,
+          author: pull.author,
+          state: pull.state,
+          base: pull.baseRef,
+          head: pull.headRef,
+        });
+        expect(calls.filter((call) => call.file === "gh")).toEqual([]);
+        expect(
+          calls
+            .flatMap((call) => call.args)
+            .filter((arg) => /(?:origin\/HEAD|refs\/heads\/|refs\/remotes\/|merge-base)/.test(arg)),
+        ).toEqual([]);
+      }),
+  );
+
+  it.effect("compiles external walkthroughs against the supplied repository", () =>
+    Effect.gen(function* () {
+      const repo = yield* fixture;
+      const internalFile = repo.addWalkthrough("valid.md", "valid.md");
+      const base = execFileSync("git", ["rev-parse", "main"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      const external = yield* Effect.acquireRelease(
+        Effect.sync(() => realpathSync(mkdtempSync(join(tmpdir(), "balade-library-source-")))),
+        (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+      );
+      const file = join(external, "review.md");
+      writeFileSync(file, readFileSync(join(repo.dir, internalFile), "utf8"));
+      const options = { repository: repo.dir, base, head: repo.pin };
+      const internal = yield* compilePayloadEffect({ ...options, file: internalFile });
+      if (internal._tag !== "Compiled") throw new Error("Compilation refused");
+      // Output paths use Git's root, which can expand a Windows short-name alias.
+      const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+        cwd: repo.dir,
+        encoding: "utf8",
+      }).trim();
+      const sourcePath = relative(realpathSync(root), file).replaceAll("\\", "/");
+      const expected = {
+        ...internal,
+        payload: { ...internal.payload, sourcePath },
+        report: { ...internal.report, file: sourcePath },
+      };
+      expect(yield* compilePayloadEffect({ ...options, file })).toEqual(expected);
+      expect(yield* compilePayloadEffect({ ...options, file: relative(repo.dir, file) })).toEqual(
+        expected,
+      );
+      // A different clone around the source must not change the selected repository.
+      execFileSync("git", ["init", "-q"], { cwd: external });
+      expect(yield* compilePayloadEffect({ ...options, file })).toEqual(expected);
+    }).pipe(Effect.provide(resolverLayer)),
+  );
+
+  it.effect(
+    "keeps parse diagnostics as outcomes and rejects unreadable files and invalid ranges with typed errors",
+    () =>
+      Effect.gen(function* () {
+        const repo = yield* fixture;
+        const base = execFileSync("git", ["rev-parse", "main"], {
+          cwd: repo.dir,
+          encoding: "utf8",
+        }).trim();
+        const options = {
+          repository: repo.dir,
+          file: "walkthroughs/invalid.md",
+          base,
+          head: repo.pin,
+        };
+        repo.write(options.file, "# Missing frontmatter\n");
+        const invalid = yield* compilePayloadEffect(options);
+        expect(invalid).toMatchObject({ _tag: "NotCompiled", report: { ok: false } });
+        expect(invalid.report).toEqual(
+          yield* checkWalkthrough(options.file, { cwd: repo.dir, range: options }),
+        );
+        const file = repo.addWalkthrough("valid.md", "valid.md");
+        for (const range of [
+          { base: "--help", head: repo.pin },
+          { base, head: "f".repeat(40) },
+        ]) {
+          expect(
+            yield* Effect.flip(compilePayloadEffect({ ...options, file, ...range })),
+          ).toMatchObject({ _tag: "CommitUnresolvable" });
+        }
+        expect(
+          yield* Effect.flip(
+            compilePayloadEffect({ ...options, file, pull: { url: "javascript:alert(1)" } }),
+          ),
+        ).toMatchObject({ _tag: "PayloadInvalid" });
+        const invalidHeader = yield* checkWalkthrough(file, {
+          cwd: repo.dir,
+          range: { base, head: repo.pin, pull: { url: "javascript:alert(1)" } },
+        });
+        expect(invalidHeader).toMatchObject({
+          ok: false,
+          diagnostics: [{ file, code: "schema" }],
+        });
+        yield* Effect.promise(() =>
+          expect(compilePayload({ ...options, file: "missing.md" })).rejects.toMatchObject({
+            _tag: "WalkthroughFileReadFailed",
+            message: expect.stringContaining("could not read"),
+          }),
+        );
+      }).pipe(Effect.provide(resolverLayer)),
+  );
+
   it.effect(
     "generates without a terminal: omits changed instructions by default, refuses a same-head replacement, replaces on force",
     () =>

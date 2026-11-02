@@ -28,7 +28,7 @@ const payload = {
 
 const target = {
   mode: "served",
-  storageKey: payload.storageKey,
+  storageKey: "balade:test-review",
   sourcePath: payload.sourcePath,
 } satisfies ReviewStoreTarget;
 

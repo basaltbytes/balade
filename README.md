@@ -58,8 +58,8 @@ npx balade build .agents/walkthroughs/pr-96-loan-refactor.md
 | --- | --- |
 | `generate <pr>` | Draft, validate and open a walkthrough. Accepts `96`, a PR URL, or `'#96'`. |
 | `open [target]` | Start a live review. The target may be a file or PR; omit it to discover all walkthroughs. |
-| `check [file]` | Validate one walkthrough, or all discovered walkthroughs. Use `--json` for JSON output. |
-| `build <file>` | Write a self-contained HTML file beside the walkthrough. Use `--out` to change the path. |
+| `check [file]` | Validate one walkthrough, or all discovered walkthroughs. Use `--json` for the report and `--base <sha> --head <sha>` for an explicit PR range. |
+| `build <file>` | Write a self-contained HTML review or, with `--format json`, a resolved payload. Use `--out` for the destination and `--base <sha> --head <sha>` for an explicit PR range. |
 | `agent setup` | Authenticate and choose the model used by generation and live Q&A. |
 | `agent logout` | Remove every provider credential stored by Balade. |
 | `skills install` | Install the bundled authoring skill for coding agents. |
@@ -296,7 +296,7 @@ Use `--out <dir>` for another skill layout (other coding agent harnesses). The n
 
 ## Library
 
-The package exports the three commands as functions, so a script or a CI job
+The package exports commands and a payload compiler as functions, so a script or a CI job
 calls them instead of spawning the executable and parsing its output:
 
 ```ts
@@ -326,6 +326,77 @@ can't be resolved rejects the promise with a tagged error — `error._tag` names
 the case, its fields carry the details, and `error.message` is the sentence
 the command would have printed. `onProgress` receives the events the command
 renders, in order.
+
+To compile a walkthrough for a host application or store its resolved payload,
+pass the full base and head commit SHAs available in the clone:
+
+```ts
+import { compilePayload } from "balade";
+import { decodePayload, PAYLOAD_FORMAT } from "balade/contract";
+import { Effect } from "effect";
+
+const compiled = await compilePayload({
+  repository: "/path/to/clone",
+  file: ".agents/walkthroughs/pr-96.md",
+  base: baseSha,
+  head: headSha,
+  pull: {
+    url: "https://github.com/acme/project/pull/96",
+    author: "octocat",
+    state: "open",
+    baseRef: "release/2",
+    headRef: "feature/pool",
+  },
+  lang: "en",
+});
+
+if (compiled._tag === "Compiled") {
+  // compiled.report is the same authoring report returned by check().
+  // A payload may contain renderable error cards even when report.ok is false.
+  const json = JSON.stringify(compiled.payload);
+  const payload = await Effect.runPromise(decodePayload(JSON.parse(json)));
+  console.log(payload.format === PAYLOAD_FORMAT);
+}
+```
+
+`compilePayloadEffect` returns the same outcome as an Effect; provide `liveLayer`
+when running it directly. `NotCompiled` carries the report when the document
+cannot produce a payload. File, repository, commit, command and path failures
+reject with their tagged errors. Invalid supplied header facts reject with
+`PayloadInvalid`.
+
+`repository` selects the clone used for Git resolution. The walkthrough `file`
+may be outside that clone; relative paths are resolved from `repository`.
+
+Explicit ranges never invoke `gh` or discover the default branch. Both SHAs
+must name commits in the clone. File contents remain pinned to the walkthrough's
+stamped commit; `head` determines staleness and `headDistance` records the distance
+at compile time. Each `pull` field is optional: Git supplies the stamped commit's
+author and abbreviated base/head SHAs, the origin supplies the repository for a
+GitHub URL, and state defaults to `open`. Supply the facts for another forge or
+for a closed or merged PR.
+
+`check(file, { range: { base, head } })` and
+`build(file, { range: { base, head }, format: "json" })` use the same resolution.
+The CLI accepts the equivalent pair of flags:
+
+```sh
+balade check review.md --base "$BASE_SHA" --head "$HEAD_SHA" --json
+balade build review.md --format json --base "$BASE_SHA" --head "$HEAD_SHA" --out payload.json
+```
+
+JSON builds work without the HTML renderer bundle. They contain the same source
+and metadata as HTML exports, including full file contents at both revisions.
+
+`balade/contract` is safe to import in a browser bundle. Its `decodePayload`
+returns an Effect that strictly checks the payload and requires an absolute
+HTTP or HTTPS `pr.url`. Another safe integer format version fails with
+`PayloadFormatUnsupported`; malformed data, including unsafe integers, fails with
+`PayloadInvalid`.
+Only the current payload format (`format: 1`) is supported. Keep the walkthrough
+source and recompile stored payloads when the format changes. This version is
+separate from the input's `walkthrough: 1`. Review-storage keys belong to the
+renderer and are not part of the payload.
 
 ## CI
 
