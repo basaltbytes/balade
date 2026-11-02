@@ -1,5 +1,24 @@
 # balade
 
+## 0.18.0
+
+### Minor Changes
+
+- 9262a79: Compile walkthroughs into resolved payloads with `compilePayload` and
+  `compilePayloadEffect`. Supply full base/head SHAs and optional PR header facts
+  without requiring GitHub CLI or default-branch discovery. `check` and `build`
+  accept `--base`/`--head`; `build --format json` writes the resolved payload.
+  
+  Expose the browser-safe `balade/contract` decoder and `PAYLOAD_FORMAT`. Payloads
+  now carry `format: 1`, require an HTTP or HTTPS PR link, and leave review-storage
+  keys to the renderer. Recompile previously stored payloads from their walkthrough
+  source; `headDistance` records staleness at compile time.
+- f04a7c3: Let external agents produce clarification answers with `checkAnswer`, its Effect variant, and `clarificationContext`. Check pinned evidence from a repository or use the portable `balade/answers` entry with a decoded payload. `balade answer check` validates a separate Markdoc answer file and returns diagnostics or accepted answer blocks; the authoring skill documents the repair loop.
+- 8a00d7f: Render compiled walkthroughs in React applications with `balade/viewer` and
+  `balade/viewer.css`. Compose the header, navigation, sections and clarification
+  list, and supply promise-based host adapters for review storage and questions.
+  Each viewer scopes its navigation, styles and browser access to its own instance.
+
 ## 0.17.1
 
 ### Patch Changes
