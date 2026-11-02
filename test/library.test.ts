@@ -7,7 +7,14 @@ import * as ai from "@earendil-works/pi-ai";
 import { NodeServices } from "@effect/platform-node";
 import { execFileSync } from "node:child_process";
 import { Effect, Layer } from "effect";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "@effect/vitest";
@@ -193,15 +200,16 @@ describe("the library entry", () => {
         encoding: "utf8",
       }).trim();
       const external = yield* Effect.acquireRelease(
-        Effect.sync(() => mkdtempSync(join(tmpdir(), "balade-library-source-"))),
+        Effect.sync(() => realpathSync(mkdtempSync(join(tmpdir(), "balade-library-source-")))),
         (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
       );
       const file = join(external, "review.md");
       writeFileSync(file, readFileSync(join(repo.dir, internalFile), "utf8"));
-      const options = { repository: repo.dir, base, head: repo.pin };
+      // Git expands Windows short names in its root; compare canonical temporary paths.
+      const options = { repository: realpathSync(repo.dir), base, head: repo.pin };
       const internal = yield* compilePayloadEffect({ ...options, file: internalFile });
       if (internal._tag !== "Compiled") throw new Error("Compilation refused");
-      const sourcePath = relative(repo.dir, file).replaceAll("\\", "/");
+      const sourcePath = relative(options.repository, file).replaceAll("\\", "/");
       const expected = {
         ...internal,
         payload: { ...internal.payload, sourcePath },
