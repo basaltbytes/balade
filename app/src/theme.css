@@ -340,12 +340,12 @@ section[id] {
 }
 
 /* ---- reviewed state --------------------------------------------------- */
-.hide-reviewed .reviewed-section > .section-body,
-.hide-reviewed .reviewed-file > .file-body {
+.balade-viewer.hide-reviewed .reviewed-section > .section-body,
+.balade-viewer.hide-reviewed .reviewed-file > .file-body {
   margin: 0;
   display: none;
 }
-.hide-reviewed .reviewed-section > .section-head,
-.hide-reviewed .reviewed-file > .file-head {
+.balade-viewer.hide-reviewed .reviewed-section > .section-head,
+.balade-viewer.hide-reviewed .reviewed-file > .file-head {
   opacity: 0.55;
 }

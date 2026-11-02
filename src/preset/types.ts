@@ -6,7 +6,7 @@
 
 import type { Node, Schema } from "@markdoc/markdoc";
 import type { Block, FieldRow, Inline } from "../contract/types.js";
-import type { ResolveContext } from "../contract/context.js";
+import type { BlockContext } from "../contract/context.js";
 
 /** A diagnostic a macro raises; the compiler fills in file and line. */
 export interface MacroDiagnostic {
@@ -18,7 +18,7 @@ export interface MacroDiagnostic {
 
 export interface MacroApi {
   /** Read access to the resolved PR context — the data core `files`/`i18n` use. */
-  readonly ctx: ResolveContext;
+  readonly ctx: BlockContext;
   /** Flattens a tag body to inline rich text. */
   inline(node: Node): Inline[];
   /** Flattens a tag body to one inline array per paragraph. */

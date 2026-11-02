@@ -12,13 +12,13 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 `authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the Pi adapter and agent sessions), `agent/` (shared provider/model
 configuration), `server/` (live session runtime) — and the root files `cli.ts`,
-`library.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
-`submission.ts`.
+`library.ts`, `answers.ts`, `clarification.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
+`submission.ts`, `clarification.ts`.
 
 All imports flow one direction; peers never import each other:
 
 ```
-cli.ts  library.ts          entries + layer wiring — the executable and the package export
+cli.ts  library.ts  answers.ts  entries + layer wiring — the executable and the package export
 commands/    server/        orchestrators — the ONLY places product concepts compose
 agent/                      → pi, presence, terminal
 pi/                         → authoring, git (type imports), contract, shell
@@ -27,7 +27,7 @@ git/                        → contract, shell                (never walkthroug
 preset/                     → contract
 authoring/                  → nothing internal
 contract/                   → nothing internal
-shell.ts  state.ts  terminal.ts  failure.ts  presence.ts  submission.ts
+shell.ts  state.ts  terminal.ts  failure.ts  presence.ts  submission.ts  clarification.ts
                                                             root ports & utils → contract
 ```
 
@@ -239,7 +239,14 @@ to its bottom edge. Neither covers the host page.
 The stylesheet excludes Tailwind preflight. A shared build transform scopes
 utilities, dependency styles and tokens; tokens use `--balade-`, keyframes have
 a balade prefix, and property defaults are local declarations instead of global
-registrations. React and React DOM are optional peers for CLI-only installations
+registrations. Root state selectors, including Hide reviewed, match the viewer
+root itself. Document margins, color scheme and full-height page canvas live in
+a separate standalone stylesheet imported only by the served/export entry;
+embedding styles never change the host document. Host review-storage failures
+log only the operation and typed error tag before the UI shows its persistence
+badge, without logging stored state or arbitrary host error contents.
+
+React and React DOM are optional peers for CLI-only installations
 and required by viewer consumers. Other renderer dependencies are bundled, with
 Mermaid dynamically imported. TypeScript emits the declaration graph beside the
 viewer, including the existing contract types.
@@ -1670,3 +1677,38 @@ cannot replace the sanitizer or theme CSS. Code and fence HTML remains Shiki's
 escaped output; diff HAST properties remain theme-owned. The browser fixture
 checks hostile document and answer blocks under the host CSP with network
 capture, alongside two viewers and a separately composed navigation layout.
+
+
+## External clarification answers share the fragment compiler
+
+Decided on [#166](https://github.com/basaltbytes/balade/issues/166).
+`checkAnswer` and `checkAnswerEffect` accept a Markdoc body with either a
+repository plus walkthrough file and explicit `PullRange`, or a decoded
+payload. Invalid fragments are `Rejected` values with the same string
+diagnostics returned to `submit_answer`; accepted blocks are nonempty
+`QaTurn.answer` values. Repository IO and resolution failures stay in the typed
+error channel. The command prints this result and never writes the walkthrough.
+
+The existing `ContextResolver` already hydrates pinned blobs and changed-line
+overlays, so repository checking reuses it. The stored-payload adapter supplies
+the narrower `BlockContext` consumed by block compilation and preset macros,
+without inventing a repository root or base SHA. Changed files carry unified
+diffs with context; Git's overlay uses zero-context diffs. Both now use the same
+pure added-line parser and newline handling in `contract/diff.ts`. Missing
+payload paths explain that unchanged files require a repository source.
+
+`walkthrough/answer.ts` owns parsing, reference discovery and compilation.
+The served workflow supplies its cached resolver through that shared function,
+retaining its existing extra fetch for references outside the changed files.
+The exported validator and served validator therefore cannot diverge on body
+acceptance. `clarification.ts` owns JSON-framed task context, shared by Pi and
+external hosts; hosts may supply walkthrough source or the stored payload.
+
+`balade/answers` is a portable entry alongside the Node library. It exports the
+payload Promise checker, Effect checker and context builder without loading Pi,
+filesystem adapters or Node built-ins. The npm smoke bundles and executes this
+entry while rejecting Node imports. The repository API remains on `balade`,
+where the live layer is wired. File reads moved to `walkthrough/source.ts` so
+the answer entry can share typed read failures without importing the document
+compiler's Node hashing dependency. This adds no payload version or rendering
+sink and leaves thread storage and agent execution with the host.

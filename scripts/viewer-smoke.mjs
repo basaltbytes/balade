@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { cp, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -11,6 +12,9 @@ import { build } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const project = resolve(process.argv[2] ?? join(here, ".."));
+const packageRoot = dirname(
+  createRequire(join(project, "package.json")).resolve("balade/package.json"),
+);
 const fixture = join(project, ".balade", "viewer-fixture");
 await cp(join(here, "viewer-fixture"), fixture, { recursive: true });
 await build({
@@ -119,6 +123,25 @@ try {
     .click();
   await page.waitForFunction(() => globalThis.viewerFixture.readReview()?.sections.overview);
 
+  // Root state classes must work without another viewer wrapper supplied by the host.
+  await page.locator("#first").getByRole("button", { name: "Hide reviewed", exact: true }).click();
+  const reviewedBody = '#first [data-balade-section="overview"] .section-body';
+  assert.equal(
+    await page.locator(reviewedBody).evaluate((element) => getComputedStyle(element).display),
+    "none",
+  );
+  assert.notEqual(
+    await page
+      .locator('#second [data-balade-section="overview"] .section-body')
+      .evaluate((element) => getComputedStyle(element).display),
+    "none",
+  );
+  await page.locator("#first").getByRole("button", { name: "Show reviewed", exact: true }).click();
+  assert.notEqual(
+    await page.locator(reviewedBody).evaluate((element) => getComputedStyle(element).display),
+    "none",
+  );
+
   // A composed navigation observes only its own sections in the supplied scroll container.
   await page.locator("#composed nav").getByRole("link", { name: "Evidence", exact: true }).click();
   await page.waitForFunction(
@@ -200,6 +223,36 @@ try {
     requests.every((url) => url === `${origin}/` || url.startsWith(`${origin}/assets/`)),
     `Unexpected requests: ${requests.join(", ")}`,
   );
+
+  // The standalone bundle owns its document canvas, including short index/error pages.
+  const standalone = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+  await standalone.setContent(
+    '<!doctype html><html><body><div id="root" class="balade-viewer">Short page</div></body></html>',
+  );
+  await standalone.addStyleTag({ path: join(packageRoot, "dist/export/app.css") });
+  const canvas = await standalone.evaluate(() => {
+    const root = document.getElementById("root");
+    const rect = root.getBoundingClientRect();
+    return {
+      margin: getComputedStyle(document.body).margin,
+      scheme: getComputedStyle(document.documentElement).colorScheme,
+      background: getComputedStyle(root).backgroundColor,
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    };
+  });
+  assert.deepEqual(canvas, {
+    margin: "0px",
+    scheme: "dark",
+    background: "rgb(12, 12, 13)",
+    x: 0,
+    y: 0,
+    width: 1000,
+    height: 800,
+  });
+  await standalone.close();
   console.log("viewer browser smoke passed");
 } finally {
   await browser.close();

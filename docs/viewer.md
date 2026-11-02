@@ -51,6 +51,10 @@ failed. Reject `ask` with `new ClarificationAgentUnavailable()` when agent setup
 fails, or `new ClarificationGenerationChanged()` when the request names an older
 generation. Both errors are exported from `balade/viewer`.
 
+Review-storage failures show a persistence badge and log the failed operation
+and error tag to the browser console. Stored state and host error contents are
+excluded from those diagnostics.
+
 ## Compose the page
 
 Place the parts anywhere beneath `Walkthrough.Root`. A scroll container may sit

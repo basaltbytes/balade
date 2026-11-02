@@ -49,6 +49,21 @@ import { getPreset, presetNames } from "./preset/registry.js";
 import { CommandExecutor } from "./shell.js";
 import { checkOne, checkReport, type CheckFileOptions } from "./walkthrough/checker.js";
 import { loadWalkthrough, type LoadOptions } from "./walkthrough/pipeline.js";
+import {
+  checkAnswerEffect,
+  type AnswerSource,
+  type AnswerCheckResult,
+} from "./walkthrough/answer.js";
+export { checkAnswerEffect } from "./walkthrough/answer.js";
+export type {
+  AnswerSource,
+  RepositoryAnswerSource,
+  PayloadAnswerSource,
+  AnswerCheckResult,
+  AnswerCheckError,
+} from "./walkthrough/answer.js";
+export { clarificationContext } from "./clarification.js";
+export type { ClarificationContextOptions, ClarificationWalkthrough } from "./clarification.js";
 
 export type {
   AgentModelResolutionError,
@@ -239,6 +254,18 @@ export const compilePayloadEffect = Effect.fn("compilePayload")(
 
 export function compilePayload(options: CompilePayloadOptions): Promise<CompileOutcome> {
   return Effect.runPromise(compilePayloadEffect(options).pipe(Effect.provide(liveLayer)));
+}
+
+/** Check a complete Markdoc answer without starting an agent or writing files. */
+export function checkAnswer(body: string, source: AnswerSource): Promise<AnswerCheckResult> {
+  return source._tag === "Payload"
+    ? Effect.runPromise(checkAnswerEffect(body, source))
+    : Effect.runPromise(
+        checkAnswerEffect(body, source).pipe(
+          Effect.mapError((error) => withMessage(error, buildErrorMessage(error))),
+          Effect.provide(liveLayer),
+        ),
+      );
 }
 
 export interface CheckOptions {

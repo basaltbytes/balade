@@ -457,6 +457,13 @@ they describe.
   walkthrough source, prior exchanges and question as untrusted JSON data. Only
   a successful `submit_answer` fragment reaches the compiler; provider details
   do not reach the sidecar or browser, which expose only a generic failed state.
+- External answers pass through the same Markdoc fragment validator as
+  `submit_answer`, including whole-document tag exclusions. Payload-only
+  checking reads pinned contents only from decoded changed-file entries;
+  repository checking resolves explicit base/head SHAs through the existing
+  Git port. `clarificationContext` quotes source paths, commits, walkthrough
+  source or payloads, anchors, turns and questions as untrusted JSON. The host
+  owns its external agent's tools and execution permissions.
 - A restarted server converts abandoned pending sidecar entries to that generic
   failed state on its first read. It never resumes or guesses the outcome of an
   interrupted provider request.

@@ -1,0 +1,12 @@
+/* Document styling belongs to the served app and HTML export, outside viewer.css. */
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100dvh;
+}

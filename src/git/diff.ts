@@ -76,19 +76,3 @@ export function splitDiff(raw: string): DiffRecord[] {
   flush(lines.length);
   return records;
 }
-
-/**
- * Change overlay: absolute new-file line numbers the PR added or
- * modified. Feed it a `-U0` diff body — every `+` line is a change.
- */
-export function changedLines(body: string): Set<number> {
-  const out = new Set<number>();
-  for (const line of body.split("\n")) {
-    const m = HUNK.exec(line);
-    if (m === null) continue;
-    const from = Number(m[3]);
-    const count = m[4] === undefined ? 1 : Number(m[4]);
-    for (let n = from; n < from + count; n++) out.add(n);
-  }
-  return out;
-}

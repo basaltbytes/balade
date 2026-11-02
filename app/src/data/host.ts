@@ -36,6 +36,12 @@ export const loadHostReview = (host: WalkthroughHost["reviewState"]) =>
         Effect.flatMap((state) =>
           state === null ? Effect.succeed(null) : parseReviewState(state),
         ),
+        Effect.tapError((error) =>
+          Effect.logWarning("balade: host review storage failed", {
+            operation: "load",
+            error: error._tag,
+          }),
+        ),
       );
 
 export const saveHostReview = (
@@ -49,6 +55,12 @@ export const saveHostReview = (
         catch: (cause) =>
           cause instanceof ReviewStateFallback ? cause : new HostOperationFailed({ cause }),
       }).pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning("balade: host review storage failed", {
+            operation: "save",
+            error: error._tag,
+          }),
+        ),
         Effect.match({
           onSuccess: (): SaveOutcome => "saved",
           onFailure: (error): SaveOutcome =>
