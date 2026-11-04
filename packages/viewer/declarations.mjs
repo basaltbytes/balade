@@ -8,7 +8,7 @@
  */
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +23,8 @@ const specifier = /(from\s+|import\()(["'])(\.{1,2}\/[^"']+)(["'])/g;
 const reachable = new Map();
 async function visit(file) {
   if (reachable.has(file)) return;
-  if (!file.startsWith(`${emitted}/`)) {
+  const inside = relative(emitted, file);
+  if (inside.startsWith("..") || isAbsolute(inside)) {
     throw new Error(`viewer declarations reach outside app/src: ${relative(here, file)}`);
   }
   const declaration = replaced.get(file) ?? (await readFile(file, "utf8"));
