@@ -27,7 +27,8 @@
     "balade": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "deprecated"
   ],
   "type": "module",
   "exports": {
@@ -36,26 +37,26 @@
       "default": "./dist/library.js"
     },
     "./answers": {
-      "types": "./dist/answers.d.ts",
-      "default": "./dist/answers.js"
+      "types": "./deprecated/core.d.ts",
+      "default": "./deprecated/core.js"
     },
     "./contract": {
-      "types": "./dist/contract/payload.d.ts",
-      "default": "./dist/contract/payload.js"
+      "types": "./deprecated/core.d.ts",
+      "default": "./deprecated/core.js"
     },
     "./package.json": "./package.json",
     "./viewer": {
-      "types": "./dist/viewer/types/app/src/viewer.d.ts",
-      "import": "./dist/viewer/index.js"
+      "types": "./deprecated/viewer.d.ts",
+      "default": "./deprecated/viewer.js"
     },
-    "./viewer.css": "./dist/viewer/viewer.css"
+    "./viewer.css": "./deprecated/viewer.css"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "scripts": {
-    "build": "pnpm run build:cli && pnpm run build:app && pnpm run build:viewer && pnpm run build:skill",
+    "build": "pnpm run build:packages && pnpm run build:cli && pnpm run build:app && pnpm run build:skill",
     "build:cli": "tsc -p tsconfig.build.json && node scripts/copy-prose.mjs",
     "build:app": "vite build app && vite build app --mode export",
     "build:skill": "node dist/cli.js skills install --out dist/skill",
@@ -75,10 +76,12 @@
     "changeset:version": "changeset version",
     "package:smoke": "bash scripts/npm-smoke.sh",
     "prepare": "effect-tsgo patch",
-    "prepublishOnly": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test && pnpm package:smoke",
-    "build:viewer": "vite build app --config app/viewer.vite.config.ts && tsc -p app/tsconfig.viewer.json && node scripts/viewer-types.mjs"
+    "prepublishOnly": "pnpm run release:check",
+    "build:packages": "pnpm --filter \"./packages/*\" run build",
+    "release:check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test && pnpm package:smoke"
   },
   "dependencies": {
+    "@balade/core": "workspace:*",
     "@earendil-works/pi-ai": "1.1.0",
     "@earendil-works/pi-coding-agent": "1.1.0",
     "@effect/platform-node": "4.1.2",
@@ -121,14 +124,10 @@
     "wrangler": "^4.118.0"
   },
   "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "@balade/viewer": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
+    "@balade/viewer": {
       "optional": true
     }
   },

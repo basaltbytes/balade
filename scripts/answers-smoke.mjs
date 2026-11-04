@@ -1,4 +1,4 @@
-/** Packed portable answers and the installed CLI, using contract-smoke's fixture clone. */
+/** Packed @balade/core answers and the installed CLI, using contract-smoke's fixture clone. */
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -12,7 +12,7 @@ assert.ok(project && gitBinary);
 const entry = join(project, "browser-answers.mjs");
 writeFileSync(
   entry,
-  'export { checkAnswer, checkAnswerEffect, clarificationContext } from "balade/answers";\n',
+  'export { checkAnswer, checkAnswerEffect, clarificationContext } from "@balade/core";\n',
 );
 await build({
   configFile: false,
@@ -31,7 +31,7 @@ await build({
 const portable = await import(pathToFileURL(join(project, "answers-dist/answers.mjs")));
 const { Effect } = await import(pathToFileURL(join(project, "node_modules/effect/dist/index.js")));
 const { decodePayload } = await import(
-  pathToFileURL(join(project, "node_modules/balade/dist/contract/payload.js"))
+  pathToFileURL(join(project, "node_modules/@balade/core/dist/index.js"))
 );
 const repo = join(project, "repo");
 const payload = await Effect.runPromise(

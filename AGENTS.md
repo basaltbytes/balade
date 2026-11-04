@@ -88,5 +88,5 @@ adding compatibility layers, fallbacks or migrations.
 - `pnpm typecheck` — both projects (CLI + tests, then the app)
 - `pnpm test` — vitest, CLI and app suites
 - `pnpm lint` / `pnpm format:check` — oxlint / oxfmt
-- `pnpm build` — CLI to `dist/`, SPA to `dist/app/`, export bundle to `dist/export/`
-- `pnpm package:smoke` — packs the tarball and exercises the installed binary
+- `pnpm build` — `@balade/core` and `@balade/viewer` to `packages/*/dist/`, CLI to `dist/`, SPA to `dist/app/`, export bundle to `dist/export/`
+- `pnpm package:smoke` — packs the three tarballs and exercises the installed binary, a core-only server, a viewer-only React host and a host sharing shiki and effect

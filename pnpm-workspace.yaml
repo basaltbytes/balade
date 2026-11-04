@@ -1,3 +1,6 @@
+packages:
+  - packages/*
+
 trustPolicy: no-downgrade
 
 # Old releases that predate npm provenance; excluded case by case, never wholesale.

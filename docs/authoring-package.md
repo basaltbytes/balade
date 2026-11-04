@@ -22,7 +22,7 @@ answer fragment rather than a complete walkthrough and does not use the section
 templates or writing rubric. The generated skill also teaches external agents
 to answer an anchored question in a separate Markdoc file and repair it with
 `balade answer check`. Library hosts use `checkAnswer` and
-`clarificationContext`; payload-only hosts import `balade/answers`. These paths
+`clarificationContext`; payload-only hosts import `@balade/core`. These paths
 share the live clarifier's validator and untrusted-data context framing.
 
 The current package version is `1.34.0`. Its major version matches the

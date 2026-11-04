@@ -57,6 +57,8 @@ jobs:
       - run: pnpm package:smoke
       # The pkg.pr.new app authenticates the upload and posts the PR comment;
       # this job keeps the workflow token read-only and carries no npm token.
-      - name: Publish PR package
+      # All three packages publish together so balade's @balade/core
+      # dependency resolves to the same preview.
+      - name: Publish PR packages
         if: github.event_name == 'pull_request'
-        run: pnpm exec pkg-pr-new publish --pnpm --bin --no-template
+        run: pnpm exec pkg-pr-new publish --pnpm --bin --no-template . ./packages/core ./packages/viewer

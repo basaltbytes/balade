@@ -1,9 +1,10 @@
 name: release
 # Publishes to npm via OIDC trusted publishing — no NPM_TOKEN secret anywhere.
 # npmjs.com must list this exact workflow (basaltbytes/balade, release.yml) as
-# the package's trusted publisher; the registry then accepts the runner's OIDC
-# identity. Because this repository and package are public, npm also generates
-# provenance attestations for tag publishes.
+# the trusted publisher of balade, @balade/core and @balade/viewer; the
+# registry then accepts the runner's OIDC identity. Because this repository and
+# the packages are public, npm also generates provenance attestations for tag
+# publishes.
 on:
   push:
     tags: ["v*"]
@@ -36,14 +37,22 @@ jobs:
             echo "::error::tag v$TAG does not match package.json version $PKG"
             exit 1
           fi
-      # The packed viewer smoke in prepublishOnly drives Chromium.
+      # The packed viewer smoke in the gate drives Chromium.
       - run: pnpm exec playwright install --with-deps chromium
-      # prepublishOnly runs the full gate (lint, format:check, typecheck,
-      # build, test, packed npm install smoke);
+      # The full gate (lint, format:check, typecheck, build, test, packed npm
+      # install smoke of all three packages) runs once; the publishes below
+      # skip prepublishOnly with --ignore-scripts.
+      - run: pnpm run release:check
+      # @balade/core and @balade/viewer publish before balade, which depends on
+      # core. `-r publish` skips a version npm already has, so a package the
+      # owner published by hand (a new package's first version) is not retried.
       # --no-git-checks because a tag checkout is a detached HEAD.
       # NPM_CONFIG_PROVENANCE keeps provenance explicit for pnpm and matches
-      # package.json publishConfig.provenance.
-      - run: pnpm publish --access public --no-git-checks
+      # each package.json publishConfig.provenance.
+      - run: pnpm -r publish --access public --no-git-checks --ignore-scripts
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+      - run: pnpm publish --access public --no-git-checks --ignore-scripts
         env:
           NPM_CONFIG_PROVENANCE: "true"
       - name: GitHub Release

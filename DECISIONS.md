@@ -12,13 +12,13 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 `authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the Pi adapter and agent sessions), `agent/` (shared provider/model
 configuration), `server/` (live session runtime) — and the root files `cli.ts`,
-`library.ts`, `answers.ts`, `clarification.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
+`library.ts`, `core.ts`, `clarification.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
 `submission.ts`, `clarification.ts`.
 
 All imports flow one direction; peers never import each other:
 
 ```
-cli.ts  library.ts  answers.ts  entries + layer wiring — the executable and the package export
+cli.ts  library.ts  core.ts     entries + layer wiring — the executable and the package exports
 commands/    server/        orchestrators — the ONLY places product concepts compose
 agent/                      → pi, presence, terminal
 pi/                         → authoring, git (type imports), contract, shell
@@ -170,7 +170,7 @@ checkout's branch would mislabel host-supplied ranges. The shared header boundar
 rejects invalid fields and non-HTTP URLs as `PayloadInvalid`.
 
 `format: 1` versions the resolved contract separately from the input's
-`walkthrough: 1`. `balade/contract` exports the current `PAYLOAD_FORMAT`, contract
+`walkthrough: 1`. `@balade/core` exports the current `PAYLOAD_FORMAT`, contract
 types and an Effect-returning `decodePayload`. Another safe integer version
 produces `PayloadFormatUnsupported`; malformed or excess fields, including unsafe
 integer versions, produce `PayloadInvalid`.
@@ -218,7 +218,7 @@ API against the installed `.d.ts` under `node_modules/effect/dist/`.
 ## The renderer owns an instance; the application owns browser capabilities
 
 Decided on [#164](https://github.com/basaltbytes/balade/issues/164). The public
-`balade/viewer` entry composes `Walkthrough.Root`, `Header`, `Nav`, `Sections`
+`@balade/viewer` entry composes `Walkthrough.Root`, `Header`, `Nav`, `Sections`
 and `Clarifications`; `WalkthroughView` uses those same parts for the default
 layout. Root decodes the payload and supplies a runtime containing only Shiki.
 No renderer import reaches the standalone app's browser runtime.
@@ -251,22 +251,22 @@ embedding styles never change the host document. Host review-storage failures
 log only the operation and typed error tag before the UI shows its persistence
 badge, without logging stored state or arbitrary host error contents.
 
-React and React DOM are optional peers for CLI-only installations
-and required by viewer consumers. Other renderer dependencies are bundled, with
-Mermaid dynamically imported. TypeScript emits the declaration graph beside the
-viewer, including the existing contract types.
+The viewer ships as `@balade/viewer`: React, React DOM and Effect are peers,
+and the shared rendering libraries are dependencies rather than bundled copies
+(see "The viewer and contract ship as lean packages over one source tree").
 
 The diff library's audited highlighter boundary already uses Shiki exclusively.
 Its Lowlight adapter now receives an empty automatic-language registry through a
 build adapter, retaining the upstream engine API while removing the redundant
 bundled grammars. The package browser smoke test exercises both Shiki and diff
-rendering from the packed ESM entry, alongside a host with another Effect major.
+rendering from the packed ESM entry, in a host that supplies its own React and
+Effect 4.
 This keeps the single-file export smaller than the preceding build.
 
 ## `Diff` and `{% files %}` share one file browser
 
 Decided on [#172](https://github.com/basaltbytes/balade/issues/172). Hosts show a
-pull request's changed files before a walkthrough exists, so `balade/viewer`
+pull request's changed files before a walkthrough exists, so `@balade/viewer`
 exports `Diff`, which takes `DiffFile` values instead of a payload.
 `app/src/widgets/file-browser.tsx` owns the browser frame and the file row. Both
 `Diff` and the walkthrough's `Files` map their input to the same `DiffRow`
@@ -1157,7 +1157,7 @@ Decided on [#49](https://github.com/basaltbytes/balade/issues/49). Changesets
 owns the bookkeeping: PRs carry changeset files, `changesets.yml` maintains the
 rolling Version Packages PR and, once it merges, pushes the `v*` tag and
 dispatches `release.yml` on it. Publishing itself never moves out of
-`release.yml`, because npmjs.com pins that exact workflow file as the package's
+`release.yml`, because npmjs.com pins that exact workflow file as each package's
 trusted publisher — OIDC, no NPM_TOKEN anywhere — and relocating the publish
 step would mean re-registering the trusted publisher for zero gain. The
 dispatch is explicit (`gh workflow run`) because a tag pushed with the default
@@ -1229,7 +1229,9 @@ than a downloader. The workflow token remains `contents: read` and carries no
 npm credential; the installed pkg.pr.new App owns upload authentication, the
 check and the pull-request comment. One concurrency group per pull request
 cancels stale package jobs before an older commit can replace the current
-preview comment.
+preview comment. The job publishes `balade`, `@balade/core` and
+`@balade/viewer` together, so a preview's `@balade/core` dependency resolves to
+the same commit.
 
 `--pnpm` packs through the same package manager as `package:smoke`. Balade is a
 binary, so `--bin` makes the comment show the direct `npx` command;
@@ -1732,7 +1734,7 @@ The exported validator and served validator therefore cannot diverge on body
 acceptance. `clarification.ts` owns JSON-framed task context, shared by Pi and
 external hosts; hosts may supply walkthrough source or the stored payload.
 
-`balade/answers` is a portable entry alongside the Node library. It exports the
+`@balade/core` (`src/core.ts`) is the portable entry alongside the Node library. It exports the
 payload Promise checker, Effect checker and context builder without loading Pi,
 filesystem adapters or Node built-ins. The npm smoke bundles and executes this
 entry while rejecting Node imports. The repository API remains on `balade`,
@@ -1740,3 +1742,56 @@ where the live layer is wired. File reads moved to `walkthrough/source.ts` so
 the answer entry can share typed read failures without importing the document
 compiler's Node hashing dependency. This adds no payload version or rendering
 sink and leaves thread storage and agent execution with the host.
+
+## The viewer and contract ship as lean packages over one source tree
+
+Decided on [#175](https://github.com/basaltbytes/balade/issues/175). The
+repository is a pnpm workspace publishing three packages at one fixed version
+(`.changeset/config.json`): `balade`, `@balade/core` and `@balade/viewer`.
+`packages/core` and `packages/viewer` hold only a manifest and build
+configuration. Their sources stay in `src/` and `app/src/`: `src/core.ts` is the
+core entry and `app/src/viewer-entry.ts` the viewer entry, so the served app,
+the single-file export and the packages render from the same modules and the
+src/ dependency law is unchanged.
+
+`@balade/core` bundles the payload contract and the payload answer check into
+one ESM file with `effect` as a peer (`^4.0.0`) and Markdoc and `yaml` as
+dependencies; the frontmatter parser reached by the fragment compiler needs
+`yaml`. `@balade/viewer` bundles balade's own modules, including its copy of the
+contract decoders, and leaves React, React DOM and Effect as peers. Shiki, its
+grammars and themes, Mermaid and Octicons are dependencies with caret ranges:
+a host that already uses them resolves one copy, and its bundler emits the
+curated grammar map and Mermaid as dynamic chunks only when reached. Bundling
+them, as 0.18.0 did, shipped 132 files and 7.9 MB that no host bundler could
+dedupe. `@git-diff-view/react` is the exception and stays bundled: its core
+imports `lowlight`'s full highlight.js registry eagerly, and only this build's
+`balade-diff-languages` adapter replaces it with an empty one.
+
+Declarations ship only for what a consumer can reach. The viewer build emits
+tsc declarations, then `packages/viewer/declarations.mjs` copies the files
+reachable from `viewer.d.ts`, resolves the contract types to `@balade/core`
+and fails if any reachable file lies outside `app/src/`. Exported decoders and
+Effect functions carry explicit types: an inferred `Effect.fn` or
+`Schema.decodeUnknownEffect` result expanded the full payload schema into
+`qa-parser.d.ts` (5.4 MB), `data/host.d.ts` (3.6 MB) and
+`walkthrough/answer.d.ts` (643 KB). The packed viewer measured 143 KB with
+12 KB of declarations; core measured 39 KB with 212 KB of declarations, most
+of them the schema that `types.ts` derives from.
+
+`balade` depends on `@balade/core` and takes `@balade/viewer` as an optional
+peer. A hard viewer dependency would add about 185 MB of Mermaid, Shiki and
+React (auto-installed peers) to every `npx balade`. `balade/contract`,
+`balade/answers`, `balade/viewer` and `balade/viewer.css` are hand-written
+re-exports in `deprecated/` for one minor version; `balade/viewer` resolves
+only when the host installs `@balade/viewer`. The CLI compiles its own copy of
+the contract modules, so `instanceof` checks between errors from `balade` and
+classes imported from `@balade/core` do not hold; match on `_tag`.
+
+`release.yml` runs the gate once, publishes the packages with `pnpm -r
+publish`, which skips versions already on npm, and then publishes `balade`.
+A new package's first version is published by hand so trusted publishing can
+be configured for it. The single-file export does not change with this
+packaging; the stable Effect runtime added 20,858 bytes to it (6,689,663 to
+6,710,521). What would move this: a host needing the contract decoders as a
+shared runtime with the viewer, which would make the viewer import them from
+`@balade/core` instead of bundling its own copy.

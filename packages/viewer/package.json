@@ -1,0 +1,57 @@
+{
+  "name": "@balade/viewer",
+  "version": "0.18.0",
+  "description": "The balade walkthrough viewer as a React component, for applications that render compiled walkthrough payloads.",
+  "keywords": [
+    "balade",
+    "code-review",
+    "pull-request",
+    "react",
+    "walkthrough"
+  ],
+  "homepage": "https://balade.dev",
+  "bugs": {
+    "url": "https://github.com/basaltbytes/balade/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/basaltbytes/balade.git",
+    "directory": "packages/viewer"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/viewer.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./viewer.css": "./dist/viewer.css",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json && node declarations.mjs"
+  },
+  "dependencies": {
+    "@balade/core": "workspace:*",
+    "@primer/octicons-react": "^19.32.0",
+    "@shikijs/langs": "^4.4.1",
+    "@shikijs/themes": "^4.4.1",
+    "mermaid": "^11.16.1",
+    "shiki": "^4.4.1"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

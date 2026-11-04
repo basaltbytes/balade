@@ -28,9 +28,36 @@ do not create versions, tags or GitHub Releases.
    The dispatch is explicit (`gh workflow run release.yml --ref v<version>`)
    because tags pushed with the default `GITHUB_TOKEN` never trigger another
    workflow, and the repository holds no long-lived token that would.
-4. `release.yml` publishes to npm via OIDC trusted publishing —
-   `prepublishOnly` runs the full quality gate including the packed-tarball
-   smoke test — and creates the GitHub Release on the tag.
+4. `release.yml` runs the full quality gate once (`pnpm release:check`,
+   including the packed-tarball smoke test of all three packages), publishes
+   `@balade/core` and `@balade/viewer`, then `balade`, to npm via OIDC trusted
+   publishing, and creates the GitHub Release on the tag.
+
+## Packages
+
+The workspace publishes `balade` (the CLI and its library entry),
+`@balade/core` (`packages/core`) and `@balade/viewer` (`packages/viewer`).
+They share one version: `.changeset/config.json` lists them as a fixed group,
+so a changeset for any of them bumps all three. Pick the packages a change
+affects when running `pnpm changeset`.
+
+A new package's first version is published by hand, because npm accepts a
+trusted publisher only for a package that exists:
+
+1. Make sure the `@balade` npm organization exists and you own it.
+2. Before merging the Version Packages PR that first versions the package,
+   check out its branch (`changeset-release/main`), run
+   `pnpm install --frozen-lockfile && pnpm build`, then
+   `pnpm --filter <name> publish --access public --no-git-checks --ignore-scripts --otp <code>`.
+3. On npmjs.com, add `basaltbytes/balade` and `release.yml` as the package's
+   trusted publisher.
+4. Merge the Version Packages PR. `pnpm -r publish` in `release.yml` skips a
+   version npm already has, so the hand-published package is not retried. If
+   `release.yml` already ran and failed on the new package, publish it by hand
+   from the tag instead and re-run `release.yml` on the tag.
+
+After every release, check the published versions on the registry
+(`npm view <name> version`), not only the workflow log.
 
 ## Boundaries
 
@@ -46,4 +73,6 @@ do not create versions, tags or GitHub Releases.
   publishes whatever version the chosen ref carries.
 - Preview publication runs only for `pull_request` events, with the CI
   workflow's read-only token and no npm credentials. A newer commit cancels an
-  older preview job for the same pull request.
+  older preview job for the same pull request. All three packages publish to
+  pkg.pr.new together, so a preview of `balade` resolves the matching
+  `@balade/core` preview.

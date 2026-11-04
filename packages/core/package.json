@@ -1,0 +1,48 @@
+{
+  "name": "@balade/core",
+  "version": "0.18.0",
+  "description": "The balade walkthrough payload contract and portable clarification-answer check, for browsers and servers.",
+  "keywords": [
+    "balade",
+    "code-review",
+    "effect",
+    "pull-request",
+    "walkthrough"
+  ],
+  "homepage": "https://balade.dev",
+  "bugs": {
+    "url": "https://github.com/basaltbytes/balade/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/basaltbytes/balade.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/types/src/core.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@markdoc/markdoc": "0.5.8",
+    "yaml": "^2.9.0"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0"
+  }
+}

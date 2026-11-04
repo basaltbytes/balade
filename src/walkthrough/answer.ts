@@ -40,10 +40,12 @@ export interface AnswerContext<E, R> {
 }
 
 /** Keep parsing, reference discovery and block diagnostics identical for every adapter. */
-export const checkAnswerWithContext = Effect.fn("checkAnswerWithContext")(function* <E, R>(
+export const checkAnswerWithContext: <E, R>(
   body: string,
   context: AnswerContext<E, R>,
-) {
+) => Effect.Effect<Result.Result<readonly [Block, ...Block[]], FragmentInvalid>, E, R> = Effect.fn(
+  "checkAnswerWithContext",
+)(function* <E, R>(body: string, context: AnswerContext<E, R>) {
   const parsed = parseFragment(body, context.file, context.preset);
   if (Result.isFailure(parsed)) return Result.fail(parsed.failure);
   const resolved = yield* context.resolve(parsed.success.references);

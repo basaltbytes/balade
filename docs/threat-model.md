@@ -187,7 +187,7 @@ they describe.
 
 - Both payload entry points decode with `onExcessProperty: "error"` against
   the versioned payload schema; `window.__BALADE__` is typed `unknown`.
-  The browser-safe `decodePayload` exported as `balade/contract` uses the same
+  The browser-safe `decodePayload` exported by `@balade/core` uses the same
   schema for stored payloads and names unsupported safe integer versions with
   `PayloadFormatUnsupported` before decoding their shape. Malformed versions,
   including unsafe integers, remain typed `PayloadInvalid` errors.
@@ -197,7 +197,7 @@ they describe.
 
 **Embedded host boundary**
 
-- `balade/viewer` imports no browser fetch or storage layer. All review and Q&A
+- `@balade/viewer` imports no browser fetch or storage layer. All review and Q&A
   IO passes through the supplied `WalkthroughHost`; omitting it leaves marks in
   memory and removes clarification controls. The standalone app supplies its
   HTTP/localStorage adapter through that same boundary.

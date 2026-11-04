@@ -7,9 +7,9 @@ import {
   WalkthroughView,
   ClarificationAgentUnavailable,
   ClarificationGenerationChanged,
-} from "balade/viewer";
+} from "@balade/viewer";
 import "./host.css";
-import "balade/viewer.css";
+import "@balade/viewer/viewer.css";
 
 const attack =
   '<script>globalThis.pwned=true</script><img src="https://evil.example/pixel" onerror="globalThis.pwned=true">';

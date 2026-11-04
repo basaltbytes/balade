@@ -332,7 +332,7 @@ pass the full base and head commit SHAs available in the clone:
 
 ```ts
 import { compilePayload } from "balade";
-import { decodePayload, PAYLOAD_FORMAT } from "balade/contract";
+import { decodePayload, PAYLOAD_FORMAT } from "@balade/core";
 import { Effect } from "effect";
 
 const compiled = await compilePayload({
@@ -388,8 +388,9 @@ balade build review.md --format json --base "$BASE_SHA" --head "$HEAD_SHA" --out
 JSON builds work without the HTML renderer bundle. They contain the same source
 and metadata as HTML exports, including full file contents at both revisions.
 
-`balade/contract` is safe to import in a browser bundle. Its `decodePayload`
-returns an Effect that strictly checks the payload and requires an absolute
+The payload contract is published separately as `@balade/core`. It is safe to
+import in a browser bundle and depends on Effect 4 (a peer), Markdoc and YAML,
+not on the CLI or its agent runtime. Its `decodePayload` returns an Effect that strictly checks the payload and requires an absolute
 HTTP or HTTPS `pr.url`. Another safe integer format version fails with
 `PayloadFormatUnsupported`; malformed data, including unsafe integers, fails with
 `PayloadInvalid`.
@@ -430,12 +431,11 @@ IO and resolution failures reject with typed errors; invalid answer bodies
 return `Rejected`. `checkAnswerEffect` returns the same result as an Effect;
 provide `liveLayer` for a repository source.
 
-For a host that stores payloads, import the portable entry. It uses no Node
-built-ins or repository services:
+For a host that stores payloads, install `@balade/core`. It uses no Node
+built-ins, repository services or agent runtime:
 
 ```ts
-import { checkAnswer, clarificationContext } from "balade/answers";
-import { decodePayload } from "balade/contract";
+import { checkAnswer, clarificationContext, decodePayload } from "@balade/core";
 import { Effect } from "effect";
 
 const payload = await Effect.runPromise(decodePayload(storedJson));
@@ -462,11 +462,16 @@ answers exit with status 1; repair the answer and check again.
 
 ## React viewer
 
-Render a compiled payload inside your React 19 application:
+Install `@balade/viewer` with React 19, React DOM 19 and Effect 4, then render a
+compiled payload:
+
+```sh
+npm install @balade/viewer react react-dom effect
+```
 
 ```tsx
-import { WalkthroughView } from "balade/viewer";
-import "balade/viewer.css";
+import { WalkthroughView } from "@balade/viewer";
+import "@balade/viewer/viewer.css";
 
 <WalkthroughView payload={payload} />;
 ```
@@ -475,8 +480,16 @@ Supply a `WalkthroughHost` to persist review marks or answer clarification
 questions. `Walkthrough.Root`, `Header`, `Nav`, `Sections` and `Clarifications`
 let you arrange the review in your own layout. `Diff` renders a pull request's
 changed files in the same diff browser without a walkthrough. Each instance
-keeps its browser state and CSS scoped to the viewer. See [the integration guide](docs/viewer.md)
-for host adapters, navigation, theme tokens and CSP requirements.
+keeps its browser state and CSS scoped to the viewer. Shiki, Mermaid, Octicons,
+Effect and React are dependencies or peers rather than bundled copies, so your
+bundler shares them with the rest of the application. See
+[the integration guide](docs/viewer.md) for host adapters, navigation, theme
+tokens and CSP requirements.
+
+`balade/viewer`, `balade/viewer.css`, `balade/contract` and `balade/answers`
+still re-export the new packages in this release and will be removed in the
+next minor version. `balade/viewer` now needs `@balade/viewer` installed
+alongside `balade`.
 
 ## CI
 
