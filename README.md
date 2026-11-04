@@ -473,8 +473,9 @@ import "balade/viewer.css";
 
 Supply a `WalkthroughHost` to persist review marks or answer clarification
 questions. `Walkthrough.Root`, `Header`, `Nav`, `Sections` and `Clarifications`
-let you arrange the review in your own layout. Each instance keeps its browser
-state and CSS scoped to the viewer. See [the integration guide](docs/viewer.md)
+let you arrange the review in your own layout. `Diff` renders a pull request's
+changed files in the same diff browser without a walkthrough. Each instance
+keeps its browser state and CSS scoped to the viewer. See [the integration guide](docs/viewer.md)
 for host adapters, navigation, theme tokens and CSP requirements.
 
 ## CI

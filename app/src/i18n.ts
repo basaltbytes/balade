@@ -86,6 +86,13 @@ export interface Strings {
     missing: (path: string) => string;
     renamedFrom: (path: string) => string;
     status: Record<"A" | "M" | "D" | "R", string>;
+    omitted: string;
+    truncated: string;
+    unchanged: string;
+    test: string;
+    generated: string;
+    open: (path: string) => string;
+    unreadable: string;
   };
 
   /* widget chrome */
@@ -200,6 +207,13 @@ const en: Strings = {
     missing: (path) => `${path} is not among the changed files of this pull request.`,
     renamedFrom: (path) => `renamed from ${path}`,
     status: { A: "added", M: "modified", D: "deleted", R: "renamed" },
+    omitted: "No diff available for this file.",
+    truncated: "This diff is truncated; later changes to this file are not shown.",
+    unchanged: "No content changes.",
+    test: "test",
+    generated: "generated",
+    open: (path) => `Open ${path}`,
+    unreadable: "The file changes do not match the format this component reads.",
   },
 
   fieldsHead: ["Field", "Kind", "Note"],
@@ -313,6 +327,14 @@ const fr: Strings = {
     missing: (path) => `${path} ne fait pas partie des fichiers modifiés de cette pull request.`,
     renamedFrom: (path) => `renommé depuis ${path}`,
     status: { A: "ajouté", M: "modifié", D: "supprimé", R: "renommé" },
+    omitted: "Aucun diff disponible pour ce fichier.",
+    truncated:
+      "Ce diff est tronqué ; les modifications suivantes de ce fichier ne sont pas affichées.",
+    unchanged: "Aucune modification de contenu.",
+    test: "test",
+    generated: "généré",
+    open: (path) => `Ouvrir ${path}`,
+    unreadable: "Les modifications de fichiers ne correspondent pas au format lu par ce composant.",
   },
 
   fieldsHead: ["Champ", "Type", "Note"],

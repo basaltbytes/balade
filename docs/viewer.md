@@ -102,6 +102,74 @@ title, HTML attributes, URL and history to your app; use `onSectionChange` if yo
 want to update your router. Section IDs include an instance prefix. For separate
 server-rendered React roots, give each root a distinct React `identifierPrefix`.
 
+## Show changed files without a walkthrough
+
+`Diff` renders a list of changed files with the same diff browser as a
+walkthrough's files sections. It needs no payload:
+
+```tsx
+import { Diff, type DiffFile } from "balade/viewer";
+import "balade/viewer.css";
+
+// `GitHubFile` is an item from GitHub's "List pull request files" endpoint.
+function toDiffFile(file: GitHubFile): DiffFile {
+  const status =
+    file.status === "added" || file.status === "removed" || file.status === "renamed"
+      ? file.status
+      : "modified";
+  return {
+    path: file.filename,
+    ...(file.previous_filename !== undefined ? { oldPath: file.previous_filename } : {}),
+    status,
+    additions: file.additions,
+    deletions: file.deletions,
+    patch:
+      file.patch !== undefined
+        ? { kind: "text", text: file.patch }
+        : status === "renamed" && file.changes === 0
+          ? { kind: "text", text: "" }
+          : { kind: "omitted" },
+    test: /(^|\/)tests?\//.test(file.filename),
+  };
+}
+
+export function Changes({ files }: { files: GitHubFile[] }) {
+  const navigate = useNavigate(); // your router's navigation
+  return (
+    <Diff
+      files={files.map(toDiffFile)}
+      fileHref={(file) => `/files/${encodeURIComponent(file.path)}`}
+      onFileOpen={(file, event) => {
+        event.preventDefault();
+        navigate(`/files/${encodeURIComponent(file.path)}`);
+      }}
+    />
+  );
+}
+```
+
+Each `DiffFile` has a `patch`:
+
+- `{ kind: "text", text }` holds the unified diff, with or without the
+  `---`/`+++` header. Add `truncated: true` when the text stops early; the row
+  shows the partial diff and a notice. Text with no hunk, such as a pure rename,
+  shows "No content changes".
+- `{ kind: "binary" }` shows a binary-file notice.
+- `{ kind: "omitted" }` shows that no diff is available, for example when GitHub
+  leaves out the patch of a large file.
+
+Files start collapsed. Pass `defaultExpanded` to open every file except those
+marked `generated`. `test` and `generated` add a label to the file's row.
+`fileHref` and `onFileOpen` add a link to the host's own file view. Links render
+only for HTTP, HTTPS and relative URLs. Without a usable `fileHref`, the
+callback gets a button instead. Both callbacks receive the objects you passed.
+`lang` sets the chrome language, `"en"` by default, and `className` and `style`
+apply to the root, as for `Walkthrough.Root`.
+
+The component checks `files` before rendering, and shows an error for data that
+does not match `DiffFile`. It has no review marks or clarification controls,
+and it makes no requests.
+
 ## Theme and browser policy
 
 The stylesheet scopes its selectors to `.balade-viewer` and imports no Tailwind

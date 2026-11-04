@@ -15,6 +15,7 @@ import { StringsProvider, useStrings } from "./ui/strings";
 import { WalkthroughHeader, WalkthroughNav, WalkthroughSections } from "./ui/walkthrough-parts";
 import { ViewportOverlay, ViewportProvider } from "./ui/viewport";
 
+export { Diff, type DiffProps, type DiffFile, type DiffPatch } from "./diff";
 export type { WalkthroughHost } from "./host";
 export { ClarificationAgentUnavailable, ClarificationGenerationChanged } from "./host";
 export type {
