@@ -351,7 +351,11 @@ export const PullUrl = Schema.String.check(
     },
     {
       message: "Expected an absolute HTTP or HTTPS URL",
-      arbitrary: { candidate: { make: (fc) => fc.webUrl() } },
+      arbitraryConstraint: {
+        patterns: [
+          { source: "^https?://[a-z]{1,12}\\.[a-z]{2,6}(/[a-z0-9-]{1,12}){0,3}$", flags: "" },
+        ],
+      },
     },
   ),
 );
@@ -574,7 +578,7 @@ export const CheckReport = Schema.Struct({
   ranges: Schema.Array(RangeEcho),
 });
 
-export const Commit = Schema.String.pipe(Schema.check(Schema.isPattern(/^[0-9a-f]{7,40}$/i)));
+export const Commit = Schema.String.pipe(Schema.check(Schema.isPattern(/^[0-9a-fA-F]{7,40}$/)));
 
 export const Frontmatter = Schema.Struct({
   walkthrough: Schema.Literal(1),

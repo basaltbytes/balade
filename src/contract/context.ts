@@ -60,7 +60,7 @@ export type PullHeader = typeof PullHeader.Type;
    module boundaries by resolution and discovery, translated at the command
    boundaries that can explain them. */
 
-export class CommandFailed extends Schema.TaggedErrorClass<CommandFailed>()("CommandFailed", {
+export class CommandFailed extends Schema.TaggedError<CommandFailed>()("CommandFailed", {
   file: Schema.String,
   args: Schema.Array(Schema.String),
   cwd: Schema.String,
@@ -68,7 +68,7 @@ export class CommandFailed extends Schema.TaggedErrorClass<CommandFailed>()("Com
   code: Schema.Finite,
 }) {}
 
-export class NotARepository extends Schema.TaggedErrorClass<NotARepository>()("NotARepository", {
+export class NotARepository extends Schema.TaggedError<NotARepository>()("NotARepository", {
   cwd: Schema.String,
 }) {
   get note(): string {
@@ -76,7 +76,7 @@ export class NotARepository extends Schema.TaggedErrorClass<NotARepository>()("N
   }
 }
 
-export class CommitUnresolvable extends Schema.TaggedErrorClass<CommitUnresolvable>()(
+export class CommitUnresolvable extends Schema.TaggedError<CommitUnresolvable>()(
   "CommitUnresolvable",
   { commit: Schema.String, file: Schema.String },
 ) {}

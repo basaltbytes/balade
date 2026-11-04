@@ -1,7 +1,7 @@
 /** Terminal interaction for the shared agent model configuration workflow. */
 
 import { Context, Effect, Layer } from "effect";
-import { Prompt } from "effect/unstable/cli";
+import { Prompt } from "effect/cli";
 import { AgentPresence, reportWaitingDuring } from "../presence.js";
 import {
   type AuthorModel,
@@ -40,7 +40,7 @@ export const terminalAgentModelManagerLive = Layer.effect(
     const interaction: AgentModelInteraction = {
       chooseLogin: (methods) =>
         Prompt.run(
-          Prompt.select({
+          Prompt.Select({
             message: "Log in to an agent provider",
             choices: methods.map((candidate) => ({
               title: `${candidate.providerName} — ${candidate.label}`,
@@ -62,7 +62,7 @@ export const terminalAgentModelManagerLive = Layer.effect(
         ),
       chooseModel: (models) =>
         Prompt.run(
-          Prompt.select({
+          Prompt.Select({
             message: "Choose the provider and model",
             choices: models.map((candidate) => ({
               title: `${candidate.providerName} — ${candidate.modelName}`,
@@ -107,7 +107,7 @@ function loginInteraction(context: Context.Context<Prompt.Environment>): LoginIn
 function loginPrompt(prompt: LoginPrompt) {
   if (prompt.type === "select" && prompt.options.length > 0) {
     return Prompt.run(
-      Prompt.select({
+      Prompt.Select({
         message: prompt.message,
         choices: prompt.options.map((option) => {
           const facets: ChoiceDescriptionFacet = {};
@@ -117,16 +117,16 @@ function loginPrompt(prompt: LoginPrompt) {
       }),
     );
   }
-  if (prompt.type === "select") return Prompt.run(Prompt.text({ message: prompt.message }));
+  if (prompt.type === "select") return Prompt.run(Prompt.String({ message: prompt.message }));
   const message =
     prompt.placeholder === undefined ? prompt.message : `${prompt.message} (${prompt.placeholder})`;
-  return Prompt.run(Prompt.text({ message }));
+  return Prompt.run(Prompt.String({ message }));
 }
 
 function loginSecretPrompt(prompt: LoginSecretPrompt) {
   const message =
     prompt.placeholder === undefined ? prompt.message : `${prompt.message} (${prompt.placeholder})`;
-  return Prompt.run(Prompt.password({ message }));
+  return Prompt.run(Prompt.Password({ message }));
 }
 
 function printLoginNotification(event: LoginNotification): void {

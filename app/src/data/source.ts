@@ -38,7 +38,7 @@ const decodeHeadDistance = Schema.decodeUnknownEffect(HeadDistance, {
   onExcessProperty: "error",
 });
 
-export class PayloadUnreadable extends Schema.TaggedErrorClass<PayloadUnreadable>()(
+export class PayloadUnreadable extends Schema.TaggedError<PayloadUnreadable>()(
   "PayloadUnreadable",
   {
     source: Schema.Literals(["baked", "served"]),
@@ -46,7 +46,7 @@ export class PayloadUnreadable extends Schema.TaggedErrorClass<PayloadUnreadable
   },
 ) {}
 
-export class PayloadFetchFailed extends Schema.TaggedErrorClass<PayloadFetchFailed>()(
+export class PayloadFetchFailed extends Schema.TaggedError<PayloadFetchFailed>()(
   "PayloadFetchFailed",
   {
     url: Schema.String,
@@ -54,7 +54,7 @@ export class PayloadFetchFailed extends Schema.TaggedErrorClass<PayloadFetchFail
   },
 ) {}
 
-export class PayloadLocationInvalid extends Schema.TaggedErrorClass<PayloadLocationInvalid>()(
+export class PayloadLocationInvalid extends Schema.TaggedError<PayloadLocationInvalid>()(
   "PayloadLocationInvalid",
   {
     source: Schema.Literals(["hash", "pathname"]),

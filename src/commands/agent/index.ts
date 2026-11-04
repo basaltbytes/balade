@@ -1,7 +1,7 @@
 /** `balade agent`: configure the provider and model used by every agent-powered feature. */
 
 import { Effect } from "effect";
-import { Command, Flag } from "effect/unstable/cli";
+import { Command, Flag } from "effect/cli";
 import {
   AgentModelManager,
   agentModelErrorMessage,
@@ -9,12 +9,12 @@ import {
 } from "../../agent/model.js";
 import { stdoutTheme, stopMessage, writeStdout } from "../../terminal.js";
 
-const provider = Flag.string("provider").pipe(
+const provider = Flag.String("provider").pipe(
   Flag.withDescription("Agent provider id; partial or unavailable selections open the picker"),
   Flag.optional,
 );
 
-const model = Flag.string("model").pipe(
+const model = Flag.String("model").pipe(
   Flag.withDescription("Agent model id; partial or unavailable selections open the picker"),
   Flag.optional,
 );

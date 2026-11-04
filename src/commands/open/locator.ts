@@ -24,7 +24,7 @@ import {
 import type { LocatedSelection } from "../../server/session.js";
 import { describeFailure } from "../../failure.js";
 
-export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughForPull>()(
+export class NoWalkthroughForPull extends Schema.TaggedError<NoWalkthroughForPull>()(
   "NoWalkthroughForPull",
   { number: Schema.Finite },
 ) {
@@ -37,7 +37,7 @@ export class NoWalkthroughForPull extends Schema.TaggedErrorClass<NoWalkthroughF
   }
 }
 
-export class PullSourceReadFailed extends Schema.TaggedErrorClass<PullSourceReadFailed>()(
+export class PullSourceReadFailed extends Schema.TaggedError<PullSourceReadFailed>()(
   "PullSourceReadFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {

@@ -58,12 +58,12 @@ export interface BuildNotRun {
 
 export type BuildOutcome = Built | BuildFailed | BuildNotRun;
 
-export class ExportBundleReadFailed extends Schema.TaggedErrorClass<ExportBundleReadFailed>()(
+export class ExportBundleReadFailed extends Schema.TaggedError<ExportBundleReadFailed>()(
   "ExportBundleReadFailed",
   { dir: Schema.String, file: Schema.String, cause: Schema.Defect() },
 ) {}
 
-export class ExportWriteFailed extends Schema.TaggedErrorClass<ExportWriteFailed>()(
+export class ExportWriteFailed extends Schema.TaggedError<ExportWriteFailed>()(
   "ExportWriteFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}

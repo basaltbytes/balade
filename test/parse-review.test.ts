@@ -22,7 +22,9 @@ describe("parseReviewState", () => {
     { expected: ReviewStateSchema },
     ({ expected }) =>
       Effect.gen(function* () {
-        expect(yield* parseReviewJson(JSON.stringify(expected))).toEqual(expected);
+        // JSON has no negative zero; compare against what the JSON edge can carry.
+        const serialized = JSON.stringify(expected);
+        expect(yield* parseReviewJson(serialized)).toEqual(JSON.parse(serialized));
       }),
   );
 

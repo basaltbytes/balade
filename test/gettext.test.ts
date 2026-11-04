@@ -1,14 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
-import { FastCheck } from "effect/testing";
+import { Arbitrary, Schema } from "effect";
 import { countEntries, parsePo, poLanguage } from "../src/walkthrough/gettext.js";
 
-const poEntries = FastCheck.uniqueArray(
-  FastCheck.tuple(
-    FastCheck.string({ minLength: 1, maxLength: 40 }),
-    FastCheck.string({ maxLength: 60 }),
-  ),
-  { selector: ([id]) => id, maxLength: 20 },
-);
+const poEntries = Arbitrary.array(
+  Arbitrary.all([
+    Arbitrary.schema(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(40))),
+    Arbitrary.schema(Schema.String.check(Schema.isMaxLength(60))),
+  ]),
+  { maxLength: 20 },
+  /* Catalog ids are unique; the last duplicate wins, as it does in `new Map`. */
+).pipe(Arbitrary.map((entries) => [...new Map(entries)]));
 
 describe("gettext", () => {
   const before = `msgid ""

@@ -55,7 +55,7 @@ describe("loadPayload", () => {
         }),
         () => Promise.reject(new Error("fetch should not be used")),
       ),
-    { fastCheck: { numRuns: 25 } },
+    { arbitrary: { runs: 25 } },
   );
 
   it.effect("loads and decodes a baked walkthrough", () =>

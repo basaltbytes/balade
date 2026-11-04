@@ -5,7 +5,7 @@
 
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
 
-export class PathResolutionFailed extends Schema.TaggedErrorClass<PathResolutionFailed>()(
+export class PathResolutionFailed extends Schema.TaggedError<PathResolutionFailed>()(
   "PathResolutionFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}

@@ -45,7 +45,7 @@ function stubBundle(): string {
 
 const json = { "content-type": "application/json" };
 
-class ServerExerciseFailed extends Schema.TaggedErrorClass<ServerExerciseFailed>()(
+class ServerExerciseFailed extends Schema.TaggedError<ServerExerciseFailed>()(
   "ServerExerciseFailed",
   { cause: Schema.Defect() },
 ) {}

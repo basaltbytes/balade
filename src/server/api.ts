@@ -25,52 +25,49 @@ import { PayloadCache, type PayloadCachePort } from "./cache.js";
 import { ServerRepo, type ServerRepoPort } from "./repo.js";
 import { QaWorkflow, type QaWorkflowError, type QaWorkflowPort } from "./qa.js";
 
-export class ApiPathRequired extends Schema.TaggedErrorClass<ApiPathRequired>()(
-  "ApiPathRequired",
-  {},
-) {}
+export class ApiPathRequired extends Schema.TaggedError<ApiPathRequired>()("ApiPathRequired", {}) {}
 
-export class ApiTargetNotServed extends Schema.TaggedErrorClass<ApiTargetNotServed>()(
+export class ApiTargetNotServed extends Schema.TaggedError<ApiTargetNotServed>()(
   "ApiTargetNotServed",
   { path: Schema.String },
 ) {}
 
-export class ApiWalkthroughUnavailable extends Schema.TaggedErrorClass<ApiWalkthroughUnavailable>()(
+export class ApiWalkthroughUnavailable extends Schema.TaggedError<ApiWalkthroughUnavailable>()(
   "ApiWalkthroughUnavailable",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}
 
-export class ApiReviewStateNotFound extends Schema.TaggedErrorClass<ApiReviewStateNotFound>()(
+export class ApiReviewStateNotFound extends Schema.TaggedError<ApiReviewStateNotFound>()(
   "ApiReviewStateNotFound",
   { path: Schema.String },
 ) {}
 
-export class ApiReviewStateInvalid extends Schema.TaggedErrorClass<ApiReviewStateInvalid>()(
+export class ApiReviewStateInvalid extends Schema.TaggedError<ApiReviewStateInvalid>()(
   "ApiReviewStateInvalid",
   { cause: Schema.Defect() },
 ) {}
 
-export class ApiReviewStateMismatch extends Schema.TaggedErrorClass<ApiReviewStateMismatch>()(
+export class ApiReviewStateMismatch extends Schema.TaggedError<ApiReviewStateMismatch>()(
   "ApiReviewStateMismatch",
   { requestPath: Schema.String, statePath: Schema.String },
 ) {}
 
-export class ApiReviewStateUnavailable extends Schema.TaggedErrorClass<ApiReviewStateUnavailable>()(
+export class ApiReviewStateUnavailable extends Schema.TaggedError<ApiReviewStateUnavailable>()(
   "ApiReviewStateUnavailable",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}
 
-export class ApiStampUnreadable extends Schema.TaggedErrorClass<ApiStampUnreadable>()(
+export class ApiStampUnreadable extends Schema.TaggedError<ApiStampUnreadable>()(
   "ApiStampUnreadable",
   { path: Schema.String },
 ) {}
 
-export class ApiStampUnresolvable extends Schema.TaggedErrorClass<ApiStampUnresolvable>()(
+export class ApiStampUnresolvable extends Schema.TaggedError<ApiStampUnresolvable>()(
   "ApiStampUnresolvable",
   { pin: Schema.String },
 ) {}
 
-export class ApiQaRequestInvalid extends Schema.TaggedErrorClass<ApiQaRequestInvalid>()(
+export class ApiQaRequestInvalid extends Schema.TaggedError<ApiQaRequestInvalid>()(
   "ApiQaRequestInvalid",
   { cause: Schema.Defect() },
 ) {}

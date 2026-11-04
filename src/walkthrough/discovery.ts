@@ -24,7 +24,7 @@ export interface Discovery {
   paths: string[];
 }
 
-export class WalkthroughReadFailed extends Schema.TaggedErrorClass<WalkthroughReadFailed>()(
+export class WalkthroughReadFailed extends Schema.TaggedError<WalkthroughReadFailed>()(
   "WalkthroughReadFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}

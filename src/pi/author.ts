@@ -190,27 +190,27 @@ export interface AuthorTurn {
   readonly usage: AuthorUsage;
 }
 
-export class AuthorDiscoveryFailed extends Schema.TaggedErrorClass<AuthorDiscoveryFailed>()(
+export class AuthorDiscoveryFailed extends Schema.TaggedError<AuthorDiscoveryFailed>()(
   "AuthorDiscoveryFailed",
   { cause: Schema.Defect() },
 ) {}
 
-export class AuthorPreferenceReadFailed extends Schema.TaggedErrorClass<AuthorPreferenceReadFailed>()(
+export class AuthorPreferenceReadFailed extends Schema.TaggedError<AuthorPreferenceReadFailed>()(
   "AuthorPreferenceReadFailed",
   { cause: Schema.Defect() },
 ) {}
 
-export class AuthorPreferenceWriteFailed extends Schema.TaggedErrorClass<AuthorPreferenceWriteFailed>()(
+export class AuthorPreferenceWriteFailed extends Schema.TaggedError<AuthorPreferenceWriteFailed>()(
   "AuthorPreferenceWriteFailed",
   { cause: Schema.Defect() },
 ) {}
 
-export class AuthorCredentialReadFailed extends Schema.TaggedErrorClass<AuthorCredentialReadFailed>()(
+export class AuthorCredentialReadFailed extends Schema.TaggedError<AuthorCredentialReadFailed>()(
   "AuthorCredentialReadFailed",
   { cause: Schema.Defect() },
 ) {}
 
-export class AuthorLogoutFailed extends Schema.TaggedErrorClass<AuthorLogoutFailed>()(
+export class AuthorLogoutFailed extends Schema.TaggedError<AuthorLogoutFailed>()(
   "AuthorLogoutFailed",
   {
     provider: AuthorProviderId,
@@ -218,23 +218,20 @@ export class AuthorLogoutFailed extends Schema.TaggedErrorClass<AuthorLogoutFail
   },
 ) {}
 
-export class LoginFailed extends Schema.TaggedErrorClass<LoginFailed>()("LoginFailed", {
+export class LoginFailed extends Schema.TaggedError<LoginFailed>()("LoginFailed", {
   provider: AuthorProviderId,
   method: Schema.Literals(["oauth", "api_key"]),
   reason: Schema.Literals(["oauth", "auth", "provider", "unknown"]),
 }) {}
 
-export class LoginCancelled extends Schema.TaggedErrorClass<LoginCancelled>()(
-  "LoginCancelled",
-  {},
-) {}
+export class LoginCancelled extends Schema.TaggedError<LoginCancelled>()("LoginCancelled", {}) {}
 
-export class AuthorRuntimeLoadFailed extends Schema.TaggedErrorClass<AuthorRuntimeLoadFailed>()(
+export class AuthorRuntimeLoadFailed extends Schema.TaggedError<AuthorRuntimeLoadFailed>()(
   "AuthorRuntimeLoadFailed",
   { cause: Schema.Defect() },
 ) {}
 
-export class AuthorModelUnavailable extends Schema.TaggedErrorClass<AuthorModelUnavailable>()(
+export class AuthorModelUnavailable extends Schema.TaggedError<AuthorModelUnavailable>()(
   "AuthorModelUnavailable",
   {
     provider: AuthorProviderId,
@@ -242,7 +239,7 @@ export class AuthorModelUnavailable extends Schema.TaggedErrorClass<AuthorModelU
   },
 ) {}
 
-export class AuthorSearchConfigurationFailed extends Schema.TaggedErrorClass<AuthorSearchConfigurationFailed>()(
+export class AuthorSearchConfigurationFailed extends Schema.TaggedError<AuthorSearchConfigurationFailed>()(
   "AuthorSearchConfigurationFailed",
   {
     file: Schema.String,
@@ -250,7 +247,7 @@ export class AuthorSearchConfigurationFailed extends Schema.TaggedErrorClass<Aut
   },
 ) {}
 
-export class AuthorSessionStartFailed extends Schema.TaggedErrorClass<AuthorSessionStartFailed>()(
+export class AuthorSessionStartFailed extends Schema.TaggedError<AuthorSessionStartFailed>()(
   "AuthorSessionStartFailed",
   {
     provider: AuthorProviderId,
@@ -259,7 +256,7 @@ export class AuthorSessionStartFailed extends Schema.TaggedErrorClass<AuthorSess
   },
 ) {}
 
-export class ProviderRequestFailed extends Schema.TaggedErrorClass<ProviderRequestFailed>()(
+export class ProviderRequestFailed extends Schema.TaggedError<ProviderRequestFailed>()(
   "ProviderRequestFailed",
   {
     provider: AuthorProviderId,
@@ -268,7 +265,7 @@ export class ProviderRequestFailed extends Schema.TaggedErrorClass<ProviderReque
   },
 ) {}
 
-export class DraftMalformed extends Schema.TaggedErrorClass<DraftMalformed>()("DraftMalformed", {
+export class DraftMalformed extends Schema.TaggedError<DraftMalformed>()("DraftMalformed", {
   detail: Schema.String,
 }) {}
 

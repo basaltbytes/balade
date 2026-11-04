@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Layer, Option, Path } from "effect";
+import { ByteSize, Effect, FileSystem, Layer, Option, Path } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { isContainedRepoRelativePath, repoRelative } from "../src/contract/paths.js";
 
@@ -10,14 +10,14 @@ const info = (ino: number): FileSystem.File.Info => ({
   mtime: Option.none(),
   atime: Option.none(),
   birthtime: Option.none(),
-  dev: 1,
-  ino: Option.some(ino),
+  dev: 1n,
+  ino: Option.some(BigInt(ino)),
   mode: 0,
   nlink: Option.none(),
   uid: Option.none(),
   gid: Option.none(),
   rdev: Option.none(),
-  size: FileSystem.Size(0),
+  size: ByteSize.bytes(0),
   blksize: Option.none(),
   blocks: Option.none(),
 });

@@ -4,7 +4,6 @@ import {
   Cause,
   Clock,
   Context,
-  Crypto,
   Effect,
   Exit,
   Layer,
@@ -13,6 +12,7 @@ import {
   Semaphore,
   type Scope,
 } from "effect";
+import { SecureRandom } from "effect/crypto";
 import {
   AgentModelManager,
   type AgentModelConfigurationError,
@@ -51,41 +51,40 @@ import { ServerRepo } from "./repo.js";
 const decodeThreadId = Schema.decodeUnknownEffect(QaThreadId);
 const decodeTurnId = Schema.decodeUnknownEffect(QaTurnId);
 
-export class QaWalkthroughUnavailable extends Schema.TaggedErrorClass<QaWalkthroughUnavailable>()(
+export class QaWalkthroughUnavailable extends Schema.TaggedError<QaWalkthroughUnavailable>()(
   "QaWalkthroughUnavailable",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}
 
-export class QaStateUnavailable extends Schema.TaggedErrorClass<QaStateUnavailable>()(
+export class QaStateUnavailable extends Schema.TaggedError<QaStateUnavailable>()(
   "QaStateUnavailable",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}
 
-export class QaSectionNotFound extends Schema.TaggedErrorClass<QaSectionNotFound>()(
+export class QaSectionNotFound extends Schema.TaggedError<QaSectionNotFound>()(
   "QaSectionNotFound",
   { sectionId: Schema.String },
 ) {}
 
-export class QaThreadNotFound extends Schema.TaggedErrorClass<QaThreadNotFound>()(
-  "QaThreadNotFound",
-  { threadId: QaThreadId },
-) {}
-
-export class QaThreadBusy extends Schema.TaggedErrorClass<QaThreadBusy>()("QaThreadBusy", {
+export class QaThreadNotFound extends Schema.TaggedError<QaThreadNotFound>()("QaThreadNotFound", {
   threadId: QaThreadId,
 }) {}
 
-export class QaAgentUnavailable extends Schema.TaggedErrorClass<QaAgentUnavailable>()(
+export class QaThreadBusy extends Schema.TaggedError<QaThreadBusy>()("QaThreadBusy", {
+  threadId: QaThreadId,
+}) {}
+
+export class QaAgentUnavailable extends Schema.TaggedError<QaAgentUnavailable>()(
   "QaAgentUnavailable",
   { reason: Schema.Literals(["setup-cancelled", "setup-failed"]) },
 ) {}
 
-export class QaIdentifierFailed extends Schema.TaggedErrorClass<QaIdentifierFailed>()(
+export class QaIdentifierFailed extends Schema.TaggedError<QaIdentifierFailed>()(
   "QaIdentifierFailed",
   { cause: Schema.Defect() },
 ) {}
 
-export class QaGenerationChanged extends Schema.TaggedErrorClass<QaGenerationChanged>()(
+export class QaGenerationChanged extends Schema.TaggedError<QaGenerationChanged>()(
   "QaGenerationChanged",
   { expected: QaGenerationSchema, actual: QaGenerationSchema },
 ) {}
@@ -167,7 +166,7 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
         const resolver = yield* ContextResolver;
         const clarifier = yield* WalkthroughClarifier;
         const agentModels = yield* AgentModelManager;
-        const crypto = yield* Crypto.Crypto;
+        const random = yield* SecureRandom.SecureRandom;
         const lock = yield* Semaphore.make(1);
         const reconciledGenerations = new Set<string>();
 
@@ -266,13 +265,13 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
           );
           yield* loadRequestPayload(path, request);
           const now = isoNow();
-          const questionId = yield* crypto.randomUUIDv4.pipe(
+          const questionId = yield* random.uuidV4().pipe(
             Effect.flatMap(decodeTurnId),
             Effect.mapError((cause) => new QaIdentifierFailed({ cause })),
           );
           const threadId =
             request.kind === "new"
-              ? yield* crypto.randomUUIDv4.pipe(
+              ? yield* random.uuidV4().pipe(
                   Effect.flatMap(decodeThreadId),
                   Effect.mapError((cause) => new QaIdentifierFailed({ cause })),
                 )
@@ -299,7 +298,7 @@ export class QaWorkflow extends Context.Service<QaWorkflow, QaWorkflowPort>()(
 
         return { agentStatus, read, ask } satisfies QaWorkflowPort;
       }),
-    );
+    ).pipe(Layer.provide(SecureRandom.layerWebCrypto));
   }
 }
 

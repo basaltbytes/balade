@@ -205,10 +205,15 @@ the pipeline green.
 Two things survive the supersession: diagnostics stay values (`CheckDiagnostic`
 is the product of `check`, not a failure — the error channel is for real
 failures), and pure parse/compile functions stay pure, orchestrated from Effect
-rather than wrapped in it. One version note: the pinned `effect@4.0.0-beta.102`
-(the current `beta` dist-tag) names the service API `Context.Service` —
-`ServiceMap` is later naming that most docs already use. Verify every API
-against the installed `.d.ts` under `node_modules/effect/dist/`.
+rather than wrapped in it. One version note: balade pins the stable
+`effect@4.1.2`. Stable 4.x renamed several beta APIs this code used:
+`Schema.TaggedError`, PascalCase constructors in `effect/cli` and `Config`
+(`Flag.String`, `Flag.Literals`, `Prompt.Select`), `effect/cli` and
+`effect/http` outside `unstable/`, `SecureRandom` in `effect/crypto`,
+`ByteSize` for sizes, and a native `Arbitrary` module in place of fast-check.
+A stable boolean flag fails when omitted, so every one carries
+`Flag.withDefault(false)`. The service API is `Context.Service`. Verify every
+API against the installed `.d.ts` under `node_modules/effect/dist/`.
 
 ## The renderer owns an instance; the application owns browser capabilities
 
@@ -675,14 +680,13 @@ Pi lazily (its root barrel loads TUI modules at import time), so `check`,
 `^22.22.2 || ^24.15.0 || >=26.0.0`, covering Pi and its locked production tree;
 Node 20 passed end of life on 2026-04-30.
 
-`@effect/platform-node-shared` is pinned as a direct dependency even though
-balade never imports it. `@effect/platform-node` declares it with a caret
-range, so a fresh npm install of the published package resolves the newest
-beta, whose `effect` peer pulls a second effect runtime into the tree and
-kills the CLI at startup (caught by the npm-package smoke job, 2026-08-04).
-The explicit pin makes npm dedupe onto the version balade's own `effect` pin
-matches. Bump it in lockstep with every effect-family bump; drop it when the
-Effect v4 packages stabilize their internal ranges.
+`@effect/platform-node-shared` is no longer pinned directly. During the beta,
+`@effect/platform-node` declared it with a caret range, so a fresh npm install
+resolved a newer beta whose `effect` peer pulled a second runtime into the tree
+and killed the CLI at startup (caught by the npm-package smoke job,
+2026-08-04). Stable `@effect/platform-node` depends on the matching
+`platform-node-shared` version exactly, so the workaround is retired. Bump the
+effect family in lockstep.
 
 Pi's 0.x SDK stops at two Balade-owned service boundaries:
 `WalkthroughAuthor` for generation, provider/model discovery and credential

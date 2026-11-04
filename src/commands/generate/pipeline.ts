@@ -48,7 +48,7 @@ const MAX_REPAIR_ATTEMPTS = 2;
 const RepairCause = Schema.Union([ProviderRequestFailed, DraftMalformed, DraftWriteFailed]);
 type RepairCause = typeof RepairCause.Type;
 
-export class RepairFailed extends Schema.TaggedErrorClass<RepairFailed>()("RepairFailed", {
+export class RepairFailed extends Schema.TaggedError<RepairFailed>()("RepairFailed", {
   file: Schema.String,
   report: CheckReportSchema,
   cause: RepairCause,

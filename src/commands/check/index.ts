@@ -1,7 +1,7 @@
 /** `balade check`: read flags, run the typed check Effect, print the report. */
 
 import { Effect, Option } from "effect";
-import { Argument, Command, Flag } from "effect/unstable/cli";
+import { Argument, Command, Flag } from "effect/cli";
 import {
   formatJson,
   formatText,
@@ -13,12 +13,14 @@ import {
 import { runCheck, type CheckOptions } from "../../walkthrough/checker.js";
 import { skillStalenessHints } from "./skill.js";
 
-const jsonFlag = Flag.boolean("json").pipe(Flag.withDescription("Emit the report as JSON"));
+const jsonFlag = Flag.Boolean("json").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Emit the report as JSON"),
+);
 
-const files = Argument.variadic(
-  Argument.string("file").pipe(
-    Argument.withDescription("Walkthrough file; omit to use every discovered walkthrough"),
-  ),
+const files = Argument.String("file").pipe(
+  Argument.withDescription("Walkthrough file; omit to use every discovered walkthrough"),
+  Argument.variadic(),
 );
 
 export const checkCommand = Command.make(
@@ -26,13 +28,13 @@ export const checkCommand = Command.make(
   {
     files,
     json: jsonFlag,
-    base: Flag.string("base").pipe(
+    base: Flag.String("base").pipe(
       Flag.withDescription(
         "Full base commit SHA; requires --head; skips gh and default-branch discovery",
       ),
       Flag.optional,
     ),
-    head: Flag.string("head").pipe(
+    head: Flag.String("head").pipe(
       Flag.withDescription("Full PR head commit SHA; requires --base"),
       Flag.optional,
     ),

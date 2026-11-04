@@ -1,11 +1,11 @@
 /** `balade answer check`: local validation of an external agent's Markdoc body. */
 import { Effect, FileSystem, Schema } from "effect";
-import { Argument, Command, Flag } from "effect/unstable/cli";
+import { Argument, Command, Flag } from "effect/cli";
 import { checkAnswerEffect, type AnswerCheckError } from "../../walkthrough/answer.js";
 import { loadErrorDiagnostic } from "../../walkthrough/pipeline.js";
 import { stopMessage, writeStderr, writeStdout } from "../../terminal.js";
 
-class AnswerFileReadFailed extends Schema.TaggedErrorClass<AnswerFileReadFailed>()(
+class AnswerFileReadFailed extends Schema.TaggedError<AnswerFileReadFailed>()(
   "AnswerFileReadFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}
@@ -19,13 +19,13 @@ function errorMessage(error: AnswerFileReadFailed | AnswerCheckError): string {
 const checkCommand = Command.make(
   "check",
   {
-    file: Argument.string("answer.md"),
-    walkthrough: Flag.string("walkthrough").pipe(
+    file: Argument.String("answer.md"),
+    walkthrough: Flag.String("walkthrough").pipe(
       Flag.withDescription("Walkthrough file carrying the pinned commit and preset"),
     ),
-    base: Flag.string("base").pipe(Flag.withDescription("Full base commit SHA")),
-    head: Flag.string("head").pipe(Flag.withDescription("Full PR head commit SHA")),
-    format: Flag.choice("format", ["text", "json"]).pipe(Flag.withDefault("text")),
+    base: Flag.String("base").pipe(Flag.withDescription("Full base commit SHA")),
+    head: Flag.String("head").pipe(Flag.withDescription("Full PR head commit SHA")),
+    format: Flag.Literals("format", ["text", "json"]).pipe(Flag.withDefault("text")),
   },
   (config) =>
     Effect.gen(function* () {

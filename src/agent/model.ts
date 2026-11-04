@@ -17,12 +17,12 @@ import {
   type WalkthroughAuthorPort,
 } from "../pi/author.js";
 
-export class NoProviderAuthenticated extends Schema.TaggedErrorClass<NoProviderAuthenticated>()(
+export class NoProviderAuthenticated extends Schema.TaggedError<NoProviderAuthenticated>()(
   "NoProviderAuthenticated",
   { requested: Schema.String },
 ) {}
 
-export class AgentModelSelectionCancelled extends Schema.TaggedErrorClass<AgentModelSelectionCancelled>()(
+export class AgentModelSelectionCancelled extends Schema.TaggedError<AgentModelSelectionCancelled>()(
   "AgentModelSelectionCancelled",
   {},
 ) {}
@@ -31,7 +31,7 @@ export class AgentModelSelectionCancelled extends Schema.TaggedErrorClass<AgentM
  * Authenticated models exist, but none is the one named. `available` lists
  * what a caller could name instead.
  */
-export class AgentModelUnresolved extends Schema.TaggedErrorClass<AgentModelUnresolved>()(
+export class AgentModelUnresolved extends Schema.TaggedError<AgentModelUnresolved>()(
   "AgentModelUnresolved",
   { requested: Schema.String, available: Schema.Array(AuthorModelSchema) },
 ) {}

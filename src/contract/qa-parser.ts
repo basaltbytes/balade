@@ -22,20 +22,20 @@ const decodeQaAgentStatus = Schema.decodeUnknownEffect(QaAgentStatusSchema, {
   onExcessProperty: "error",
 });
 
-export class QaJsonInvalid extends Schema.TaggedErrorClass<QaJsonInvalid>()("QaJsonInvalid", {
+export class QaJsonInvalid extends Schema.TaggedError<QaJsonInvalid>()("QaJsonInvalid", {
   cause: Schema.Defect(),
 }) {}
 
-export class QaStateInvalid extends Schema.TaggedErrorClass<QaStateInvalid>()("QaStateInvalid", {
+export class QaStateInvalid extends Schema.TaggedError<QaStateInvalid>()("QaStateInvalid", {
   cause: Schema.Defect(),
 }) {}
 
-export class QaAskRequestInvalid extends Schema.TaggedErrorClass<QaAskRequestInvalid>()(
+export class QaAskRequestInvalid extends Schema.TaggedError<QaAskRequestInvalid>()(
   "QaAskRequestInvalid",
   { cause: Schema.Defect() },
 ) {}
 
-export class QaAgentStatusInvalid extends Schema.TaggedErrorClass<QaAgentStatusInvalid>()(
+export class QaAgentStatusInvalid extends Schema.TaggedError<QaAgentStatusInvalid>()(
   "QaAgentStatusInvalid",
   { cause: Schema.Defect() },
 ) {}

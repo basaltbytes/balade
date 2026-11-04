@@ -5,7 +5,7 @@ import { PAYLOAD_FORMAT, Payload } from "./schema.js";
 export { PAYLOAD_FORMAT } from "./schema.js";
 export type * from "./types.js";
 
-export class PayloadFormatUnsupported extends Schema.TaggedErrorClass<PayloadFormatUnsupported>()(
+export class PayloadFormatUnsupported extends Schema.TaggedError<PayloadFormatUnsupported>()(
   "PayloadFormatUnsupported",
   { format: Schema.Int },
 ) {
@@ -14,7 +14,7 @@ export class PayloadFormatUnsupported extends Schema.TaggedErrorClass<PayloadFor
   }
 }
 
-export class PayloadInvalid extends Schema.TaggedErrorClass<PayloadInvalid>()("PayloadInvalid", {
+export class PayloadInvalid extends Schema.TaggedError<PayloadInvalid>()("PayloadInvalid", {
   cause: Schema.Defect(),
 }) {}
 

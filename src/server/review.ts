@@ -33,7 +33,7 @@ interface ReviewSessionStarted {
   readonly url: string;
 }
 
-export class ReviewServerFailed extends Schema.TaggedErrorClass<ReviewServerFailed>()(
+export class ReviewServerFailed extends Schema.TaggedError<ReviewServerFailed>()(
   "ReviewServerFailed",
   { port: Schema.Finite, cause: Schema.Defect() },
 ) {}

@@ -7,7 +7,7 @@
 import { spawn } from "node:child_process";
 import { Context, Effect, Layer, Schema } from "effect";
 
-export class BrowserLaunchFailed extends Schema.TaggedErrorClass<BrowserLaunchFailed>()(
+export class BrowserLaunchFailed extends Schema.TaggedError<BrowserLaunchFailed>()(
   "BrowserLaunchFailed",
   { url: Schema.String, reason: Schema.String },
 ) {}

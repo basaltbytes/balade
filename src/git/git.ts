@@ -87,7 +87,7 @@ const decodePullRequest = Schema.decodeUnknownEffect(PullRequestResponse, {
 });
 const decodeRepositoryUrl = Schema.decodeUnknownResult(Schema.URLFromString);
 
-class PullRepositoryUrlInvalid extends Schema.TaggedErrorClass<PullRepositoryUrlInvalid>()(
+class PullRepositoryUrlInvalid extends Schema.TaggedError<PullRepositoryUrlInvalid>()(
   "PullRepositoryUrlInvalid",
   { url: Schema.String, reason: Schema.String },
 ) {}
