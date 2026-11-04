@@ -204,6 +204,11 @@ they describe.
 - Root strictly decodes payloads before any sink. Host review and Q&A responses,
   including subscription updates and answer blocks, pass through the canonical
   parsers; Q&A state must match the displayed walkthrough, PR and commit.
+- `Diff` checks host files against its schema before any sink and renders
+  paths and patch text through the same React text and diff-view sinks as the
+  walkthrough. Host `fileHref` values become links only when they resolve to
+  HTTP or HTTPS against a placeholder base, so a `javascript:` or `data:` link
+  built from an untrusted path is dropped (`app/src/data/diff-files.ts`).
 - Navigation, selection listeners and observers are rooted in the instance or
   its explicit scroll container. IDs carry a React instance prefix; renderer
   components never change title, HTML attributes, history or document overflow.

@@ -258,6 +258,30 @@ bundled grammars. The package browser smoke test exercises both Shiki and diff
 rendering from the packed ESM entry, alongside a host with another Effect major.
 This keeps the single-file export smaller than the preceding build.
 
+## `Diff` and `{% files %}` share one file browser
+
+Decided on [#172](https://github.com/basaltbytes/balade/issues/172). Hosts show a
+pull request's changed files before a walkthrough exists, so `balade/viewer`
+exports `Diff`, which takes `DiffFile` values instead of a payload.
+`app/src/widgets/file-browser.tsx` owns the browser frame and the file row. Both
+`Diff` and the walkthrough's `Files` map their input to the same `DiffRow`
+(`app/src/data/diff-files.ts`), so the two renderers cannot drift. `Files` adds
+the walkthrough-only parts as row slots: authored groups, missing-path rows, the
+section link, the author's note and the Viewed checkbox.
+
+`DiffFile.patch` is a tagged union of `text` (with an optional `truncated`
+flag), `binary` and `omitted`, because GitHub leaves out patches for both binary
+and large files and a host may cut a patch itself. A text patch with no hunk
+renders a "No content changes" notice in both renderers, replacing the empty
+diff view that a pure rename or an empty new file used to show. Rows highlight
+through the path's language from `langOf`, the same mapping the CLI uses.
+
+`Diff` validates `files` with Effect Schema, as `Walkthrough.Root` validates its
+payload, but keeps the host's own objects after validation so callbacks receive
+them by identity. Excess properties are allowed because host objects usually
+carry more fields. Host links render only for HTTP, HTTPS and relative URLs.
+With `defaultExpanded`, generated files stay collapsed, as on GitHub.
+
 ## Toned callouts derive their chrome from the tone
 
 A `key` or `warn` callout renders through the app's shared banner shape: a

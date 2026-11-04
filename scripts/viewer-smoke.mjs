@@ -111,6 +111,21 @@ try {
   );
   assert.equal(await page.evaluate(() => globalThis.pwned), undefined);
 
+  // The standalone diff draws host files with the same highlighter and no walkthrough.
+  const diff = page.locator("#diff");
+  await diff.locator('[data-theme="dark"] span[style*="color"]').first().waitFor();
+  assert.equal(await diff.locator(".file-head").count(), 3);
+  assert.ok(await diff.getByText("No content changes.", { exact: true }).count());
+  assert.ok(await diff.getByText("Binary file — no diff to show.", { exact: true }).count());
+  assert.equal(await diff.locator('script, img, image, b, a[href^="javascript:"]').count(), 0);
+  await diff.getByRole("link", { name: "Open example.ts", exact: true }).click();
+  await diff.getByRole("button", { name: "Open src/<b>hostile</b>.ts", exact: true }).click();
+  assert.deepEqual(await page.evaluate(() => globalThis.viewerFixture.openedFiles()), [
+    "example.ts",
+    "src/<b>hostile</b>.ts",
+  ]);
+  assert.deepEqual(await hostState(), before);
+
   // Memory marks stay local to the second viewer; the host persists the first one's marks.
   await page
     .locator('#second [data-balade-section="overview"]')

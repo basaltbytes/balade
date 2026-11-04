@@ -13,6 +13,11 @@ export function normalizeUnified(unified: string, path: string, oldPath?: string
   return `--- a/${oldPath ?? path}\n+++ b/${path}\n${body}`;
 }
 
+/** A pure rename, a mode change or an empty new file has a patch with no hunk. */
+export function hasHunk(unified: string): boolean {
+  return HUNK.test(unified);
+}
+
 /**
  * The diff view of a `code` block, rebuilt from the only data the block has:
  * the excerpt's lines plus the change overlay. Overlay lines become additions

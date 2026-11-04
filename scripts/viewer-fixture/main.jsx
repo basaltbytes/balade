@@ -2,6 +2,7 @@ import React, { StrictMode, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Effect } from "effect";
 import {
+  Diff,
   Walkthrough,
   WalkthroughView,
   ClarificationAgentUnavailable,
@@ -101,6 +102,26 @@ const payload = {
   errors: [],
   sourcePath: "walkthroughs/example.md",
 };
+const diffFiles = [
+  {
+    path: "example.ts",
+    status: "modified",
+    additions: 1,
+    deletions: 1,
+    patch: { kind: "text", text: `@@ -1 +1 @@\n-${attack}\n+${code}\n` },
+  },
+  {
+    path: "src/<b>hostile</b>.ts",
+    oldPath: "src/old.ts",
+    status: "renamed",
+    additions: 0,
+    deletions: 0,
+    patch: { kind: "text", text: "" },
+    test: true,
+  },
+  { path: "logo.png", status: "added", additions: 0, deletions: 0, patch: { kind: "binary" } },
+];
+const openedFiles = [];
 let review = null;
 let qa = {
   version: 1,
@@ -207,6 +228,19 @@ function Fixture() {
           <Walkthrough.Clarifications />
         </Walkthrough.Root>
       </div>
+      <div id="diff">
+        <Diff
+          files={diffFiles}
+          defaultExpanded
+          fileHref={(file) =>
+            file === diffFiles[1] ? "javascript:alert(1)" : `/files/${file.path}`
+          }
+          onFileOpen={(file, event) => {
+            event.preventDefault();
+            openedFiles.push(file.path);
+          }}
+        />
+      </div>
       <div id="unsupported">
         <WalkthroughView payload={{ format: 2, lang: "fr" }} />
       </div>
@@ -233,6 +267,7 @@ globalThis.viewerFixture = {
     behavior = next;
   },
   subscriptions: () => listeners.size,
+  openedFiles: () => openedFiles,
   unmount: () => root.unmount(),
 };
 // The consumer owns a different Effect major; the viewer never borrows its runtime.
