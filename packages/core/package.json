@@ -1,6 +1,6 @@
 {
   "name": "@balade/core",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "The balade walkthrough payload contract and portable clarification-answer check, for browsers and servers.",
   "keywords": [
     "balade",
