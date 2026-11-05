@@ -1,4 +1,4 @@
-/** Browser acceptance test against the installed package, with the host's own React and Effect. */
+/** Browser acceptance test against the installed @balade/viewer, sharing the host's React and Effect. */
 import assert from "node:assert/strict";
 import { cp, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -12,8 +12,10 @@ import { build } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const project = resolve(process.argv[2] ?? join(here, ".."));
+/* The standalone stylesheet ships with the CLI, which the viewer host does not install. */
+const cliProject = resolve(process.argv[3] ?? project);
 const packageRoot = dirname(
-  createRequire(join(project, "package.json")).resolve("balade/package.json"),
+  createRequire(join(cliProject, "package.json")).resolve("balade/package.json"),
 );
 const fixture = join(project, ".balade", "viewer-fixture");
 await cp(join(here, "viewer-fixture"), fixture, { recursive: true });

@@ -21,7 +21,7 @@ const AuthorSourcePath = Schema.String.pipe(
 );
 export type AuthorSourcePath = typeof AuthorSourcePath.Type;
 
-export class AuthorSourcePathRejected extends Schema.TaggedErrorClass<AuthorSourcePathRejected>()(
+export class AuthorSourcePathRejected extends Schema.TaggedError<AuthorSourcePathRejected>()(
   "AuthorSourcePathRejected",
   {
     path: Schema.String,
@@ -29,7 +29,7 @@ export class AuthorSourcePathRejected extends Schema.TaggedErrorClass<AuthorSour
   },
 ) {}
 
-export class AuthorSourceUnavailable extends Schema.TaggedErrorClass<AuthorSourceUnavailable>()(
+export class AuthorSourceUnavailable extends Schema.TaggedError<AuthorSourceUnavailable>()(
   "AuthorSourceUnavailable",
   {
     path: Schema.String,

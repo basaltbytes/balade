@@ -54,27 +54,27 @@ export type ClarificationValidator<Accepted, Rejected extends ClarificationRejec
   body: string,
 ) => Effect.Effect<Result.Result<Accepted, Rejected>, Error>;
 
-export class ClarifierRuntimeLoadFailed extends Schema.TaggedErrorClass<ClarifierRuntimeLoadFailed>()(
+export class ClarifierRuntimeLoadFailed extends Schema.TaggedError<ClarifierRuntimeLoadFailed>()(
   "ClarifierRuntimeLoadFailed",
   { cause: Schema.Defect() },
 ) {}
 
-export class ClarifierModelUnavailable extends Schema.TaggedErrorClass<ClarifierModelUnavailable>()(
+export class ClarifierModelUnavailable extends Schema.TaggedError<ClarifierModelUnavailable>()(
   "ClarifierModelUnavailable",
   { provider: AuthorProviderId, model: AuthorModelId },
 ) {}
 
-export class ClarifierSessionStartFailed extends Schema.TaggedErrorClass<ClarifierSessionStartFailed>()(
+export class ClarifierSessionStartFailed extends Schema.TaggedError<ClarifierSessionStartFailed>()(
   "ClarifierSessionStartFailed",
   { provider: AuthorProviderId, model: AuthorModelId, cause: Schema.Defect() },
 ) {}
 
-export class ClarifierRequestFailed extends Schema.TaggedErrorClass<ClarifierRequestFailed>()(
+export class ClarifierRequestFailed extends Schema.TaggedError<ClarifierRequestFailed>()(
   "ClarifierRequestFailed",
   { provider: AuthorProviderId, model: AuthorModelId, detail: Schema.String },
 ) {}
 
-export class ClarifierAnswerMalformed extends Schema.TaggedErrorClass<ClarifierAnswerMalformed>()(
+export class ClarifierAnswerMalformed extends Schema.TaggedError<ClarifierAnswerMalformed>()(
   "ClarifierAnswerMalformed",
   { detail: Schema.String },
 ) {}

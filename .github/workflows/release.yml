@@ -1,53 +1,48 @@
 name: release
-# Publishes to npm via OIDC trusted publishing — no NPM_TOKEN secret anywhere.
-# npmjs.com must list this exact workflow (basaltbytes/balade, release.yml) as
-# the package's trusted publisher; the registry then accepts the runner's OIDC
-# identity. Because this repository and package are public, npm also generates
-# provenance attestations for tag publishes.
+# Versions and publishes through changesets and npm OIDC trusted publishing;
+# there is no NPM_TOKEN secret. npmjs.com lists this workflow
+# (basaltbytes/balade, release.yml) as the trusted publisher of balade,
+# @balade/core and @balade/viewer. A package's first version is published by
+# hand from a logged-in machine, because npm only accepts a trusted publisher on
+# a package that already exists.
+#
+# On every push to main the changesets action maintains the rolling "Version
+# Packages" PR. Once that PR merges, the publish script stages the new versions
+# on npm; an npm maintainer approves them, and the next run of this job tags the
+# release once every version is public.
 on:
   push:
-    tags: ["v*"]
-  # manual fallback: publishes whatever version the chosen ref carries
+    branches: [main]
+  # manual fallback: re-runs the version-or-publish decision at main's HEAD
   workflow_dispatch:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-concurrency:
-  group: release
-  cancel-in-progress: false
 permissions:
-  id-token: write # OIDC exchange with the npm registry
-  contents: write # GitHub Release creation
+  contents: read
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write # push the version branch and the release tags
+      pull-requests: write # open and update the "Version Packages" PR
+      id-token: write # OIDC exchange with the npm registry
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-        with: { version: 10 }
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        # Full history: changelog entries name the commit that added each
+        # changeset, which a shallow clone cannot see.
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - name: Tag must match package.json
-        if: github.ref_type == 'tag'
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          PKG="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::tag v$TAG does not match package.json version $PKG"
-            exit 1
-          fi
-      # The packed viewer smoke in prepublishOnly drives Chromium.
-      - run: pnpm exec playwright install --with-deps chromium
-      # prepublishOnly runs the full gate (lint, format:check, typecheck,
-      # build, test, packed npm install smoke);
-      # --no-git-checks because a tag checkout is a detached HEAD.
-      # NPM_CONFIG_PROVENANCE keeps provenance explicit for pnpm and matches
-      # package.json publishConfig.provenance.
-      - run: pnpm publish --access public --no-git-checks
-        env:
-          NPM_CONFIG_PROVENANCE: "true"
-      - name: GitHub Release
-        if: github.ref_type == 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+      - name: Create the Version Packages PR or stage the release
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          version-script: pnpm changeset:version
+          publish-script: pnpm changeset:publish
+          # Tags come from scripts/release/tag.mjs once npm shows every version.
+          create-github-releases: false
+          push-git-tags: false

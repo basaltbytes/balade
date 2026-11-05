@@ -110,14 +110,13 @@ const select = Effect.fn("selectSession")(function* (options: SessionOptions) {
 
   if (options.selection.kind === "discovered") {
     return yield* discoverWalkthroughs(options.cwd).pipe(
-      Effect.map(
-        (found): Selected =>
-          found.paths.length === 0
-            ? { _tag: "SessionNotStarted", message: NO_WALKTHROUGH }
-            : {
-                _tag: "SessionSelected",
-                selection: { kind: "workingTree", root: found.repoRoot, paths: found.paths },
-              },
+      Effect.map((found): Selected =>
+        found.paths.length === 0
+          ? { _tag: "SessionNotStarted", message: NO_WALKTHROUGH }
+          : {
+              _tag: "SessionSelected",
+              selection: { kind: "workingTree", root: found.repoRoot, paths: found.paths },
+            },
       ),
       Effect.catchTag("NotARepository", () =>
         Effect.succeed<Selected>({ _tag: "SessionNotStarted", message: NOT_A_REPO }),

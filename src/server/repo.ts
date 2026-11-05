@@ -57,7 +57,7 @@ export interface ServerRepoPort {
   readonly load: (sourcePath: string) => Effect.Effect<LoadResult, LoadError | ServerRepoError>;
 }
 
-export class ServerSourceReadFailed extends Schema.TaggedErrorClass<ServerSourceReadFailed>()(
+export class ServerSourceReadFailed extends Schema.TaggedError<ServerSourceReadFailed>()(
   "ServerSourceReadFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}

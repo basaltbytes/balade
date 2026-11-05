@@ -13,12 +13,12 @@ const decodeReviewState = Schema.decodeUnknownEffect(ReviewStateSchema, {
   onExcessProperty: "error",
 });
 
-export class ReviewJsonInvalid extends Schema.TaggedErrorClass<ReviewJsonInvalid>()(
+export class ReviewJsonInvalid extends Schema.TaggedError<ReviewJsonInvalid>()(
   "ReviewJsonInvalid",
   { cause: Schema.Defect() },
 ) {}
 
-export class ReviewStateInvalid extends Schema.TaggedErrorClass<ReviewStateInvalid>()(
+export class ReviewStateInvalid extends Schema.TaggedError<ReviewStateInvalid>()(
   "ReviewStateInvalid",
   { cause: Schema.Defect() },
 ) {}

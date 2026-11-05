@@ -107,10 +107,9 @@ function rowOfFile(file: DiffFile): DiffRow {
   };
 }
 
-export class DiffFilesInvalid extends Schema.TaggedErrorClass<DiffFilesInvalid>()(
-  "DiffFilesInvalid",
-  { cause: Schema.Defect() },
-) {}
+export class DiffFilesInvalid extends Schema.TaggedError<DiffFilesInvalid>()("DiffFilesInvalid", {
+  cause: Schema.Defect(),
+}) {}
 
 const decodeFiles = Schema.decodeUnknownResult(Schema.Array(DiffFile));
 

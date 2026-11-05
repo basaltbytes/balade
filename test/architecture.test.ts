@@ -38,7 +38,7 @@ function importsOf(file: string): string[] {
 }
 
 /** Public entries compose freely, and nothing imports them. */
-const ENTRIES = ["cli.ts", "library.ts", "answers.ts"];
+const ENTRIES = ["cli.ts", "library.ts", "core.ts"];
 
 /** The layer a module belongs to: a concept folder, `commands/<verb>`, or its root file. */
 function layerOf(module: string): string {

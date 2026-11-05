@@ -1,3 +1,6 @@
+packages:
+  - packages/*
+
 trustPolicy: no-downgrade
 
 # Old releases that predate npm provenance; excluded case by case, never wholesale.
@@ -5,7 +8,10 @@ trustPolicyExclude:
   - undici-types@6.21.0
   - semver@6.3.1
 
-onlyBuiltDependencies:
-  - esbuild
+# Install scripts run only for these; pnpm 11 fails the install on any other.
+allowBuilds:
+  "@google/genai": false
+  esbuild: true
+  protobufjs: false
   # workerd ships the Workers runtime binary; its postinstall places it.
-  - workerd
+  workerd: true

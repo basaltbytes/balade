@@ -1,7 +1,7 @@
 /** Walkthrough file IO shared by document and clarification compilation. */
 import { Effect, FileSystem, Schema } from "effect";
 
-export class WalkthroughFileReadFailed extends Schema.TaggedErrorClass<WalkthroughFileReadFailed>()(
+export class WalkthroughFileReadFailed extends Schema.TaggedError<WalkthroughFileReadFailed>()(
   "WalkthroughFileReadFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}

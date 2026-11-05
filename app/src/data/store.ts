@@ -46,7 +46,7 @@ class HttpReviewStore extends Context.Service<HttpReviewStore, HttpReviewStoreCl
   "@balade/app/HttpReviewStore",
 ) {}
 
-class ReviewStoreAccessFailed extends Schema.TaggedErrorClass<ReviewStoreAccessFailed>()(
+class ReviewStoreAccessFailed extends Schema.TaggedError<ReviewStoreAccessFailed>()(
   "ReviewStoreAccessFailed",
   {
     operation: Schema.Literals(["storage-read", "storage-write", "http-get", "http-put"]),

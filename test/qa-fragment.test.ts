@@ -3,7 +3,7 @@
 import { Effect, Result, Schema } from "effect";
 import { execFileSync } from "node:child_process";
 import { checkAnswer, compilePayload } from "../src/library.js";
-import { checkAnswer as checkPayloadAnswer, clarificationContext } from "../src/answers.js";
+import { checkAnswer as checkPayloadAnswer, clarificationContext } from "../src/core.js";
 import { decodePayload } from "../src/contract/payload.js";
 import { QaTurn } from "../src/contract/schema.js";
 import { createFixtureRepo } from "./support/repo.js";

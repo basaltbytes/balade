@@ -208,12 +208,16 @@ describe("the library entry", () => {
       const options = { repository: repo.dir, base, head: repo.pin };
       const internal = yield* compilePayloadEffect({ ...options, file: internalFile });
       if (internal._tag !== "Compiled") throw new Error("Compilation refused");
-      // Output paths use Git's root, which can expand a Windows short-name alias.
+      // Output paths use Git's root; the file system's native real path expands a
+      // Windows short-name alias on both sides, as Git does.
       const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
         cwd: repo.dir,
         encoding: "utf8",
       }).trim();
-      const sourcePath = relative(realpathSync(root), file).replaceAll("\\", "/");
+      const sourcePath = relative(realpathSync.native(root), realpathSync.native(file)).replaceAll(
+        "\\",
+        "/",
+      );
       const expected = {
         ...internal,
         payload: { ...internal.payload, sourcePath },

@@ -7,14 +7,14 @@
  */
 
 import { NodeHttpServer } from "@effect/platform-node";
-import { Cause, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { ByteSize, Cause, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import {
   HttpRouter,
   HttpServer,
   HttpServerRequest,
   HttpServerResponse,
   HttpStaticServer,
-} from "effect/unstable/http";
+} from "effect/http";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { sanitizeTerminalText } from "../terminal.js";
@@ -29,8 +29,8 @@ import {
 /** A review tool listens for the reviewer, not for the network. */
 const HOST = "127.0.0.1";
 const ALLOWED_HOSTS = new Set([HOST, "localhost", "[::1]"]);
-const REVIEW_STATE_BODY_LIMIT = FileSystem.MiB(4);
-const QA_BODY_LIMIT = FileSystem.KiB(64);
+const REVIEW_STATE_BODY_LIMIT = ByteSize.mebibytes(4);
+const QA_BODY_LIMIT = ByteSize.kibibytes(64);
 
 const hostAllowed = (host: string | undefined): boolean =>
   host !== undefined && ALLOWED_HOSTS.has(host.replace(/:\d+$/u, ""));
@@ -58,10 +58,9 @@ export interface ServeOptions {
 /** The prebuilt SPA ships beside the compiled CLI: `dist/cli.js` next to `dist/app/`. */
 const APP_DIR = fileURLToPath(new URL("../app/", import.meta.url));
 
-export class AppBundleMissing extends Schema.TaggedErrorClass<AppBundleMissing>()(
-  "AppBundleMissing",
-  { path: Schema.String },
-) {
+export class AppBundleMissing extends Schema.TaggedError<AppBundleMissing>()("AppBundleMissing", {
+  path: Schema.String,
+}) {
   get note(): string {
     return (
       `balade: no app bundle at ${this.path}. In a checkout, run \`pnpm run build:app\`; ` +
@@ -70,7 +69,7 @@ export class AppBundleMissing extends Schema.TaggedErrorClass<AppBundleMissing>(
   }
 }
 
-export class AppBundleReadFailed extends Schema.TaggedErrorClass<AppBundleReadFailed>()(
+export class AppBundleReadFailed extends Schema.TaggedError<AppBundleReadFailed>()(
   "AppBundleReadFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {

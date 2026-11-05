@@ -1,4 +1,4 @@
-/** Exercise the packed contract as browser code and the installed explicit-range CLI. */
+/** Exercise the packed @balade/core contract as browser code and the installed explicit-range CLI. */
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
@@ -10,7 +10,7 @@ import { build } from "vite";
 const [project, gitBinary] = process.argv.slice(2);
 assert.ok(project && gitBinary, "usage: contract-smoke.mjs <installed project> <git binary>");
 const entry = join(project, "browser-contract.mjs");
-writeFileSync(entry, 'export { decodePayload, PAYLOAD_FORMAT } from "balade/contract";\n');
+writeFileSync(entry, 'export { decodePayload, PAYLOAD_FORMAT } from "@balade/core";\n');
 await build({
   configFile: false,
   root: project,

@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module";
 import { Effect, Option, Schema, Terminal } from "effect";
-import { Argument, Command, Flag, Prompt } from "effect/unstable/cli";
+import { Argument, Command, Flag, Prompt } from "effect/cli";
 import {
   AgentModelManager,
   agentModelErrorMessage,
@@ -48,38 +48,38 @@ import {
 
 type GenerationFacets = { preset?: AuthoringPreset; lang?: Lang; guidance?: string };
 
-const target = Argument.string("pr").pipe(
+const target = Argument.String("pr").pipe(
   Argument.withDescription("Bare pull request number, URL, or quoted '#number'"),
 );
 
-const provider = Flag.string("provider").pipe(
+const provider = Flag.String("provider").pipe(
   Flag.withDescription("Agent provider id; partial or unavailable selections open the picker"),
   Flag.optional,
 );
 
-const model = Flag.string("model").pipe(
+const model = Flag.String("model").pipe(
   Flag.withDescription("Agent model id; partial or unavailable selections open the picker"),
   Flag.optional,
 );
 
-const preset = Flag.string("preset").pipe(
+const preset = Flag.String("preset").pipe(
   Flag.withDescription(
     `Activate a preset's tags for this walkthrough (${presetNames().join(", ")})`,
   ),
   Flag.optional,
 );
 
-const lang = Flag.choice("lang", ["en", "fr"]).pipe(
+const lang = Flag.Literals("lang", ["en", "fr"]).pipe(
   Flag.withDescription("Walkthrough language; the draft is authored and stamped in it"),
   Flag.optional,
 );
 
-const directory = Flag.string("dir").pipe(
+const directory = Flag.String("dir").pipe(
   Flag.withDescription("Repository-relative directory for the generated walkthrough"),
   Flag.withDefault(DEFAULT_WALKTHROUGH_DIRECTORY),
 );
 
-const guidance = Flag.string("prompt").pipe(
+const guidance = Flag.String("prompt").pipe(
   Flag.withDescription(
     "Additional reviewer guidance and steering appended to the base prompt for this run",
   ),
@@ -93,36 +93,41 @@ const guidance = Flag.string("prompt").pipe(
   ),
 );
 
-const budget = Flag.choice("budget", ["low", "medium", "high"]).pipe(
+const budget = Flag.Literals("budget", ["low", "medium", "high"]).pipe(
   Flag.withDescription(
     "Inspection budget: low fixes small caps, medium scales with the pull request, high removes the caps",
   ),
   Flag.withDefault("medium" as const),
 );
 
-const force = Flag.boolean("force").pipe(
+const force = Flag.Boolean("force").pipe(
+  Flag.withDefault(false),
   Flag.withDescription(
     "Replace an existing same-head walkthrough without confirmation (non-interactive runs)",
   ),
 );
 
-const verbose = Flag.boolean("verbose").pipe(
+const verbose = Flag.Boolean("verbose").pipe(
+  Flag.withDefault(false),
   Flag.withDescription("Show Pi assistant text, tool inputs/results, and successful range echoes"),
 );
 
-const trustHeadInstructions = Flag.boolean("trust-head-instructions").pipe(
+const trustHeadInstructions = Flag.Boolean("trust-head-instructions").pipe(
+  Flag.withDefault(false),
   Flag.withDescription("Apply AGENTS.md or CLAUDE.md files changed by the pull request"),
 );
 
-const noOpen = Flag.boolean("no-open").pipe(
+const noOpen = Flag.Boolean("no-open").pipe(
+  Flag.withDefault(false),
   Flag.withDescription("Generate only: print the path and open hint without starting a server"),
 );
 
-const noBrowser = Flag.boolean("no-browser").pipe(
+const noBrowser = Flag.Boolean("no-browser").pipe(
+  Flag.withDefault(false),
   Flag.withDescription("Serve headless: print the URL without opening a browser"),
 );
 
-const port = Flag.integer("port").pipe(
+const port = Flag.Int("port").pipe(
   Flag.withDescription("Review-server port; 0 asks the system for a free one"),
   Flag.withDefault(0),
 );
@@ -192,7 +197,7 @@ export const generateCommand = Command.make(
       if (plan.undecided.length > 0 && !config.force) {
         if (process.stdin.isTTY === true) {
           const replace = yield* reportWaitingDuring(
-            Prompt.run(Prompt.confirm({ message: generationReplaceQuestion(plan.undecided) })),
+            Prompt.run(Prompt.Confirm({ message: generationReplaceQuestion(plan.undecided) })),
           );
           if (!replace) {
             stopMessage("Generation cancelled.");

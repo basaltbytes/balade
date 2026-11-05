@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Schema } from "effect";
+import { Arbitrary } from "effect";
 import { stringify as stringifyYaml } from "yaml";
 import { Frontmatter as FrontmatterSchema } from "../src/contract/schema.js";
 import { parseFrontmatter } from "../src/walkthrough/frontmatter.js";
@@ -7,7 +7,7 @@ import { parseFrontmatter } from "../src/walkthrough/frontmatter.js";
 describe("frontmatter schema diagnostics", () => {
   it.prop(
     "round-trips schema-shaped values through YAML",
-    { expected: Schema.toArbitrary(FrontmatterSchema) },
+    { expected: Arbitrary.schema(FrontmatterSchema) },
     ({ expected }) => {
       expect(parseFrontmatter(stringifyYaml(expected), "walkthroughs/property.md")).toEqual({
         frontmatter: expected,

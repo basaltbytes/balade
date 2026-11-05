@@ -62,7 +62,7 @@ export function parseOpenTarget(argv: readonly string[]): OpenTarget {
   return { kind: "pr", pr: first };
 }
 
-export class WrongRepository extends Schema.TaggedErrorClass<WrongRepository>()("WrongRepository", {
+export class WrongRepository extends Schema.TaggedError<WrongRepository>()("WrongRepository", {
   wanted: Schema.String,
   found: Schema.String,
 }) {
@@ -71,7 +71,7 @@ export class WrongRepository extends Schema.TaggedErrorClass<WrongRepository>()(
   }
 }
 
-export class PullFetchFailed extends Schema.TaggedErrorClass<PullFetchFailed>()("PullFetchFailed", {
+export class PullFetchFailed extends Schema.TaggedError<PullFetchFailed>()("PullFetchFailed", {
   number: Schema.Finite,
 }) {
   get note(): string {

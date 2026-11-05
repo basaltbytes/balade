@@ -1,11 +1,12 @@
 /** Browser-safe payload boundary. No filesystem, Git or CLI runtime. */
 import { Effect, Predicate, Schema } from "effect";
-import { PAYLOAD_FORMAT, Payload } from "./schema.js";
+import { PAYLOAD_FORMAT, Payload as PayloadSchema } from "./schema.js";
+import type { Payload } from "./types.js";
 
 export { PAYLOAD_FORMAT } from "./schema.js";
 export type * from "./types.js";
 
-export class PayloadFormatUnsupported extends Schema.TaggedErrorClass<PayloadFormatUnsupported>()(
+export class PayloadFormatUnsupported extends Schema.TaggedError<PayloadFormatUnsupported>()(
   "PayloadFormatUnsupported",
   { format: Schema.Int },
 ) {
@@ -14,18 +15,19 @@ export class PayloadFormatUnsupported extends Schema.TaggedErrorClass<PayloadFor
   }
 }
 
-export class PayloadInvalid extends Schema.TaggedErrorClass<PayloadInvalid>()("PayloadInvalid", {
+export class PayloadInvalid extends Schema.TaggedError<PayloadInvalid>()("PayloadInvalid", {
   cause: Schema.Defect(),
 }) {}
 
 export type PayloadDecodeError = PayloadFormatUnsupported | PayloadInvalid;
 
-const payload = Schema.decodeUnknownEffect(Payload, { onExcessProperty: "error" });
+const payload: ReturnType<typeof Schema.decodeUnknownEffect<typeof PayloadSchema>> =
+  Schema.decodeUnknownEffect(PayloadSchema, { onExcessProperty: "error" });
 
 /** Strict decoding; only the current format is supported. */
 export const decodePayload = (
   input: Parameters<typeof payload>[0],
-): Effect.Effect<typeof Payload.Type, PayloadDecodeError> => {
+): Effect.Effect<Payload, PayloadDecodeError> => {
   // Inspect only the version before decoding its shape; malformed envelopes
   // still receive the complete schema diagnostic below.
   if (

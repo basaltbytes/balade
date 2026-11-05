@@ -1,7 +1,7 @@
 /** `balade build`: read flags, run the typed build Effect, print the outcome. */
 
 import { Effect, Match, Option } from "effect";
-import { Argument, Command, Flag } from "effect/unstable/cli";
+import { Argument, Command, Flag } from "effect/cli";
 import {
   printSoft,
   size,
@@ -17,12 +17,12 @@ import {
   type BuildOptions,
 } from "./pipeline.js";
 
-const langFlag = Flag.choice("lang", ["en", "fr"]).pipe(
+const langFlag = Flag.Literals("lang", ["en", "fr"]).pipe(
   Flag.withDescription("Chrome language; overrides meta.lang"),
   Flag.optional,
 );
 
-const outFlag = Flag.string("out").pipe(
+const outFlag = Flag.String("out").pipe(
   Flag.withDescription(
     "Where to write the export; defaults to <walkthrough>.<format> beside the file",
   ),
@@ -31,8 +31,9 @@ const outFlag = Flag.string("out").pipe(
 
 /* Variadic so that "none" and "several" are answered by `build` itself — with
    the discovered paths (#21) — rather than by the argument parser. */
-const buildFile = Argument.variadic(
-  Argument.string("file").pipe(Argument.withDescription("The one walkthrough file to export")),
+const buildFile = Argument.String("file").pipe(
+  Argument.withDescription("The one walkthrough file to export"),
+  Argument.variadic(),
 );
 
 export const buildCommand = Command.make(
@@ -41,14 +42,14 @@ export const buildCommand = Command.make(
     files: buildFile,
     lang: langFlag,
     out: outFlag,
-    format: Flag.choice("format", ["html", "json"]).pipe(Flag.withDefault("html")),
-    base: Flag.string("base").pipe(
+    format: Flag.Literals("format", ["html", "json"]).pipe(Flag.withDefault("html")),
+    base: Flag.String("base").pipe(
       Flag.withDescription(
         "Full base commit SHA; requires --head; skips gh and default-branch discovery",
       ),
       Flag.optional,
     ),
-    head: Flag.string("head").pipe(
+    head: Flag.String("head").pipe(
       Flag.withDescription("Full PR head commit SHA; requires --base"),
       Flag.optional,
     ),

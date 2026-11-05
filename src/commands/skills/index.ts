@@ -2,13 +2,13 @@
 
 import { Effect, Option } from "effect";
 import type { PlatformError } from "effect/PlatformError";
-import { Command, Flag } from "effect/unstable/cli";
+import { Command, Flag } from "effect/cli";
 import { AUTHORING_PACKAGE_VERSION } from "../../authoring/package.js";
 import type { CommandFailed, NotARepository } from "../../contract/context.js";
 import { stdoutTheme, stopMessage, writeStdout } from "../../terminal.js";
 import { runSkillsInstall, type SkillsInstallOptions } from "./install.js";
 
-const out = Flag.string("out").pipe(
+const out = Flag.String("out").pipe(
   Flag.withDescription(
     "Write <dir>/balade-authoring/SKILL.md instead of the conventional agent directories",
   ),

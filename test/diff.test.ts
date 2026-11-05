@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { FastCheck } from "effect/testing";
+import { Arbitrary, Schema } from "effect";
 import { splitDiff } from "../src/git/diff.js";
 import { changedLines } from "../src/contract/diff.js";
 
@@ -28,29 +28,26 @@ index 3333333..0000000
 -# Superseded
 `;
 
-const diffLineCharacter = FastCheck.constantFrom(
-  ...Array.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-./@"),
-);
-const diffLine = FastCheck.array(diffLineCharacter, { maxLength: 60 }).map((characters) =>
-  characters.join(""),
-);
-const pathSegment = FastCheck.array(
-  FastCheck.constantFrom(
-    ...Array.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"),
-  ),
+const characters = (alphabet: string) => Arbitrary.schema(Schema.Literals(Array.from(alphabet)));
+const diffLine = Arbitrary.array(
+  characters("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-./@"),
+  { maxLength: 60 },
+).pipe(Arbitrary.map((line) => line.join("")));
+const pathSegment = Arbitrary.array(
+  characters("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"),
   { minLength: 1, maxLength: 12 },
-).map((characters) => characters.join(""));
-const diffFile = FastCheck.record({
-  path: FastCheck.tuple(pathSegment, pathSegment).map(
-    ([directory, name]) => `${directory}/${name}.txt`,
+).pipe(Arbitrary.map((segment) => segment.join("")));
+const diffFile = Arbitrary.all({
+  path: Arbitrary.all([pathSegment, pathSegment]).pipe(
+    Arbitrary.map(([directory, name]) => `${directory}/${name}.txt`),
   ),
   removed: diffLine,
   added: diffLine,
 });
-const diffFiles = FastCheck.uniqueArray(diffFile, {
-  selector: ({ path }) => path,
-  maxLength: 6,
-});
+/* One record per path: a repeated path would be one file, not two. */
+const diffFiles = Arbitrary.array(diffFile, { maxLength: 6 }).pipe(
+  Arbitrary.map((files) => [...new Map(files.map((file) => [file.path, file])).values()]),
+);
 
 describe("unified diff", () => {
   it.prop("round-trips adjacent generated file records", [diffFiles], ([files]) => {

@@ -78,27 +78,27 @@ function sidecarFilePath(sourcePath: string, kind: "review" | "qa"): string {
   return `${sourcePath}.${kind}.json`;
 }
 
-export class StatePathRejected extends Schema.TaggedErrorClass<StatePathRejected>()(
+export class StatePathRejected extends Schema.TaggedError<StatePathRejected>()(
   "StatePathRejected",
   { path: Schema.String },
 ) {}
 
-export class StateReadFailed extends Schema.TaggedErrorClass<StateReadFailed>()("StateReadFailed", {
+export class StateReadFailed extends Schema.TaggedError<StateReadFailed>()("StateReadFailed", {
   path: Schema.String,
   cause: Schema.Defect(),
 }) {}
 
-export class StateInvalid extends Schema.TaggedErrorClass<StateInvalid>()("StateInvalid", {
+export class StateInvalid extends Schema.TaggedError<StateInvalid>()("StateInvalid", {
   path: Schema.String,
   cause: Schema.Defect(),
 }) {}
 
-export class StateWriteFailed extends Schema.TaggedErrorClass<StateWriteFailed>()(
-  "StateWriteFailed",
-  { path: Schema.String, cause: Schema.Defect() },
-) {}
+export class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()("StateWriteFailed", {
+  path: Schema.String,
+  cause: Schema.Defect(),
+}) {}
 
-export class StateExcludeFailed extends Schema.TaggedErrorClass<StateExcludeFailed>()(
+export class StateExcludeFailed extends Schema.TaggedError<StateExcludeFailed>()(
   "StateExcludeFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}

@@ -97,7 +97,7 @@ export const resolveLang = (lang: string): string => {
 export const highlightLanguage = (code: string, lang: string): string =>
   hasOverlongHighlightLine(code) ? "text" : resolveLang(lang);
 
-export class HighlightLoadFailed extends Schema.TaggedErrorClass<HighlightLoadFailed>()(
+export class HighlightLoadFailed extends Schema.TaggedError<HighlightLoadFailed>()(
   "HighlightLoadFailed",
   {
     languages: Schema.Array(Schema.String),
@@ -105,7 +105,7 @@ export class HighlightLoadFailed extends Schema.TaggedErrorClass<HighlightLoadFa
   },
 ) {}
 
-export class HighlightRenderFailed extends Schema.TaggedErrorClass<HighlightRenderFailed>()(
+export class HighlightRenderFailed extends Schema.TaggedError<HighlightRenderFailed>()(
   "HighlightRenderFailed",
   {
     output: Schema.Literals(["html", "ast"]),
@@ -114,7 +114,7 @@ export class HighlightRenderFailed extends Schema.TaggedErrorClass<HighlightRend
   },
 ) {}
 
-export class HighlightLanguageCheckFailed extends Schema.TaggedErrorClass<HighlightLanguageCheckFailed>()(
+export class HighlightLanguageCheckFailed extends Schema.TaggedError<HighlightLanguageCheckFailed>()(
   "HighlightLanguageCheckFailed",
   {
     language: Schema.String,

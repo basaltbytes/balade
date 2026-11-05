@@ -107,12 +107,12 @@ export const liveLayer = Layer.mergeAll(piWalkthroughAuthorLive, contextResolver
 );
 
 /** `pullRequest` names no GitHub pull request. */
-export class PullTargetInvalid extends Schema.TaggedErrorClass<PullTargetInvalid>()(
+export class PullTargetInvalid extends Schema.TaggedError<PullTargetInvalid>()(
   "PullTargetInvalid",
   { target: Schema.String },
 ) {}
 
-export class PresetUnknown extends Schema.TaggedErrorClass<PresetUnknown>()("PresetUnknown", {
+export class PresetUnknown extends Schema.TaggedError<PresetUnknown>()("PresetUnknown", {
   preset: Schema.String,
   available: Schema.Array(Schema.String),
 }) {}
@@ -121,7 +121,7 @@ export class PresetUnknown extends Schema.TaggedErrorClass<PresetUnknown>()("Pre
  * Same-identity walkthroughs the CLI would ask about: stamped at the current
  * head, or without a readable stamp. `force: true` replaces them.
  */
-export class ExistingWalkthroughUndecided extends Schema.TaggedErrorClass<ExistingWalkthroughUndecided>()(
+export class ExistingWalkthroughUndecided extends Schema.TaggedError<ExistingWalkthroughUndecided>()(
   "ExistingWalkthroughUndecided",
   { files: Schema.Array(Schema.String) },
 ) {}

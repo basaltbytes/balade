@@ -16,7 +16,7 @@ export interface ParsedFragment {
   readonly preset: Preset | undefined;
 }
 
-export class FragmentInvalid extends Schema.TaggedErrorClass<FragmentInvalid>()("FragmentInvalid", {
+export class FragmentInvalid extends Schema.TaggedError<FragmentInvalid>()("FragmentInvalid", {
   diagnostics: Schema.Array(Schema.String),
 }) {}
 

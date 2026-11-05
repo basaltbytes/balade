@@ -1,4 +1,4 @@
-/** Portable clarification entry: decoded payloads, no Node services or agent runtime. */
+/** The `@balade/core` entry: the payload contract and the portable answer check. No Node built-ins or agent runtime. */
 import { Effect } from "effect";
 import {
   checkAnswerEffect,
@@ -6,6 +6,7 @@ import {
   type PayloadAnswerSource,
 } from "./walkthrough/answer.js";
 
+export * from "./contract/payload.js";
 export { checkAnswerEffect } from "./walkthrough/answer.js";
 export type { AnswerCheckResult, PayloadAnswerSource } from "./walkthrough/answer.js";
 export { clarificationContext } from "./clarification.js";

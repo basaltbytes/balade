@@ -13,13 +13,13 @@ import {
   type WalkthroughHost,
 } from "../host";
 
-export class HostOperationFailed extends Schema.TaggedErrorClass<HostOperationFailed>()(
+export class HostOperationFailed extends Schema.TaggedError<HostOperationFailed>()(
   "HostOperationFailed",
   { cause: Schema.Defect() },
 ) {}
 
 /** The served adapter persisted only its browser backup. */
-export class ReviewStateFallback extends Schema.TaggedErrorClass<ReviewStateFallback>()(
+export class ReviewStateFallback extends Schema.TaggedError<ReviewStateFallback>()(
   "ReviewStateFallback",
   {},
 ) {}

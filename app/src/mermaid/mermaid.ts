@@ -53,7 +53,7 @@ export const MERMAID_CONFIG = {
   secure: SECURE_KEYS,
 } satisfies MermaidConfig;
 
-export class MermaidRenderFailed extends Schema.TaggedErrorClass<MermaidRenderFailed>()(
+export class MermaidRenderFailed extends Schema.TaggedError<MermaidRenderFailed>()(
   "MermaidRenderFailed",
   { cause: Schema.Defect() },
 ) {}

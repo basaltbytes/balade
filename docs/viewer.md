@@ -1,11 +1,15 @@
 # Embed a walkthrough
 
-Install `balade`, React 19 and React DOM 19 in your application, then import the
-browser entry and its stylesheet:
+Install `@balade/viewer` with React 19, React DOM 19 and Effect 4 in your
+application, then import the component and its stylesheet:
+
+```sh
+npm install @balade/viewer react react-dom effect
+```
 
 ```tsx
-import { WalkthroughView, type WalkthroughHost } from "balade/viewer";
-import "balade/viewer.css";
+import { WalkthroughView, type WalkthroughHost } from "@balade/viewer";
+import "@balade/viewer/viewer.css";
 
 export function ReviewPage({ payload }: { payload: unknown }) {
   return <WalkthroughView payload={payload} />;
@@ -49,7 +53,7 @@ when omitted, the viewer polls `load` every 1.5 seconds. A subscription should
 publish each updated state, including transitions from pending to answered or
 failed. Reject `ask` with `new ClarificationAgentUnavailable()` when agent setup
 fails, or `new ClarificationGenerationChanged()` when the request names an older
-generation. Both errors are exported from `balade/viewer`.
+generation. Both errors are exported from `@balade/viewer`.
 
 Review-storage failures show a persistence badge and log the failed operation
 and error tag to the browser console. Stored state and host error contents are
@@ -62,7 +66,7 @@ outside it:
 
 ```tsx
 import { useRef, useState } from "react";
-import { Walkthrough, type WalkthroughHost } from "balade/viewer";
+import { Walkthrough, type WalkthroughHost } from "@balade/viewer";
 
 export function Review({ payload, host }: { payload: unknown; host: WalkthroughHost }) {
   const scrollRoot = useRef<HTMLDivElement>(null);
@@ -108,8 +112,8 @@ server-rendered React roots, give each root a distinct React `identifierPrefix`.
 walkthrough's files sections. It needs no payload:
 
 ```tsx
-import { Diff, type DiffFile } from "balade/viewer";
-import "balade/viewer.css";
+import { Diff, type DiffFile } from "@balade/viewer";
+import "@balade/viewer/viewer.css";
 
 // `GitHubFile` is an item from GitHub's "List pull request files" endpoint.
 function toDiffFile(file: GitHubFile): DiffFile {
@@ -200,9 +204,13 @@ script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src
 ```
 
 Serve your bundler's generated script and CSS assets from your origin. Mermaid
-and syntax grammars load as separate chunks. React and React DOM are peers;
-rendering dependencies, including Effect, ship inside the viewer bundle. Your
-application can use a different Effect version.
+and syntax grammars are dynamic imports, so your bundler emits them as separate
+chunks that load only when a walkthrough uses them. React, React DOM and Effect 4
+are peers. Shiki, its grammars and themes, Mermaid and Octicons are regular
+dependencies: when your application already uses compatible versions, the
+package manager installs one copy and your bundler shares it. The diff component
+is bundled with an empty fallback grammar registry, because its upstream
+highlighter would otherwise add every highlight.js grammar to your bundle.
 
 The viewer makes data requests only through the host. It neither chooses API
 paths nor reads browser storage. Mermaid diagrams that contain resource syntax,

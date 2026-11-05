@@ -87,7 +87,7 @@ const decodePullRequest = Schema.decodeUnknownEffect(PullRequestResponse, {
 });
 const decodeRepositoryUrl = Schema.decodeUnknownResult(Schema.URLFromString);
 
-class PullRepositoryUrlInvalid extends Schema.TaggedErrorClass<PullRepositoryUrlInvalid>()(
+class PullRepositoryUrlInvalid extends Schema.TaggedError<PullRepositoryUrlInvalid>()(
   "PullRepositoryUrlInvalid",
   { url: Schema.String, reason: Schema.String },
 ) {}
@@ -126,13 +126,11 @@ const resolveContext = Effect.fn("resolveContext")(function* (options: ResolveOp
     requested,
     resolution,
   });
-  const diagnostics = snapshot.notices.map(
-    (notice): CheckDiagnostic => ({
-      ...notice,
-      level: "warning",
-      file: options.file,
-    }),
-  );
+  const diagnostics = snapshot.notices.map((notice): CheckDiagnostic => ({
+    ...notice,
+    level: "warning",
+    file: options.file,
+  }));
   const entries = yield* hydrateFiles(snapshot);
   const changed = yield* readOverlay(root, snapshot.base, pin);
   const headDistance = Number(
@@ -392,10 +390,8 @@ const optionOnExitOne = <A, R>(
 ): Effect.Effect<Option.Option<A>, CommandFailed, R> =>
   effect.pipe(
     Effect.map(Option.some),
-    Effect.catchTag(
-      "CommandFailed",
-      (error): Effect.Effect<Option.Option<A>, CommandFailed> =>
-        error.code === 1 ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
+    Effect.catchTag("CommandFailed", (error): Effect.Effect<Option.Option<A>, CommandFailed> =>
+      error.code === 1 ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
     ),
   );
 

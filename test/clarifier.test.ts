@@ -57,12 +57,12 @@ it("quotes the PR-controlled walkthrough path in the clarification prompt", () =
   expect(prompt).not.toContain(`Walkthrough source path: ${sourcePath}`);
 });
 
-class FixtureValidationFailed extends Schema.TaggedErrorClass<FixtureValidationFailed>()(
+class FixtureValidationFailed extends Schema.TaggedError<FixtureValidationFailed>()(
   "FixtureValidationFailed",
   {},
 ) {}
 
-class FixtureClarificationRejected extends Schema.TaggedErrorClass<FixtureClarificationRejected>()(
+class FixtureClarificationRejected extends Schema.TaggedError<FixtureClarificationRejected>()(
   "FixtureClarificationRejected",
   { diagnostics: Schema.Array(Schema.String) },
 ) {}

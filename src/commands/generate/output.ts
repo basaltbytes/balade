@@ -11,27 +11,24 @@ import { frontmatterBlock, parseFrontmatter } from "../../walkthrough/frontmatte
 /** Where a generated walkthrough lands unless `--dir` (or the library's `directory`) says otherwise. */
 export const DEFAULT_WALKTHROUGH_DIRECTORY = ".agents/walkthroughs";
 
-export class OutputOutsideRepository extends Schema.TaggedErrorClass<OutputOutsideRepository>()(
+export class OutputOutsideRepository extends Schema.TaggedError<OutputOutsideRepository>()(
   "OutputOutsideRepository",
   { directory: Schema.String, root: Schema.String },
 ) {}
 
-export class DraftWriteFailed extends Schema.TaggedErrorClass<DraftWriteFailed>()(
-  "DraftWriteFailed",
-  {
-    file: Schema.String,
-    operation: Schema.Literals(["replace", "remove"]),
-    reason: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
+export class DraftWriteFailed extends Schema.TaggedError<DraftWriteFailed>()("DraftWriteFailed", {
+  file: Schema.String,
+  operation: Schema.Literals(["replace", "remove"]),
+  reason: Schema.String,
+  cause: Schema.Defect(),
+}) {}
 
-export class DraftRetentionFailed extends Schema.TaggedErrorClass<DraftRetentionFailed>()(
+export class DraftRetentionFailed extends Schema.TaggedError<DraftRetentionFailed>()(
   "DraftRetentionFailed",
   { file: Schema.String, reason: Schema.String, cause: Schema.Defect() },
 ) {}
 
-export class OutputAccessFailed extends Schema.TaggedErrorClass<OutputAccessFailed>()(
+export class OutputAccessFailed extends Schema.TaggedError<OutputAccessFailed>()(
   "OutputAccessFailed",
   {
     path: Schema.String,

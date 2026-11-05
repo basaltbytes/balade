@@ -59,9 +59,9 @@ export function herdrPane(env: Record<string, string | undefined>): HerdrPane | 
 }
 
 const herdrPaneConfig = Config.all({
-  HERDR_ENV: Config.string("HERDR_ENV").pipe(Config.withDefault("")),
-  HERDR_SOCKET_PATH: Config.string("HERDR_SOCKET_PATH").pipe(Config.withDefault("")),
-  HERDR_PANE_ID: Config.string("HERDR_PANE_ID").pipe(Config.withDefault("")),
+  HERDR_ENV: Config.String("HERDR_ENV").pipe(Config.withDefault("")),
+  HERDR_SOCKET_PATH: Config.String("HERDR_SOCKET_PATH").pipe(Config.withDefault("")),
+  HERDR_PANE_ID: Config.String("HERDR_PANE_ID").pipe(Config.withDefault("")),
 }).pipe(Config.map(herdrPane));
 
 /** Windows exposes the socket as a named pipe; elsewhere the path is literal. */

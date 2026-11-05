@@ -5,28 +5,28 @@ import { parseQaAgentStatus, parseQaState } from "../../../src/contract/qa-parse
 import type { QaAgentStatus, QaAskRequest, QaState } from "../contract";
 import { BrowserFetch } from "./browser";
 
-export class QaFetchFailed extends Schema.TaggedErrorClass<QaFetchFailed>()("QaFetchFailed", {
+export class QaFetchFailed extends Schema.TaggedError<QaFetchFailed>()("QaFetchFailed", {
   cause: Schema.Defect(),
 }) {}
 
-export class QaResponseInvalid extends Schema.TaggedErrorClass<QaResponseInvalid>()(
+export class QaResponseInvalid extends Schema.TaggedError<QaResponseInvalid>()(
   "QaResponseInvalid",
   { cause: Schema.Defect() },
 ) {}
 
-export class QaHttpFailed extends Schema.TaggedErrorClass<QaHttpFailed>()("QaHttpFailed", {
+export class QaHttpFailed extends Schema.TaggedError<QaHttpFailed>()("QaHttpFailed", {
   status: Schema.Int,
   statusText: Schema.String,
 }) {}
 
 /** The clarification POST reached the server, but local agent setup did not finish. */
-export class QaAgentUnavailable extends Schema.TaggedErrorClass<QaAgentUnavailable>()(
+export class QaAgentUnavailable extends Schema.TaggedError<QaAgentUnavailable>()(
   "QaAgentUnavailable",
   {},
 ) {}
 
 /** The browser is showing a different walkthrough generation than the server. */
-export class QaGenerationChanged extends Schema.TaggedErrorClass<QaGenerationChanged>()(
+export class QaGenerationChanged extends Schema.TaggedError<QaGenerationChanged>()(
   "QaGenerationChanged",
   {},
 ) {}

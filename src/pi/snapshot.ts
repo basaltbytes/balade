@@ -36,7 +36,7 @@ export interface PinnedRepositorySnapshot {
   ) => Effect.Effect<string, SnapshotPathRejected | SnapshotReadFailed>;
 }
 
-export class SnapshotOpenFailed extends Schema.TaggedErrorClass<SnapshotOpenFailed>()(
+export class SnapshotOpenFailed extends Schema.TaggedError<SnapshotOpenFailed>()(
   "SnapshotOpenFailed",
   {
     repositoryRoot: Schema.String,
@@ -45,12 +45,12 @@ export class SnapshotOpenFailed extends Schema.TaggedErrorClass<SnapshotOpenFail
   },
 ) {}
 
-export class SnapshotPathRejected extends Schema.TaggedErrorClass<SnapshotPathRejected>()(
+export class SnapshotPathRejected extends Schema.TaggedError<SnapshotPathRejected>()(
   "SnapshotPathRejected",
   { path: Schema.String, reason: Schema.String },
 ) {}
 
-export class SnapshotReadFailed extends Schema.TaggedErrorClass<SnapshotReadFailed>()(
+export class SnapshotReadFailed extends Schema.TaggedError<SnapshotReadFailed>()(
   "SnapshotReadFailed",
   { path: Schema.String, cause: Schema.Defect() },
 ) {}
@@ -60,7 +60,7 @@ interface CacheEntry {
   readonly accessedAt: number;
 }
 
-class SnapshotCacheRejected extends Schema.TaggedErrorClass<SnapshotCacheRejected>()(
+class SnapshotCacheRejected extends Schema.TaggedError<SnapshotCacheRejected>()(
   "SnapshotCacheRejected",
   { path: Schema.String, reason: Schema.String },
 ) {}

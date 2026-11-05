@@ -12,13 +12,13 @@ one folder per CLI verb under `commands/`, the concept folders — `walkthrough/
 `authoring/` (the versioned authoring package: typed data plus its renderings),
 `pi/` (the Pi adapter and agent sessions), `agent/` (shared provider/model
 configuration), `server/` (live session runtime) — and the root files `cli.ts`,
-`library.ts`, `answers.ts`, `clarification.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
+`library.ts`, `core.ts`, `clarification.ts`, `shell.ts`, `state.ts`, `terminal.ts`, `failure.ts`, `presence.ts`,
 `submission.ts`, `clarification.ts`.
 
 All imports flow one direction; peers never import each other:
 
 ```
-cli.ts  library.ts  answers.ts  entries + layer wiring — the executable and the package export
+cli.ts  library.ts  core.ts     entries + layer wiring — the executable and the package exports
 commands/    server/        orchestrators — the ONLY places product concepts compose
 agent/                      → pi, presence, terminal
 pi/                         → authoring, git (type imports), contract, shell
@@ -170,7 +170,7 @@ checkout's branch would mislabel host-supplied ranges. The shared header boundar
 rejects invalid fields and non-HTTP URLs as `PayloadInvalid`.
 
 `format: 1` versions the resolved contract separately from the input's
-`walkthrough: 1`. `balade/contract` exports the current `PAYLOAD_FORMAT`, contract
+`walkthrough: 1`. `@balade/core` exports the current `PAYLOAD_FORMAT`, contract
 types and an Effect-returning `decodePayload`. Another safe integer version
 produces `PayloadFormatUnsupported`; malformed or excess fields, including unsafe
 integer versions, produce `PayloadInvalid`.
@@ -205,15 +205,20 @@ the pipeline green.
 Two things survive the supersession: diagnostics stay values (`CheckDiagnostic`
 is the product of `check`, not a failure — the error channel is for real
 failures), and pure parse/compile functions stay pure, orchestrated from Effect
-rather than wrapped in it. One version note: the pinned `effect@4.0.0-beta.102`
-(the current `beta` dist-tag) names the service API `Context.Service` —
-`ServiceMap` is later naming that most docs already use. Verify every API
-against the installed `.d.ts` under `node_modules/effect/dist/`.
+rather than wrapped in it. One version note: balade pins the stable
+`effect@4.1.2`. Stable 4.x renamed several beta APIs this code used:
+`Schema.TaggedError`, PascalCase constructors in `effect/cli` and `Config`
+(`Flag.String`, `Flag.Literals`, `Prompt.Select`), `effect/cli` and
+`effect/http` outside `unstable/`, `SecureRandom` in `effect/crypto`,
+`ByteSize` for sizes, and a native `Arbitrary` module in place of fast-check.
+A stable boolean flag fails when omitted, so every one carries
+`Flag.withDefault(false)`. The service API is `Context.Service`. Verify every
+API against the installed `.d.ts` under `node_modules/effect/dist/`.
 
 ## The renderer owns an instance; the application owns browser capabilities
 
 Decided on [#164](https://github.com/basaltbytes/balade/issues/164). The public
-`balade/viewer` entry composes `Walkthrough.Root`, `Header`, `Nav`, `Sections`
+`@balade/viewer` entry composes `Walkthrough.Root`, `Header`, `Nav`, `Sections`
 and `Clarifications`; `WalkthroughView` uses those same parts for the default
 layout. Root decodes the payload and supplies a runtime containing only Shiki.
 No renderer import reaches the standalone app's browser runtime.
@@ -246,22 +251,22 @@ embedding styles never change the host document. Host review-storage failures
 log only the operation and typed error tag before the UI shows its persistence
 badge, without logging stored state or arbitrary host error contents.
 
-React and React DOM are optional peers for CLI-only installations
-and required by viewer consumers. Other renderer dependencies are bundled, with
-Mermaid dynamically imported. TypeScript emits the declaration graph beside the
-viewer, including the existing contract types.
+The viewer ships as `@balade/viewer`: React, React DOM and Effect are peers,
+and the shared rendering libraries are dependencies rather than bundled copies
+(see "The viewer and contract ship as lean packages over one source tree").
 
 The diff library's audited highlighter boundary already uses Shiki exclusively.
 Its Lowlight adapter now receives an empty automatic-language registry through a
 build adapter, retaining the upstream engine API while removing the redundant
 bundled grammars. The package browser smoke test exercises both Shiki and diff
-rendering from the packed ESM entry, alongside a host with another Effect major.
+rendering from the packed ESM entry, in a host that supplies its own React and
+Effect 4.
 This keeps the single-file export smaller than the preceding build.
 
 ## `Diff` and `{% files %}` share one file browser
 
 Decided on [#172](https://github.com/basaltbytes/balade/issues/172). Hosts show a
-pull request's changed files before a walkthrough exists, so `balade/viewer`
+pull request's changed files before a walkthrough exists, so `@balade/viewer`
 exports `Diff`, which takes `DiffFile` values instead of a payload.
 `app/src/widgets/file-browser.tsx` owns the browser frame and the file row. Both
 `Diff` and the walkthrough's `Files` map their input to the same `DiffRow`
@@ -392,15 +397,24 @@ The manual close and warning callbacks are gone. The SPA review-store service
 likewise logs browser-storage and network failures in Effect before returning
 its existing fallback outcome.
 
-## `typecheck` carries the Effect language service
+## `typecheck` carries the Effect diagnostics from `@effect/tsgo`
 
-`@effect/tsgo` patches the native `tsc` binary in place — the `prepare` script
-re-applies it after every install, and the plugin block in `tsconfig.json`
-turns it on. Effect diagnostics therefore run inside `pnpm typecheck`:
-error-level findings fail the build, suggestions print but do not (the
-`ignoreEffectSuggestionsInTscExitCode` default). The patched binary must match
-the installed TypeScript by gitHead, so the two packages move together — bump
-`typescript` and `@effect/tsgo` in the same change.
+`pnpm typecheck` runs `effect-tsgo tsc` for the three projects: the
+Effect-patched TypeScript-Go compiler that ships inside `@effect/tsgo`, so
+Effect diagnostics are ordinary `tsc` errors and CI needs no second tool. The
+`prepare` script also patches the installed `typescript` package
+(`effect-tsgo patch --typescript`), so editors and the build's plain `tsc`
+report the same diagnostics. The configuration lives once, in
+`tsconfig.base.json`, which `tsconfig.json` and `app/tsconfig.json` extend:
+the same rule set as usine, 101 rules at `error`. The rules that fail on the
+current code are `off` there and listed with their counts in
+[docs/effect-diagnostics.md](docs/effect-diagnostics.md); turning one on means
+deleting its line after fixing the sites. `deterministicKeys` stays off by
+policy, because service keys are `@balade/<Name>`. Oxlint and `oxlint-tsgolint`
+are pinned at versions the installed `@effect/tsgo` supports, so
+`effect-tsgo oxlint --type-aware` can apply the autofixes for the mechanical
+rules. What would move this: `@effect/tsgo` shipping without a native
+TypeScript dependency, or Oxlint carrying the Effect rules upstream.
 
 ## A PR target serves from `pull/<n>/head` when the branch is not checked out
 
@@ -675,14 +689,13 @@ Pi lazily (its root barrel loads TUI modules at import time), so `check`,
 `^22.22.2 || ^24.15.0 || >=26.0.0`, covering Pi and its locked production tree;
 Node 20 passed end of life on 2026-04-30.
 
-`@effect/platform-node-shared` is pinned as a direct dependency even though
-balade never imports it. `@effect/platform-node` declares it with a caret
-range, so a fresh npm install of the published package resolves the newest
-beta, whose `effect` peer pulls a second effect runtime into the tree and
-kills the CLI at startup (caught by the npm-package smoke job, 2026-08-04).
-The explicit pin makes npm dedupe onto the version balade's own `effect` pin
-matches. Bump it in lockstep with every effect-family bump; drop it when the
-Effect v4 packages stabilize their internal ranges.
+`@effect/platform-node-shared` is no longer pinned directly. During the beta,
+`@effect/platform-node` declared it with a caret range, so a fresh npm install
+resolved a newer beta whose `effect` peer pulled a second runtime into the tree
+and killed the CLI at startup (caught by the npm-package smoke job,
+2026-08-04). Stable `@effect/platform-node` depends on the matching
+`platform-node-shared` version exactly, so the workaround is retired. Bump the
+effect family in lockstep.
 
 Pi's 0.x SDK stops at two Balade-owned service boundaries:
 `WalkthroughAuthor` for generation, provider/model discovery and credential
@@ -1147,30 +1160,32 @@ enforces the same rule as an error so `check` rejects drift and generation can
 repair it. What would move this: a replacement closing widget that preserves
 the complete diff and per-file review-state behavior without a `files` block.
 
-## Publish stays in release.yml; changesets only versions and tags
+## One release job versions, stages and tags; a maintainer approves on npm
 
-Decided on [#49](https://github.com/basaltbytes/balade/issues/49). Changesets
-owns the bookkeeping: PRs carry changeset files, `changesets.yml` maintains the
-rolling Version Packages PR and, once it merges, pushes the `v*` tag and
-dispatches `release.yml` on it. Publishing itself never moves out of
-`release.yml`, because npmjs.com pins that exact workflow file as the package's
-trusted publisher — OIDC, no NPM_TOKEN anywhere — and relocating the publish
-step would mean re-registering the trusted publisher for zero gain. The
-dispatch is explicit (`gh workflow run`) because a tag pushed with the default
-`GITHUB_TOKEN` does not fire another workflow's `push: tags` trigger, and the
-repository deliberately holds no long-lived token that would.
+Decided on [#49](https://github.com/basaltbytes/balade/issues/49), revised
+with [#175](https://github.com/basaltbytes/balade/issues/175) to the flow the
+other basaltbytes repositories use. `release.yml` runs the changesets action on
+every push to `main`: while changesets are pending it maintains the rolling
+Version Packages PR; once that PR merges, `pnpm changeset:publish` builds and
+stages every workspace version npm lacks (`scripts/release/stage.mjs`, which
+includes the root `balade` package that `pnpm stage publish -r` skips), then
+`scripts/release/tag.mjs` checks the public registry. A staged version is not
+installable until an npm maintainer approves it, which is the human gate; the
+next run of the job tags the release through `changeset git-tag` once every
+version is public. npmjs.com pins this one workflow file as the trusted
+publisher of all three packages (OIDC, no NPM_TOKEN anywhere), which is why
+publishing never moves out of it. The pinned pnpm is 11.20.0, the first line
+with `pnpm stage`.
 
-The tag step is hand-rolled rather than `changeset git-tag` behind the action's
-`publish-script` input: gated on the action's `has-changesets` output, it tags only
-when the checked-out `package.json` version has no tag yet, so every other
-push to main is a cheap, observable no-op and nothing depends on parsing
-changeset stdout. `package.json` is the CLI version source; the installed
-binary reads it directly, so changesets has no second CLI constant to update.
-The authoring package version (`src/authoring/package.ts`) tracks the
+The quality gate is CI on `main`: the release job builds and stages without
+re-running lint, tests and the package smoke, because the same commit's `ci`
+workflow runs them in parallel and the maintainer approves after reading both.
+`package.json` is the CLI version source; the installed binary reads it
+directly. The authoring package version (`src/authoring/package.ts`) tracks the
 walkthrough/prompt contract on its own policy and must never be wired in. What
-would move this: npm dropping
-per-workflow trusted-publisher pinning, or the repository adopting a bot
-identity whose pushes may trigger workflows.
+would move this: npm dropping per-workflow trusted-publisher pinning, or a
+`next` prerelease line for every push to `main`, which would reuse the same
+workflow and registry check.
 
 ## CI installs ripgrep itself and forbids Pi's download fallback
 
@@ -1225,7 +1240,9 @@ than a downloader. The workflow token remains `contents: read` and carries no
 npm credential; the installed pkg.pr.new App owns upload authentication, the
 check and the pull-request comment. One concurrency group per pull request
 cancels stale package jobs before an older commit can replace the current
-preview comment.
+preview comment. The job publishes `balade`, `@balade/core` and
+`@balade/viewer` together, so a preview's `@balade/core` dependency resolves to
+the same commit.
 
 `--pnpm` packs through the same package manager as `package:smoke`. Balade is a
 binary, so `--bin` makes the comment show the direct `npx` command;
@@ -1728,7 +1745,7 @@ The exported validator and served validator therefore cannot diverge on body
 acceptance. `clarification.ts` owns JSON-framed task context, shared by Pi and
 external hosts; hosts may supply walkthrough source or the stored payload.
 
-`balade/answers` is a portable entry alongside the Node library. It exports the
+`@balade/core` (`src/core.ts`) is the portable entry alongside the Node library. It exports the
 payload Promise checker, Effect checker and context builder without loading Pi,
 filesystem adapters or Node built-ins. The npm smoke bundles and executes this
 entry while rejecting Node imports. The repository API remains on `balade`,
@@ -1736,3 +1753,56 @@ where the live layer is wired. File reads moved to `walkthrough/source.ts` so
 the answer entry can share typed read failures without importing the document
 compiler's Node hashing dependency. This adds no payload version or rendering
 sink and leaves thread storage and agent execution with the host.
+
+## The viewer and contract ship as lean packages over one source tree
+
+Decided on [#175](https://github.com/basaltbytes/balade/issues/175). The
+repository is a pnpm workspace publishing three packages at one fixed version
+(`.changeset/config.json`): `balade`, `@balade/core` and `@balade/viewer`.
+`packages/core` and `packages/viewer` hold only a manifest and build
+configuration. Their sources stay in `src/` and `app/src/`: `src/core.ts` is the
+core entry and `app/src/viewer-entry.ts` the viewer entry, so the served app,
+the single-file export and the packages render from the same modules and the
+src/ dependency law is unchanged.
+
+`@balade/core` bundles the payload contract and the payload answer check into
+one ESM file with `effect` as a peer (`^4.0.0`) and Markdoc and `yaml` as
+dependencies; the frontmatter parser reached by the fragment compiler needs
+`yaml`. `@balade/viewer` bundles balade's own modules, including its copy of the
+contract decoders, and leaves React, React DOM and Effect as peers. Shiki, its
+grammars and themes, Mermaid and Octicons are dependencies with caret ranges:
+a host that already uses them resolves one copy, and its bundler emits the
+curated grammar map and Mermaid as dynamic chunks only when reached. Bundling
+them, as 0.18.0 did, shipped 132 files and 7.9 MB that no host bundler could
+dedupe. `@git-diff-view/react` is the exception and stays bundled: its core
+imports `lowlight`'s full highlight.js registry eagerly, and only this build's
+`balade-diff-languages` adapter replaces it with an empty one.
+
+Declarations ship only for what a consumer can reach. The viewer build emits
+tsc declarations, then `packages/viewer/declarations.mjs` copies the files
+reachable from `viewer.d.ts`, resolves the contract types to `@balade/core`
+and fails if any reachable file lies outside `app/src/`. Exported decoders and
+Effect functions carry explicit types: an inferred `Effect.fn` or
+`Schema.decodeUnknownEffect` result expanded the full payload schema into
+`qa-parser.d.ts` (5.4 MB), `data/host.d.ts` (3.6 MB) and
+`walkthrough/answer.d.ts` (643 KB). The packed viewer measured 143 KB with
+12 KB of declarations; core measured 39 KB with 212 KB of declarations, most
+of them the schema that `types.ts` derives from.
+
+`balade` depends on `@balade/core` and takes `@balade/viewer` as an optional
+peer. A hard viewer dependency would add about 185 MB of Mermaid, Shiki and
+React (auto-installed peers) to every `npx balade`. `balade/contract`,
+`balade/answers`, `balade/viewer` and `balade/viewer.css` are hand-written
+re-exports in `deprecated/` for one minor version; `balade/viewer` resolves
+only when the host installs `@balade/viewer`. The CLI compiles its own copy of
+the contract modules, so `instanceof` checks between errors from `balade` and
+classes imported from `@balade/core` do not hold; match on `_tag`.
+
+Releases stage all three packages together (see "One release job versions,
+stages and tags"). A new package's first version is published by hand so
+trusted publishing can be configured for it. The single-file export does not
+change with this
+packaging; the stable Effect runtime added 20,858 bytes to it (6,689,663 to
+6,710,521). What would move this: a host needing the contract decoders as a
+shared runtime with the viewer, which would make the viewer import them from
+`@balade/core` instead of bundling its own copy.
