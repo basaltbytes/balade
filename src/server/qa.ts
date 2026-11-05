@@ -545,18 +545,17 @@ function generationKey(path: string, payload: Payload): string {
 function failPendingThreads(state: QaState, failedAt: string): QaState {
   return {
     ...state,
-    threads: state.threads.map(
-      (thread): QaThread =>
-        thread.status === "pending"
-          ? {
-              id: thread.id,
-              anchor: thread.anchor,
-              status: "failed",
-              turns: thread.turns,
-              failed: thread.pending,
-              failedAt,
-            }
-          : thread,
+    threads: state.threads.map((thread): QaThread =>
+      thread.status === "pending"
+        ? {
+            id: thread.id,
+            anchor: thread.anchor,
+            status: "failed",
+            turns: thread.turns,
+            failed: thread.pending,
+            failedAt,
+          }
+        : thread,
     ),
   };
 }

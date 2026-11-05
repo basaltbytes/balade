@@ -1,5 +1,5 @@
 {
-  "$schema": "./node_modules/@effect/tsgo/schema.json",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
@@ -14,12 +14,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "types": ["node"],
-    "plugins": [
-      {
-        "name": "@effect/language-service"
-      }
-    ]
+    "types": ["node"]
   },
   "include": ["src", "test", "vitest.config.ts", "vitest.paid.config.ts"]
 }

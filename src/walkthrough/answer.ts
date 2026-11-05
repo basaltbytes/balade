@@ -70,11 +70,10 @@ export function checkAnswerEffect(
       ? checkPayloadAnswer(body, source.payload)
       : checkRepositoryAnswer(body, source);
   return checked.pipe(
-    Effect.map(
-      (result): AnswerCheckResult =>
-        Result.isSuccess(result)
-          ? { _tag: "Accepted", blocks: result.success }
-          : { _tag: "Rejected", diagnostics: result.failure.diagnostics },
+    Effect.map((result): AnswerCheckResult =>
+      Result.isSuccess(result)
+        ? { _tag: "Accepted", blocks: result.success }
+        : { _tag: "Rejected", diagnostics: result.failure.diagnostics },
     ),
   );
 }

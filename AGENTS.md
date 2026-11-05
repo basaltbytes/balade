@@ -61,9 +61,11 @@ reporting the command.
   [DECISIONS.md](DECISIONS.md) before adding a file or an import.
 - Chrome strings ship in `en` and `fr` (`app/src/i18n.ts`); never hardcode
   user-visible English in a component.
-- Effect v4 beta APIs differ from v3 and from most published docs: verify
+- Effect 4 stable APIs differ from v3 and from most published docs: verify
   against the installed `.d.ts` under `node_modules/effect/dist/`, never from
-  memory. Versions are pinned exact; bump deliberately.
+  memory. Versions are pinned exact; bump deliberately. `pnpm typecheck` runs
+  the Effect-patched `tsc` from `@effect/tsgo` with the diagnostics in
+  `tsconfig.base.json`; a rule listed there as `off` is backlog, not policy.
 - Tests go through real seams (fixture git repos, injected stores); module
   mocking is forbidden.
 - **Every string derived from a pull request is untrusted**, including the
@@ -85,7 +87,7 @@ adding compatibility layers, fallbacks or migrations.
 
 ## Commands
 
-- `pnpm typecheck` — both projects (CLI + tests, then the app)
+- `pnpm typecheck` — Effect-patched `tsc` over the CLI + tests, the app and the site
 - `pnpm test` — vitest, CLI and app suites
 - `pnpm lint` / `pnpm format:check` — oxlint / oxfmt
 - `pnpm build` — `@balade/core` and `@balade/viewer` to `packages/*/dist/`, CLI to `dist/`, SPA to `dist/app/`, export bundle to `dist/export/`

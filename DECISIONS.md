@@ -397,15 +397,24 @@ The manual close and warning callbacks are gone. The SPA review-store service
 likewise logs browser-storage and network failures in Effect before returning
 its existing fallback outcome.
 
-## `typecheck` carries the Effect language service
+## `typecheck` carries the Effect diagnostics from `@effect/tsgo`
 
-`@effect/tsgo` patches the native `tsc` binary in place — the `prepare` script
-re-applies it after every install, and the plugin block in `tsconfig.json`
-turns it on. Effect diagnostics therefore run inside `pnpm typecheck`:
-error-level findings fail the build, suggestions print but do not (the
-`ignoreEffectSuggestionsInTscExitCode` default). The patched binary must match
-the installed TypeScript by gitHead, so the two packages move together — bump
-`typescript` and `@effect/tsgo` in the same change.
+`pnpm typecheck` runs `effect-tsgo tsc` for the three projects: the
+Effect-patched TypeScript-Go compiler that ships inside `@effect/tsgo`, so
+Effect diagnostics are ordinary `tsc` errors and CI needs no second tool. The
+`prepare` script also patches the installed `typescript` package
+(`effect-tsgo patch --typescript`), so editors and the build's plain `tsc`
+report the same diagnostics. The configuration lives once, in
+`tsconfig.base.json`, which `tsconfig.json` and `app/tsconfig.json` extend:
+the same rule set as usine, 101 rules at `error`. The rules that fail on the
+current code are `off` there and listed with their counts in
+[docs/effect-diagnostics.md](docs/effect-diagnostics.md); turning one on means
+deleting its line after fixing the sites. `deterministicKeys` stays off by
+policy, because service keys are `@balade/<Name>`. Oxlint and `oxlint-tsgolint`
+are pinned at versions the installed `@effect/tsgo` supports, so
+`effect-tsgo oxlint --type-aware` can apply the autofixes for the mechanical
+rules. What would move this: `@effect/tsgo` shipping without a native
+TypeScript dependency, or Oxlint carrying the Effect rules upstream.
 
 ## A PR target serves from `pull/<n>/head` when the branch is not checked out
 
@@ -1151,30 +1160,32 @@ enforces the same rule as an error so `check` rejects drift and generation can
 repair it. What would move this: a replacement closing widget that preserves
 the complete diff and per-file review-state behavior without a `files` block.
 
-## Publish stays in release.yml; changesets only versions and tags
+## One release job versions, stages and tags; a maintainer approves on npm
 
-Decided on [#49](https://github.com/basaltbytes/balade/issues/49). Changesets
-owns the bookkeeping: PRs carry changeset files, `changesets.yml` maintains the
-rolling Version Packages PR and, once it merges, pushes the `v*` tag and
-dispatches `release.yml` on it. Publishing itself never moves out of
-`release.yml`, because npmjs.com pins that exact workflow file as each package's
-trusted publisher — OIDC, no NPM_TOKEN anywhere — and relocating the publish
-step would mean re-registering the trusted publisher for zero gain. The
-dispatch is explicit (`gh workflow run`) because a tag pushed with the default
-`GITHUB_TOKEN` does not fire another workflow's `push: tags` trigger, and the
-repository deliberately holds no long-lived token that would.
+Decided on [#49](https://github.com/basaltbytes/balade/issues/49), revised
+with [#175](https://github.com/basaltbytes/balade/issues/175) to the flow the
+other basaltbytes repositories use. `release.yml` runs the changesets action on
+every push to `main`: while changesets are pending it maintains the rolling
+Version Packages PR; once that PR merges, `pnpm changeset:publish` builds and
+stages every workspace version npm lacks (`scripts/release/stage.mjs`, which
+includes the root `balade` package that `pnpm stage publish -r` skips), then
+`scripts/release/tag.mjs` checks the public registry. A staged version is not
+installable until an npm maintainer approves it, which is the human gate; the
+next run of the job tags the release through `changeset git-tag` once every
+version is public. npmjs.com pins this one workflow file as the trusted
+publisher of all three packages (OIDC, no NPM_TOKEN anywhere), which is why
+publishing never moves out of it. The pinned pnpm is 11.20.0, the first line
+with `pnpm stage`.
 
-The tag step is hand-rolled rather than `changeset git-tag` behind the action's
-`publish-script` input: gated on the action's `has-changesets` output, it tags only
-when the checked-out `package.json` version has no tag yet, so every other
-push to main is a cheap, observable no-op and nothing depends on parsing
-changeset stdout. `package.json` is the CLI version source; the installed
-binary reads it directly, so changesets has no second CLI constant to update.
-The authoring package version (`src/authoring/package.ts`) tracks the
+The quality gate is CI on `main`: the release job builds and stages without
+re-running lint, tests and the package smoke, because the same commit's `ci`
+workflow runs them in parallel and the maintainer approves after reading both.
+`package.json` is the CLI version source; the installed binary reads it
+directly. The authoring package version (`src/authoring/package.ts`) tracks the
 walkthrough/prompt contract on its own policy and must never be wired in. What
-would move this: npm dropping
-per-workflow trusted-publisher pinning, or the repository adopting a bot
-identity whose pushes may trigger workflows.
+would move this: npm dropping per-workflow trusted-publisher pinning, or a
+`next` prerelease line for every push to `main`, which would reuse the same
+workflow and registry check.
 
 ## CI installs ripgrep itself and forbids Pi's download fallback
 
@@ -1787,10 +1798,10 @@ only when the host installs `@balade/viewer`. The CLI compiles its own copy of
 the contract modules, so `instanceof` checks between errors from `balade` and
 classes imported from `@balade/core` do not hold; match on `_tag`.
 
-`release.yml` runs the gate once, publishes the packages with `pnpm -r
-publish`, which skips versions already on npm, and then publishes `balade`.
-A new package's first version is published by hand so trusted publishing can
-be configured for it. The single-file export does not change with this
+Releases stage all three packages together (see "One release job versions,
+stages and tags"). A new package's first version is published by hand so
+trusted publishing can be configured for it. The single-file export does not
+change with this
 packaging; the stable Effect runtime added 20,858 bytes to it (6,689,663 to
 6,710,521). What would move this: a host needing the contract decoders as a
 shared runtime with the viewer, which would make the viewer import them from

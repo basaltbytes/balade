@@ -110,12 +110,10 @@ export const gitCommonDir = Effect.fn("gitCommonDir")(function* (root: string) {
 /** Absolute repository root holding `cwd`. */
 export const gitToplevel = Effect.fn("gitToplevel")(function* (cwd: string) {
   const out = yield* gitOut(["rev-parse", "--show-toplevel"], cwd).pipe(
-    Effect.catchTag(
-      "CommandFailed",
-      (error): Effect.Effect<never, ExecError> =>
-        error.file === "git" && error.stderr.includes("not a git repository")
-          ? Effect.fail(new NotARepository({ cwd }))
-          : Effect.fail(error),
+    Effect.catchTag("CommandFailed", (error): Effect.Effect<never, ExecError> =>
+      error.file === "git" && error.stderr.includes("not a git repository")
+        ? Effect.fail(new NotARepository({ cwd }))
+        : Effect.fail(error),
     ),
   );
   const root = out.trim();
