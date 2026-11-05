@@ -154,3 +154,111 @@ describe("release staging", () => {
     }
   });
 });
+
+describe("release tagging", () => {
+  it("tags the commit that set the version, creates the GitHub Release, and does each once", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "balade-tag-test-"));
+    try {
+      const origin = join(directory, "origin.git");
+      const work = join(directory, "work");
+      const identity = {
+        GIT_AUTHOR_NAME: "fixture",
+        GIT_AUTHOR_EMAIL: "fixture@example.com",
+        GIT_COMMITTER_NAME: "fixture",
+        GIT_COMMITTER_EMAIL: "fixture@example.com",
+      };
+      const git = async (...args: string[]) =>
+        (
+          await exec("git", args, { cwd: work, env: { ...process.env, ...identity } })
+        ).stdout.trim();
+      await exec("git", ["init", "--bare", "--initial-branch=main", origin]);
+      await mkdir(join(work, "packages", "lib"), { recursive: true });
+      await git("init", "--initial-branch=main");
+      await git("remote", "add", "origin", origin);
+      await writeFile(join(work, "pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n");
+      const manifest = (name: string) => JSON.stringify({ name, version: "1.0.0" }, null, 2);
+      await writeFile(join(work, "packages", "lib", "package.json"), manifest("@tag-test/lib"));
+      await writeFile(join(work, "package.json"), manifest("tag-test-root"));
+      await git("add", ".");
+      await git("commit", "-q", "-m", "Version Packages");
+      const versioned = await git("rev-parse", "HEAD");
+      // main moves on while the maintainer approves.
+      await writeFile(join(work, "README.md"), "later\n");
+      await git("add", ".");
+      await git("commit", "-q", "-m", "later commit");
+      await git("push", "-q", "-u", "origin", "main");
+
+      // One server is both the registry and the GitHub API.
+      let approved = false;
+      const releases: Array<{ authorization: string | undefined; body: string }> = [];
+      const url = await listen(
+        createServer(async (request, response) => {
+          const path = decodeURIComponent(request.url ?? "");
+          response.setHeader("content-type", "application/json");
+          if (path === "/repos/acme/tag-test/releases/tags/v1.0.0") {
+            response.writeHead(releases.length > 0 ? 200 : 404);
+            response.end("{}");
+            return;
+          }
+          if (path === "/repos/acme/tag-test/releases" && request.method === "POST") {
+            releases.push({
+              authorization: request.headers.authorization,
+              body: await body(request),
+            });
+            response.writeHead(201);
+            response.end("{}");
+            return;
+          }
+          const { name, version } = parsePath(path);
+          response.writeHead(approved ? 200 : 404);
+          response.end(JSON.stringify({ name, version }));
+        }),
+      );
+      await writeFile(join(work, ".npmrc"), `registry=${url}\nfetch-retries=0\n`);
+      const script = fileURLToPath(new URL("../scripts/release/tag.mjs", import.meta.url));
+      const tag = () =>
+        exec(process.execPath, [script], {
+          cwd: work,
+          env: {
+            ...process.env,
+            ...identity,
+            CI: "true",
+            GITHUB_TOKEN: "fixture-token",
+            GITHUB_REPOSITORY: "acme/tag-test",
+            GITHUB_API_URL: url.replace(/\/$/, ""),
+          },
+          timeout: 60_000,
+        });
+      const originTags = async () =>
+        (await exec("git", ["ls-remote", "--tags", origin])).stdout.trim();
+
+      const pending = await tag();
+      expect(pending.stdout).toContain('"release_approval_pending"');
+      expect(pending.stdout).toContain("@tag-test/lib@1.0.0");
+      expect(await originTags()).toBe("");
+      expect(releases).toEqual([]);
+
+      approved = true;
+      const tagged = await tag();
+      expect(tagged.stdout).toContain(`Pushed v1.0.0 at ${versioned}.`);
+      expect(await originTags()).toBe(`${versioned}\trefs/tags/v1.0.0`);
+      expect(releases).toEqual([
+        {
+          authorization: "Bearer fixture-token",
+          body: JSON.stringify({
+            tag_name: "v1.0.0",
+            name: "v1.0.0",
+            generate_release_notes: true,
+          }),
+        },
+      ]);
+
+      const again = await tag();
+      expect(again.stdout).toContain("v1.0.0 is already on origin.");
+      expect(again.stdout).toContain("GitHub Release v1.0.0 already exists.");
+      expect(releases).toHaveLength(1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});

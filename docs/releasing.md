@@ -25,14 +25,17 @@ do not create versions, tags or GitHub Releases.
    `main` after merge.
 3. Merging the Version Packages PR runs the same job with nothing left to
    version, so it runs `pnpm changeset:publish`: build, then
-   `pnpm stage publish -r --include-workspace-root` stages every workspace
-   package whose version npm does not have yet, through OIDC trusted publishing,
-   then `scripts/release/tag.mjs` checks the registry. Staged versions are not
-   installable until an npm maintainer approves them, so the job logs
-   `release_approval_pending` and stops.
+   `scripts/release/stage.mjs` runs `pnpm stage publish` in every workspace
+   package whose version npm does not have yet, the root included, through OIDC
+   trusted publishing; then `scripts/release/tag.mjs` checks the registry.
+   Staged versions are not installable until an npm maintainer approves them, so
+   the job logs `release_approval_pending` and stops.
 4. Approve the staged versions (below). The next run of the `release` job —
-   `workflow_dispatch`, or the next push to `main` — finds every version public
-   and tags `v<version>` through `changeset git-tag`.
+   `workflow_dispatch`, or the next push to `main` — finds every version public.
+   `tag.mjs` then pushes one `v<version>` tag on the commit that set that version
+   in `package.json` (not on `main`'s head, which may have moved on) and creates
+   the GitHub Release for it with generated notes. Both steps are skipped when
+   already done.
 
 ## Approval
 
@@ -55,8 +58,8 @@ Then check the registry, not only the workflow log:
 for name in balade @balade/core @balade/viewer; do pnpm view "$name" version dist-tags.latest; done
 ```
 
-Re-run `release.yml` from the Actions tab to create the tags once every
-version is public.
+Re-run `release.yml` from the Actions tab to create the tag and the GitHub
+Release once every version is public.
 
 ## Packages
 

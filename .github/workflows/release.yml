@@ -9,7 +9,7 @@ name: release
 # On every push to main the changesets action maintains the rolling "Version
 # Packages" PR. Once that PR merges, the publish script stages the new versions
 # on npm; an npm maintainer approves them, and the next run of this job tags the
-# release once every version is public.
+# release and creates its GitHub Release once every version is public.
 on:
   push:
     branches: [main]
@@ -43,6 +43,8 @@ jobs:
         with:
           version-script: pnpm changeset:version
           publish-script: pnpm changeset:publish
-          # Tags come from scripts/release/tag.mjs once npm shows every version.
+          # The v<version> tag and the GitHub Release come from
+          # scripts/release/tag.mjs once npm shows every version; the action
+          # only recognises `changeset publish` output.
           create-github-releases: false
           push-git-tags: false

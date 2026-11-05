@@ -1170,9 +1170,12 @@ Version Packages PR; once that PR merges, `pnpm changeset:publish` builds and
 stages every workspace version npm lacks (`scripts/release/stage.mjs`, which
 includes the root `balade` package that `pnpm stage publish -r` skips), then
 `scripts/release/tag.mjs` checks the public registry. A staged version is not
-installable until an npm maintainer approves it, which is the human gate; the
-next run of the job tags the release through `changeset git-tag` once every
-version is public. npmjs.com pins this one workflow file as the trusted
+installable until an npm maintainer approves it, which is the human gate; once
+every version is public, the next run of the job pushes one `v<version>` tag
+(the packages share a version) on the commit that set it in `package.json`, and
+creates the GitHub Release with generated notes, as the previous workflow did.
+`changeset git-tag` was dropped: it tags `<name>@<version>` per package and
+tags HEAD, which may already be past the release. npmjs.com pins this one workflow file as the trusted
 publisher of all three packages (OIDC, no NPM_TOKEN anywhere), which is why
 publishing never moves out of it. The pinned pnpm is 11.20.0, the first line
 with `pnpm stage`.
