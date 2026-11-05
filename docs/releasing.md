@@ -62,8 +62,10 @@ version is public.
 
 The workspace publishes `balade` (the CLI and its library entry, the workspace
 root), `@balade/core` (`packages/core`) and `@balade/viewer`
-(`packages/viewer`). They share one version: `.changeset/config.json` lists
-them as a fixed group, so a changeset for any of them bumps all three.
+(`packages/viewer`). `pnpm-workspace.yaml` lists `.` among the packages:
+changesets only versions workspace members, and the root is one only when the
+globs name it. They share one version: `.changeset/config.json` lists them as a
+fixed group, so a changeset for any of them bumps all three.
 
 ### A new package
 

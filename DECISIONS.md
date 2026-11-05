@@ -1760,7 +1760,9 @@ Decided on [#175](https://github.com/basaltbytes/balade/issues/175). The
 repository is a pnpm workspace publishing three packages at one fixed version
 (`.changeset/config.json`): `balade`, `@balade/core` and `@balade/viewer`.
 `packages/core` and `packages/viewer` hold only a manifest and build
-configuration. Their sources stay in `src/` and `app/src/`: `src/core.ts` is the
+configuration, and `pnpm-workspace.yaml` lists `.` as a package so changesets
+versions the root `balade` package too (it versions workspace members only, and
+pnpm lists the root once either way). Their sources stay in `src/` and `app/src/`: `src/core.ts` is the
 core entry and `app/src/viewer-entry.ts` the viewer entry, so the served app,
 the single-file export and the packages render from the same modules and the
 src/ dependency law is unchanged.

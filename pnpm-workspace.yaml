@@ -1,5 +1,7 @@
+# The root is the `balade` package itself; listing it makes changesets version it.
 packages:
   - packages/*
+  - .
 
 trustPolicy: no-downgrade
 
