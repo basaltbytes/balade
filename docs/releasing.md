@@ -23,43 +23,28 @@ do not create versions, tags or GitHub Releases.
    Packages PR itself runs no CI (it is created with the default
    `GITHUB_TOKEN`, whose events trigger no workflows); its real gate is CI on
    `main` after merge.
-3. Merging the Version Packages PR runs the same job with nothing left to
-   version, so it runs `pnpm changeset:publish`: build, then
-   `scripts/release/stage.mjs` runs `pnpm stage publish` in every workspace
-   package whose version npm does not have yet, the root included, through OIDC
-   trusted publishing; then `scripts/release/tag.mjs` checks the registry.
-   Staged versions are not installable until an npm maintainer approves them, so
-   the job logs `release_approval_pending` and stops.
-4. Approve the staged versions (below). The next run of the `release` job —
-   `workflow_dispatch`, or the next push to `main` — finds every version public.
-   `tag.mjs` then pushes one `v<version>` tag on the commit that set that version
-   in `package.json` (not on `main`'s head, which may have moved on) and creates
-   the GitHub Release for it with generated notes. Both steps are skipped when
-   already done.
+3. Merging the Version Packages PR is the review. It runs the same job with
+   nothing left to version, so it runs `pnpm changeset:publish`: build, then
+   `scripts/release/publish.mjs` runs `pnpm publish` in every workspace package
+   whose version npm does not have yet, the root included, through OIDC trusted
+   publishing, and waits until the registry serves them. Then
+   `scripts/release/tag.mjs` pushes one `v<version>` tag on the commit that set
+   that version in `package.json` (not on `main`'s head, in case a re-run
+   happens later) and creates the GitHub Release for it with generated notes.
+   Every step skips what already exists, so re-running the job
+   (`workflow_dispatch`) is safe.
 
-## Approval
-
-After the release job logs `release_approval_pending`, use a local npm account
-with publish access to the `@balade` organization and 2FA enabled:
-
-```sh
-pnpm stage list
-pnpm stage view <stage-id>
-pnpm stage approve <stage-id> --otp <code>
-```
-
-Review the package name, version and source commit before approving each stage
-ID. Approve `@balade/core` first, then `@balade/viewer`, then `balade`, which
-depends on both. The **Staged Packages** tab on npmjs.com shows the same list.
-
-Then check the registry, not only the workflow log:
+Check the registry when in doubt:
 
 ```sh
 for name in balade @balade/core @balade/viewer; do pnpm view "$name" version dist-tags.latest; done
 ```
 
-Re-run `release.yml` from the Actions tab to create the tag and the GitHub
-Release once every version is public.
+npm's staged publishing (`pnpm stage publish`, a maintainer approves each
+version with 2FA before it becomes public) is not used: the merge is the review,
+and nothing tells CI when a staged version is approved, so tagging would need a
+second run. Revisit when the library has consumers who would be hurt by a bad
+publish.
 
 ## Packages
 
@@ -83,8 +68,10 @@ pnpm --filter <name> publish --access public --no-git-checks --ignore-scripts --
 
 Then on npmjs.com, under the package's **Settings → Trusted publisher**, add
 GitHub Actions with repository `basaltbytes/balade` and workflow
-`release.yml`, and keep **Allow npm publish** enabled. `pnpm stage publish`
-skips versions npm already has, so the hand-published version is not retried.
+`release.yml`, and tick **Allow npm publish**: npm creates trusted publishers
+as stage-only by default, and the release job publishes directly.
+`publish.mjs` skips versions npm already has, so the hand-published version is
+not retried.
 
 ## Boundaries
 
@@ -95,9 +82,9 @@ skips versions npm already has, so the hand-published version is not retried.
   follows its own policy in
   [authoring-package.md](authoring-package.md#version-policy). Never wire it
   into changesets.
-- The repository pins pnpm 11.20.0 (`devEngines`), which has `pnpm stage` and
+- The repository pins pnpm 11.20.0 (`devEngines`), which publishes through
   OIDC trusted publishing. `workflow_dispatch` on `release.yml` re-runs the
-  version-or-publish-or-tag decision at `main`.
+  version-or-publish decision at `main`.
 - Preview publication runs only for `pull_request` events, with the CI
   workflow's read-only token and no npm credentials. A newer commit cancels an
   older preview job for the same pull request. All three packages publish to

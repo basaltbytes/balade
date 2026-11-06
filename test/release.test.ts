@@ -1,6 +1,6 @@
 /**
  * The release scripts against a registry they can reach: a local HTTP server
- * standing in for npm, and the pnpm that runs this test staging a workspace.
+ * standing in for npm and GitHub, and the pnpm that runs this test publishing a workspace.
  */
 import { execFile } from "node:child_process";
 import { once } from "node:events";
@@ -88,15 +88,15 @@ async function body(request: IncomingMessage): Promise<string> {
   return text;
 }
 
-describe("release staging", () => {
-  it("stages the unpublished workspace versions, the root included, and skips public ones", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "balade-stage-test-"));
+describe("release publishing", () => {
+  it("publishes the unpublished workspace versions, the root included, and skips public ones", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "balade-publish-test-"));
     try {
-      const root = { name: "stage-test-root", version: "1.0.1" };
+      const root = { name: "publish-test-root", version: "1.0.1" };
       const packages = [
-        { name: "@stage-test/changed", version: "1.0.1" },
-        { name: "@stage-test/unchanged", version: "1.0.0" },
-        { name: "@stage-test/private", version: "1.0.0", private: true },
+        { name: "@publish-test/changed", version: "1.0.1" },
+        { name: "@publish-test/unchanged", version: "1.0.0" },
+        { name: "@publish-test/private", version: "1.0.0", private: true },
       ];
       await writeFile(join(directory, "package.json"), JSON.stringify(root));
       await writeFile(join(directory, "pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n");
@@ -105,8 +105,8 @@ describe("release staging", () => {
         await mkdir(path, { recursive: true });
         await writeFile(join(path, "package.json"), JSON.stringify(pkg));
       }
-      // Version 1.0.0 of every package is public; 1.0.1 is not.
-      const staged: string[] = [];
+      // Version 1.0.0 of every package is public; 1.0.1 is not until it is published.
+      const published: string[] = [];
       const url = await listen(
         createServer(async (request, response) => {
           const path = decodeURIComponent(request.url ?? "");
@@ -114,7 +114,8 @@ describe("release staging", () => {
           if (request.method === "GET") {
             const { name, version } = parsePath(path);
             if (version !== undefined) {
-              response.writeHead(version === "1.0.0" ? 200 : 404);
+              const served = version === "1.0.0" || published.includes(`/${name} ${version}`);
+              response.writeHead(served ? 200 : 404);
               response.end(JSON.stringify({ name, version }));
               return;
             }
@@ -128,9 +129,10 @@ describe("release staging", () => {
             );
             return;
           }
+          // `pnpm publish` PUTs the packument with the new version.
           const versions = Object.keys(JSON.parse(await body(request)).versions);
-          staged.push(`${path} ${versions.join(",")}`);
-          response.end(JSON.stringify({ stageId: "123e4567-e89b-12d3-a456-426614174000" }));
+          published.push(`${path} ${versions.join(",")}`);
+          response.end(JSON.stringify({ ok: true }));
         }),
       );
       const port = new URL(url).port;
@@ -138,17 +140,18 @@ describe("release staging", () => {
         join(directory, ".npmrc"),
         `registry=${url}\nfetch-retries=0\n//127.0.0.1:${port}/:_authToken=fixture-token\n`,
       );
-      const script = fileURLToPath(new URL("../scripts/release/stage.mjs", import.meta.url));
+      const script = fileURLToPath(new URL("../scripts/release/publish.mjs", import.meta.url));
       const { stdout } = await exec(process.execPath, [script], {
         cwd: directory,
         env: { ...process.env, CI: "true" },
         timeout: 60_000,
       });
-      expect(staged.sort()).toEqual([
-        "/-/stage/package/@stage-test/changed 1.0.1",
-        "/-/stage/package/stage-test-root 1.0.1",
+      expect(published.sort()).toEqual([
+        "/@publish-test/changed 1.0.1",
+        "/publish-test-root 1.0.1",
       ]);
-      expect(stdout).toContain("@stage-test/unchanged@1.0.0 is on the registry");
+      expect(stdout).toContain("@publish-test/unchanged@1.0.0 is on the registry");
+      expect(stdout).toContain('"release_published"');
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -233,7 +236,7 @@ describe("release tagging", () => {
         (await exec("git", ["ls-remote", "--tags", origin])).stdout.trim();
 
       const pending = await tag();
-      expect(pending.stdout).toContain('"release_approval_pending"');
+      expect(pending.stdout).toContain('"release_unpublished"');
       expect(pending.stdout).toContain("@tag-test/lib@1.0.0");
       expect(await originTags()).toBe("");
       expect(releases).toEqual([]);
