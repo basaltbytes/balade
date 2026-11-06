@@ -1,19 +1,18 @@
 /**
  * Once npm serves every workspace version, tag the release and create its
- * GitHub Release; until then, report that approval is pending.
+ * GitHub Release.
  *
  * The three packages share one version, so the release is one `v<version>`
  * tag. It goes on the commit that set that version in `package.json`, not on
- * HEAD: `main` may have moved on while the maintainer approved the staged
- * versions. A tag or a release that already exists is left alone, so re-running
- * the job is safe.
+ * HEAD, so a re-run at a later `main` still tags the right commit. A tag or a
+ * release that already exists is left alone, so re-running the job is safe.
  */
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { members, registry } from "./pnpm.mjs";
 import { unpublishedPackages } from "./registry.mjs";
 
-// The action reads this report even when approval is pending and no tag exists.
+// The action reads this report even when no tag was created.
 if (process.env.CHANGESETS_OUTPUT) appendFileSync(process.env.CHANGESETS_OUTPUT, "");
 
 const git = (args) => execFileSync("git", args, { encoding: "utf8" }).trim();
@@ -70,10 +69,8 @@ async function createRelease(tag) {
 const packages = members();
 const pending = await unpublishedPackages(packages, registry());
 if (pending.length > 0) {
-  console.log(JSON.stringify({ event: "release_approval_pending", packages: pending }));
-  console.log(
-    "Approve every staged version on npm, then rerun this release job to tag the release.",
-  );
+  console.log(JSON.stringify({ event: "release_unpublished", packages: pending }));
+  console.log("Not every version is on the registry; rerun this release job once it is.");
 } else {
   const { version } = JSON.parse(readFileSync("package.json", "utf8"));
   const tag = `v${version}`;

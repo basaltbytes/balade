@@ -1160,29 +1160,34 @@ enforces the same rule as an error so `check` rejects drift and generation can
 repair it. What would move this: a replacement closing widget that preserves
 the complete diff and per-file review-state behavior without a `files` block.
 
-## One release job versions, stages and tags; a maintainer approves on npm
+## One release job versions, publishes, tags and releases; the Version Packages PR is the review
 
 Decided on [#49](https://github.com/basaltbytes/balade/issues/49), revised
-with [#175](https://github.com/basaltbytes/balade/issues/175) to the flow the
-other basaltbytes repositories use. `release.yml` runs the changesets action on
-every push to `main`: while changesets are pending it maintains the rolling
-Version Packages PR; once that PR merges, `pnpm changeset:publish` builds and
-stages every workspace version npm lacks (`scripts/release/stage.mjs`, which
-includes the root `balade` package that `pnpm stage publish -r` skips), then
-`scripts/release/tag.mjs` checks the public registry. A staged version is not
-installable until an npm maintainer approves it, which is the human gate; once
-every version is public, the next run of the job pushes one `v<version>` tag
-(the packages share a version) on the commit that set it in `package.json`, and
-creates the GitHub Release with generated notes, as the previous workflow did.
-`changeset git-tag` was dropped: it tags `<name>@<version>` per package and
-tags HEAD, which may already be past the release. npmjs.com pins this one workflow file as the trusted
-publisher of all three packages (OIDC, no NPM_TOKEN anywhere), which is why
-publishing never moves out of it. The pinned pnpm is 11.20.0, the first line
-with `pnpm stage`.
+with [#175](https://github.com/basaltbytes/balade/issues/175). `release.yml`
+runs the changesets action on every push to `main`: while changesets are
+pending it maintains the rolling Version Packages PR; once that PR merges,
+`pnpm changeset:publish` builds, publishes every workspace version npm lacks
+(`scripts/release/publish.mjs`, which includes the root `balade` package that
+`pnpm publish -r` skips) and waits for the registry to serve them, then
+`scripts/release/tag.mjs` pushes one `v<version>` tag (the packages share a
+version) on the commit that set it in `package.json` and creates the GitHub
+Release with generated notes. Every step skips what exists, so a re-run is
+safe. `changeset git-tag` is not used: it tags `<name>@<version>` per package
+and tags HEAD, which a re-run may have moved past. npmjs.com pins this one
+workflow file as the trusted publisher of all three packages (OIDC, no
+NPM_TOKEN anywhere), with **Allow npm publish** ticked, which is why publishing
+never moves out of it.
 
-The quality gate is CI on `main`: the release job builds and stages without
+npm's staged publishing, which usine adopted (a maintainer approves each
+version with 2FA before it is installable), was tried for 0.19.0 and dropped:
+the merge of the Version Packages PR already is the human review, npm has no
+callback on approval so tagging needed a second run, and that run spent runner
+minutes the organisation is short of. Staging comes back when the library has
+consumers whom a bad publish would hurt.
+
+The quality gate is CI on `main`: the release job builds and publishes without
 re-running lint, tests and the package smoke, because the same commit's `ci`
-workflow runs them in parallel and the maintainer approves after reading both.
+workflow runs them in parallel and the maintainer merges after reading both.
 `package.json` is the CLI version source; the installed binary reads it
 directly. The authoring package version (`src/authoring/package.ts`) tracks the
 walkthrough/prompt contract on its own policy and must never be wired in. What
@@ -1803,8 +1808,8 @@ only when the host installs `@balade/viewer`. The CLI compiles its own copy of
 the contract modules, so `instanceof` checks between errors from `balade` and
 classes imported from `@balade/core` do not hold; match on `_tag`.
 
-Releases stage all three packages together (see "One release job versions,
-stages and tags"). A new package's first version is published by hand so
+Releases publish all three packages together (see "One release job versions,
+publishes, tags and releases"). A new package's first version is published by hand so
 trusted publishing can be configured for it. The single-file export does not
 change with this
 packaging; the stable Effect runtime added 20,858 bytes to it (6,689,663 to

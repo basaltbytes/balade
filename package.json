@@ -78,7 +78,7 @@
     "prepare": "effect-tsgo patch --typescript",
     "build:packages": "pnpm --filter \"./packages/*\" run build",
     "release:check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test && pnpm package:smoke",
-    "changeset:publish": "pnpm build && node scripts/release/stage.mjs && node scripts/release/tag.mjs"
+    "changeset:publish": "pnpm build && node scripts/release/publish.mjs && node scripts/release/tag.mjs"
   },
   "dependencies": {
     "@balade/core": "workspace:*",

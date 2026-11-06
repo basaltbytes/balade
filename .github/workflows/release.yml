@@ -7,9 +7,8 @@ name: release
 # a package that already exists.
 #
 # On every push to main the changesets action maintains the rolling "Version
-# Packages" PR. Once that PR merges, the publish script stages the new versions
-# on npm; an npm maintainer approves them, and the next run of this job tags the
-# release and creates its GitHub Release once every version is public.
+# Packages" PR. Merging that PR is the review: the same job then publishes the
+# new versions to npm, tags the release and creates its GitHub Release.
 on:
   push:
     branches: [main]
@@ -38,13 +37,13 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - name: Create the Version Packages PR or stage the release
+      - name: Create the Version Packages PR or publish the release
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           version-script: pnpm changeset:version
           publish-script: pnpm changeset:publish
           # The v<version> tag and the GitHub Release come from
-          # scripts/release/tag.mjs once npm shows every version; the action
-          # only recognises `changeset publish` output.
+          # scripts/release/tag.mjs; the action only recognises `changeset
+          # publish` output.
           create-github-releases: false
           push-git-tags: false
